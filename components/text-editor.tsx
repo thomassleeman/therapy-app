@@ -91,11 +91,17 @@ function PureEditor({
   }, [onSaveContent]);
 
   useEffect(() => {
-    if (editorRef.current && content) {
+    if (!editorRef.current) {
+      return;
+    }
+
+    // Always update if content is provided (including empty string for clearing)
+    if (content !== undefined && content !== null) {
       const currentContent = buildContentFromDocument(
         editorRef.current.state.doc
       );
 
+      // During streaming, always update to show progressive content
       if (status === "streaming") {
         const newDocument = buildDocumentFromContent(content);
 
@@ -110,7 +116,9 @@ function PureEditor({
         return;
       }
 
-      if (currentContent !== content) {
+      // When not streaming, update if content differs
+      // Use length check first as a quick comparison, then full comparison
+      if (currentContent.length !== content.length || currentContent !== content) {
         const newDocument = buildDocumentFromContent(content);
 
         const transaction = editorRef.current.state.tr.replaceWith(

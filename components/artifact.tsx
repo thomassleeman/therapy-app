@@ -89,7 +89,11 @@ function PureArtifact({
     artifact.documentId !== "init" && artifact.status !== "streaming"
       ? `/api/document?id=${artifact.documentId}`
       : null,
-    fetcher
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnMount: true,
+    }
   );
 
   const [mode, setMode] = useState<"edit" | "diff">("edit");
@@ -114,8 +118,11 @@ function PureArtifact({
   }, [documents, setArtifact]);
 
   useEffect(() => {
-    mutateDocuments();
-  }, [mutateDocuments]);
+    // Revalidate when artifact becomes visible with a valid document ID
+    if (artifact.isVisible && artifact.documentId !== "init" && artifact.status !== "streaming") {
+      mutateDocuments();
+    }
+  }, [artifact.isVisible, artifact.documentId, artifact.status, mutateDocuments]);
 
   const { mutate } = useSWRConfig();
   const [isContentDirty, setIsContentDirty] = useState(false);

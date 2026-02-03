@@ -27,6 +27,15 @@ const messageSchema = z.object({
   parts: z.array(z.any()),
 });
 
+const therapeuticOrientationSchema = z.enum([
+  "integrative",
+  "person-centred",
+  "cbt",
+  "psychodynamic",
+  "systemic",
+  "existential",
+]);
+
 export const postRequestBodySchema = z.object({
   id: z.string().uuid(),
   // Either a single new message or all messages (for tool approvals)
@@ -34,6 +43,7 @@ export const postRequestBodySchema = z.object({
   messages: z.array(messageSchema).optional(),
   selectedChatModel: z.string(),
   selectedVisibilityType: z.enum(["public", "private"]),
+  therapeuticOrientation: therapeuticOrientationSchema.optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;
