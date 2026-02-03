@@ -1,9 +1,7 @@
 import type { UIMessageStreamWriter } from "ai";
-import type { Session } from "@/lib/auth";
-import { codeDocumentHandler } from "@/artifacts/code/server";
-import { sheetDocumentHandler } from "@/artifacts/sheet/server";
 import { textDocumentHandler } from "@/artifacts/text/server";
 import type { ArtifactKind } from "@/components/artifact";
+import type { Session } from "@/lib/auth";
 import { saveDocument } from "../db/queries";
 import type { Document } from "../db/types";
 import type { ChatMessage } from "../types";
@@ -91,8 +89,6 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
  */
 export const documentHandlersByArtifactKind: DocumentHandler[] = [
   textDocumentHandler,
-  codeDocumentHandler,
-  sheetDocumentHandler,
 ];
 
-export const artifactKinds = ["text", "code", "sheet"] as const;
+export const artifactKinds = ["text"] as const;

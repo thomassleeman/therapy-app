@@ -6,7 +6,6 @@ import {
   type EditorView,
 } from "prosemirror-view";
 import { createRoot } from "react-dom/client";
-import type { ArtifactKind } from "@/components/artifact";
 import { Suggestion as PreviewSuggestion } from "@/components/suggestion";
 import type { Suggestion } from "@/lib/db/types";
 
@@ -68,8 +67,7 @@ export function projectWithPositions(
 
 export function createSuggestionWidget(
   suggestion: UISuggestion,
-  view: EditorView,
-  artifactKind: ArtifactKind = "text"
+  view: EditorView
 ): { dom: HTMLElement; destroy: () => void } {
   const dom = document.createElement("span");
   const root = createRoot(dom);
@@ -112,13 +110,7 @@ export function createSuggestionWidget(
     dispatch(textTransaction);
   };
 
-  root.render(
-    <PreviewSuggestion
-      artifactKind={artifactKind}
-      onApply={onApply}
-      suggestion={suggestion}
-    />
-  );
+  root.render(<PreviewSuggestion onApply={onApply} suggestion={suggestion} />);
 
   return {
     dom,

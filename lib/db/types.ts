@@ -2,7 +2,7 @@
 // These types mirror the database schema
 
 export type VisibilityType = "public" | "private";
-export type ArtifactKind = "text" | "code" | "image" | "sheet";
+export type ArtifactKind = "text";
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface Chat {

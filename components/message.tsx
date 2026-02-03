@@ -1,6 +1,7 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { useState } from "react";
+import Image from "next/image";
 import type { Vote } from "@/lib/db/types";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -16,7 +17,8 @@ import {
   ToolInput,
   ToolOutput,
 } from "./elements/tool";
-import { SparklesIcon } from "./icons";
+import Logo from "@/public/images/brainLogoCompressed.png"
+// import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
@@ -65,8 +67,15 @@ const PurePreviewMessage = ({
         })}
       >
         {message.role === "assistant" && (
-          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
-            <SparklesIcon size={14} />
+          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ">
+            {/* <SparklesIcon size={14} /> */}
+            <Image
+              src={Logo}
+              alt="Brain Logo"
+              width={32}
+              height={32}
+              className="rounded-full"
+            />
           </div>
         )}
 
@@ -373,7 +382,14 @@ export const ThinkingMessage = () => {
       <div className="flex items-start justify-start gap-3">
         <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
           <div className="animate-pulse">
-            <SparklesIcon size={14} />
+            {/* <SparklesIcon size={14} /> */}
+            <Image
+              src={Logo}
+              alt="Brain Logo"
+              width={32}
+              height={32}
+              className="rounded-full"
+            />
           </div>
         </div>
 
