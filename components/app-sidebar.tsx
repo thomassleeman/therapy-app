@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import Logo from "@/public/images/brainLogoCompressed.png"
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
@@ -72,7 +74,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 }}
               >
                 <span className="cursor-pointer rounded-md px-2 font-semibold text-lg hover:bg-muted">
-                  Chatbot
+                  <Image src={Logo} alt="Therapy Reflection Agent Logo" width={32} height={32} />
                 </span>
               </Link>
               <div className="flex flex-row gap-1">
