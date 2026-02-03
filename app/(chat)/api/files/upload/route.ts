@@ -1,8 +1,8 @@
-import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/app/(auth)/auth";
+import { auth } from "@/lib/auth";
+import { createClient } from "@/utils/supabase/server";
 
 // Use Blob instead of File since File is not available in Node.js environment
 const FileSchema = z.object({
@@ -51,11 +51,33 @@ export async function POST(request: Request) {
     const fileBuffer = await file.arrayBuffer();
 
     try {
-      const data = await put(`${filename}`, fileBuffer, {
-        access: "public",
-      });
+      const supabase = await createClient();
 
-      return NextResponse.json(data);
+      // Generate a unique path with user ID to enforce RLS
+      const filePath = `${session.user.id}/${Date.now()}-${filename}`;
+
+      const { data, error } = await supabase.storage
+        .from("uploads")
+        .upload(filePath, fileBuffer, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error("Supabase storage upload error:", error);
+        return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+      }
+
+      // Get the public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from("uploads")
+        .getPublicUrl(data.path);
+
+      return NextResponse.json({
+        url: publicUrl,
+        pathname: data.path,
+        contentType: file.type,
+      });
     } catch (_error) {
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }

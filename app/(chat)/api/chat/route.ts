@@ -9,7 +9,7 @@ import {
 } from "ai";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
-import { auth, type UserType } from "@/app/(auth)/auth";
+import { auth, type UserType } from "@/lib/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -29,7 +29,7 @@ import {
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
-import type { DBMessage } from "@/lib/db/schema";
+import type { DBMessage } from "@/lib/db/types";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
             role: "user",
             parts: message.parts,
             attachments: [],
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
           },
         ],
       });
@@ -196,7 +196,7 @@ export async function POST(request: Request) {
                     id: finishedMsg.id,
                     role: finishedMsg.role,
                     parts: finishedMsg.parts,
-                    createdAt: new Date(),
+                    createdAt: new Date().toISOString(),
                     attachments: [],
                     chatId: id,
                   },
@@ -210,7 +210,7 @@ export async function POST(request: Request) {
               id: currentMessage.id,
               role: currentMessage.role,
               parts: currentMessage.parts,
-              createdAt: new Date(),
+              createdAt: new Date().toISOString(),
               attachments: [],
               chatId: id,
             })),
