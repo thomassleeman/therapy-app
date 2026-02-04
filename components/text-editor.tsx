@@ -141,14 +141,35 @@ function PureEditor({
       console.log("[Editor Sync] Content differs, updating editor");
       const newDocument = buildDocumentFromContent(content);
 
+      console.log("[Editor Sync] newDocument details", {
+        newDocContentSize: newDocument.content.size,
+        newDocChildCount: newDocument.content.childCount,
+        newDocFirstChild: newDocument.content.firstChild?.type.name,
+        currentDocSize: editorRef.current.state.doc.content.size,
+      });
+
       const transaction = editorRef.current.state.tr.replaceWith(
         0,
         editorRef.current.state.doc.content.size,
         newDocument.content
       );
 
+      console.log("[Editor Sync] Transaction details", {
+        docChanged: transaction.docChanged,
+        stepsCount: transaction.steps.length,
+      });
+
       transaction.setMeta("no-save", true);
       editorRef.current.dispatch(transaction);
+
+      // Verify after dispatch
+      const afterContent = buildContentFromDocument(editorRef.current.state.doc);
+      console.log("[Editor Sync] After dispatch", {
+        docContentSize: editorRef.current.state.doc.content.size,
+        contentLength: afterContent.length,
+        contentPreview: afterContent.substring(0, 100),
+      });
+
       console.log("[Editor Sync] Editor updated");
     } else {
       console.log("[Editor Sync] Content unchanged, no update needed");
