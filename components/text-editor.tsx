@@ -41,10 +41,12 @@ function PureEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<EditorView | null>(null);
 
+  // Initialize editor once on mount - content updates are handled by the separate useEffect below
   useEffect(() => {
     if (containerRef.current && !editorRef.current) {
       const state = EditorState.create({
-        doc: buildDocumentFromContent(content),
+        // Start with empty doc - content will be populated by the content sync effect
+        doc: buildDocumentFromContent(""),
         plugins: [
           ...exampleSetup({ schema: documentSchema, menuBar: false }),
           inputRules({
@@ -72,9 +74,7 @@ function PureEditor({
         editorRef.current = null;
       }
     };
-    // NOTE: we only want to run this effect once
-    // eslint-disable-next-line
-  }, [content]);
+  }, []);
 
   useEffect(() => {
     if (editorRef.current) {
@@ -90,46 +90,48 @@ function PureEditor({
     }
   }, [onSaveContent]);
 
+  // Sync content to editor - handles both initial load and updates
   useEffect(() => {
     if (!editorRef.current) {
       return;
     }
 
-    // Always update if content is provided (including empty string for clearing)
-    if (content !== undefined && content !== null) {
-      const currentContent = buildContentFromDocument(
-        editorRef.current.state.doc
+    // Skip if content is not yet available
+    if (content === undefined || content === null) {
+      return;
+    }
+
+    const currentContent = buildContentFromDocument(
+      editorRef.current.state.doc
+    );
+
+    // During streaming, always update to show progressive content
+    if (status === "streaming") {
+      const newDocument = buildDocumentFromContent(content);
+
+      const transaction = editorRef.current.state.tr.replaceWith(
+        0,
+        editorRef.current.state.doc.content.size,
+        newDocument.content
       );
 
-      // During streaming, always update to show progressive content
-      if (status === "streaming") {
-        const newDocument = buildDocumentFromContent(content);
+      transaction.setMeta("no-save", true);
+      editorRef.current.dispatch(transaction);
+      return;
+    }
 
-        const transaction = editorRef.current.state.tr.replaceWith(
-          0,
-          editorRef.current.state.doc.content.size,
-          newDocument.content
-        );
+    // When not streaming, update if content differs (or on initial load)
+    if (currentContent !== content) {
+      const newDocument = buildDocumentFromContent(content);
 
-        transaction.setMeta("no-save", true);
-        editorRef.current.dispatch(transaction);
-        return;
-      }
+      const transaction = editorRef.current.state.tr.replaceWith(
+        0,
+        editorRef.current.state.doc.content.size,
+        newDocument.content
+      );
 
-      // When not streaming, update if content differs
-      // Use length check first as a quick comparison, then full comparison
-      if (currentContent.length !== content.length || currentContent !== content) {
-        const newDocument = buildDocumentFromContent(content);
-
-        const transaction = editorRef.current.state.tr.replaceWith(
-          0,
-          editorRef.current.state.doc.content.size,
-          newDocument.content
-        );
-
-        transaction.setMeta("no-save", true);
-        editorRef.current.dispatch(transaction);
-      }
+      transaction.setMeta("no-save", true);
+      editorRef.current.dispatch(transaction);
     }
   }, [content, status]);
 
