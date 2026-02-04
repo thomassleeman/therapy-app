@@ -1,7 +1,7 @@
 "use client";
 
-import MarkdownIt from "markdown-it";
 import {
+  defaultMarkdownParser,
   defaultMarkdownSerializer,
   MarkdownParser,
 } from "prosemirror-markdown";
@@ -12,11 +12,11 @@ import { documentSchema } from "./config";
 import { createSuggestionWidget, type UISuggestion } from "./suggestions";
 
 // Create a markdown parser using prosemirror-markdown
-// This properly converts markdown to ProseMirror documents using the schema
-// @ts-expect-error markdown-it default export handling varies between TS configs
+// Uses the tokenizer from defaultMarkdownParser (which bundles markdown-it)
+// but with our custom schema that includes list nodes
 const markdownParser = new MarkdownParser(
   documentSchema,
-  new MarkdownIt("commonmark", { html: false }),
+  defaultMarkdownParser.tokenizer,
   {
     blockquote: { block: "blockquote" },
     paragraph: { block: "paragraph" },
