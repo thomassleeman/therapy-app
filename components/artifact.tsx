@@ -236,9 +236,11 @@ function PureArtifact({
    * we mark it as the current version.
    */
 
+  // Handle -1 (uninitialized) as "current version" to avoid race condition
+  // when documents load but currentVersionIndex hasn't been set yet
   const isCurrentVersion =
     documents && documents.length > 0
-      ? currentVersionIndex === documents.length - 1
+      ? currentVersionIndex === -1 || currentVersionIndex === documents.length - 1
       : true;
 
   const { width: windowWidth, height: windowHeight } = useWindowSize();

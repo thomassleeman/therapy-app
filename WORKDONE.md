@@ -162,6 +162,71 @@ const previewDocument = useMemo(() => documents?.at(-1), [documents]);
 
 ---
 
+### Bug Still Present — Further Investigation (2026-02-04)
+
+The above changes did not resolve the issue. Further investigation revealed the **actual root cause**:
+
+#### Root Cause: Race Condition with `currentVersionIndex`
+
+When documents load from the API, there's a render cycle where:
+
+1. `currentVersionIndex` is still `-1` (initialized as `useState(-1)`)
+2. `isCurrentVersion` evaluates to `false` because `-1 !== documents.length - 1`
+3. Content is sourced from `getDocumentContentById(-1)` which returns `""` because `documents[-1]` is undefined in JavaScript
+4. The useEffect then updates `currentVersionIndex` and `artifact.content`, but by then the Editor has already received empty content
+
+The previous fixes addressed edge cases but not this core timing issue.
+
+#### Additional Fixes Applied
+
+**1. `components/artifact.tsx` — Handle uninitialized index (line 239-244)**
+
+**Before:**
+```typescript
+const isCurrentVersion =
+  documents && documents.length > 0
+    ? currentVersionIndex === documents.length - 1
+    : true;
+```
+
+**After:**
+```typescript
+// Handle -1 (uninitialized) as "current version" to avoid race condition
+// when documents load but currentVersionIndex hasn't been set yet
+const isCurrentVersion =
+  documents && documents.length > 0
+    ? currentVersionIndex === -1 || currentVersionIndex === documents.length - 1
+    : true;
+```
+
+**Why:** Treats `-1` (uninitialized) as equivalent to "current version" so we use `artifact.content` instead of `getDocumentContentById(-1)`.
+
+---
+
+**2. `components/artifact.tsx` — Fallback to document content (line 465-468)**
+
+**Before:**
+```typescript
+content={
+  isCurrentVersion
+    ? artifact.content
+    : getDocumentContentById(currentVersionIndex)
+}
+```
+
+**After:**
+```typescript
+content={
+  isCurrentVersion
+    ? artifact.content || documents?.at(-1)?.content || ""
+    : getDocumentContentById(currentVersionIndex)
+}
+```
+
+**Why:** When `artifact.content` is empty (hasn't been set by useEffect yet), fall back to reading directly from the fetched documents array.
+
+---
+
 ## Next Steps
 
 1. **Frontend selector** — Add UI for therapists to choose orientation when starting a chat
