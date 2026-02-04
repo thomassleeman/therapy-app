@@ -125,23 +125,8 @@ function PureArtifact({
   const isStreaming = artifact.status === "streaming";
   const dbContent = document?.content ?? "";
 
-  // DEBUG: Trace content flow
-  console.log("[Artifact Debug]", {
-    isStreaming,
-    isDocumentsFetching,
-    documentId: artifact.documentId,
-    documentsLength: documents?.length,
-    documentContent: document?.content?.substring(0, 100),
-    dbContent: dbContent.substring(0, 100),
-    artifactContent: artifact.content?.substring(0, 100),
-  });
-
   const getDisplayContent = useCallback(() => {
     const content = isStreaming ? artifact.content : dbContent;
-    console.log("[getDisplayContent]", {
-      isStreaming,
-      returning: content?.substring(0, 100),
-    });
     return content;
   }, [isStreaming, artifact.content, dbContent]);
 
