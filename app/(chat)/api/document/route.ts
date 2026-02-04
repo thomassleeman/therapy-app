@@ -26,6 +26,13 @@ export async function GET(request: Request) {
 
   const documents = await getDocumentsById({ id });
 
+  // DEBUG: Log what's being returned
+  console.log("[API /document GET]", {
+    id,
+    documentsCount: documents?.length,
+    latestDocContent: documents?.at(-1)?.content?.substring(0, 200),
+  });
+
   const [document] = documents;
 
   if (!document) {

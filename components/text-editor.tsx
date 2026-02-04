@@ -92,18 +92,33 @@ function PureEditor({
 
   // Sync content to editor - handles both initial load and updates
   useEffect(() => {
+    console.log("[Editor Sync Effect]", {
+      hasEditorRef: !!editorRef.current,
+      contentLength: content?.length,
+      contentPreview: content?.substring(0, 100),
+      status,
+    });
+
     if (!editorRef.current) {
+      console.log("[Editor Sync] No editor ref, skipping");
       return;
     }
 
     // Skip if content is not yet available
     if (content === undefined || content === null) {
+      console.log("[Editor Sync] Content is null/undefined, skipping");
       return;
     }
 
     const currentContent = buildContentFromDocument(
       editorRef.current.state.doc
     );
+
+    console.log("[Editor Sync] Comparing content", {
+      currentContentLength: currentContent.length,
+      newContentLength: content.length,
+      areEqual: currentContent === content,
+    });
 
     // During streaming, always update to show progressive content
     if (status === "streaming") {
@@ -117,11 +132,13 @@ function PureEditor({
 
       transaction.setMeta("no-save", true);
       editorRef.current.dispatch(transaction);
+      console.log("[Editor Sync] Updated during streaming");
       return;
     }
 
     // When not streaming, update if content differs (or on initial load)
     if (currentContent !== content) {
+      console.log("[Editor Sync] Content differs, updating editor");
       const newDocument = buildDocumentFromContent(content);
 
       const transaction = editorRef.current.state.tr.replaceWith(
@@ -132,6 +149,9 @@ function PureEditor({
 
       transaction.setMeta("no-save", true);
       editorRef.current.dispatch(transaction);
+      console.log("[Editor Sync] Editor updated");
+    } else {
+      console.log("[Editor Sync] Content unchanged, no update needed");
     }
   }, [content, status]);
 
