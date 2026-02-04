@@ -97,25 +97,20 @@ function PureArtifact({
   );
 
   const [mode, setMode] = useState<"edit" | "diff">("edit");
-  const [document, setDocument] = useState<Document | null>(null);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
 
   const { open: isSidebarOpen } = useSidebar();
 
+  // Derive document and version index directly from fetched documents
+  // No need to sync to artifact.content - use database as source of truth when not streaming
+  const document = documents?.at(-1) ?? null;
+
+  // Update version index when documents change
   useEffect(() => {
     if (documents && documents.length > 0) {
-      const mostRecentDocument = documents.at(-1);
-
-      if (mostRecentDocument) {
-        setDocument(mostRecentDocument);
-        setCurrentVersionIndex(documents.length - 1);
-        setArtifact((currentArtifact) => ({
-          ...currentArtifact,
-          content: mostRecentDocument.content ?? "",
-        }));
-      }
+      setCurrentVersionIndex(documents.length - 1);
     }
-  }, [documents, setArtifact]);
+  }, [documents]);
 
   useEffect(() => {
     // Revalidate when artifact becomes visible with a valid document ID
@@ -123,6 +118,17 @@ function PureArtifact({
       mutateDocuments();
     }
   }, [artifact.isVisible, artifact.documentId, artifact.status, mutateDocuments]);
+
+  // Determine content based on mode:
+  // - Streaming: use artifact.content (accumulated from stream)
+  // - Viewing (idle): use database content directly
+  const isStreaming = artifact.status === "streaming";
+  const dbContent = document?.content ?? "";
+
+  const getDisplayContent = useCallback(() => {
+    const content = isStreaming ? artifact.content : dbContent;
+    return content;
+  }, [isStreaming, artifact.content, dbContent]);
 
   const { mutate } = useSWRConfig();
   const [isContentDirty, setIsContentDirty] = useState(false);
@@ -464,14 +470,14 @@ function PureArtifact({
               <artifactDefinition.content
                 content={
                   isCurrentVersion
-                    ? artifact.content
+                    ? getDisplayContent()
                     : getDocumentContentById(currentVersionIndex)
                 }
                 currentVersionIndex={currentVersionIndex}
                 getDocumentContentById={getDocumentContentById}
                 isCurrentVersion={isCurrentVersion}
                 isInline={false}
-                isLoading={isDocumentsFetching && !artifact.content}
+                isLoading={!isStreaming && isDocumentsFetching}
                 metadata={metadata}
                 mode={mode}
                 onSaveContent={saveContent}
@@ -522,7 +528,7 @@ export const Artifact = memo(PureArtifact, (prevProps, nextProps) => {
   if (prevProps.input !== nextProps.input) {
     return false;
   }
-  if (!equal(prevProps.messages, nextProps.messages.length)) {
+  if (prevProps.messages.length !== nextProps.messages.length) {
     return false;
   }
   if (prevProps.selectedVisibilityType !== nextProps.selectedVisibilityType) {
