@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
+import { useChatClient } from "@/hooks/use-chat-client";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Vote } from "@/lib/db/types";
 import { ChatSDKError } from "@/lib/errors";
@@ -37,6 +38,7 @@ export function Chat({
   initialMessages,
   initialChatModel,
   initialVisibilityType,
+  initialClientId,
   isReadonly,
   autoResume,
 }: {
@@ -44,6 +46,7 @@ export function Chat({
   initialMessages: ChatMessage[];
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
+  initialClientId: string | null;
   isReadonly: boolean;
   autoResume: boolean;
 }) {
@@ -52,6 +55,11 @@ export function Chat({
   const { visibilityType } = useChatVisibility({
     chatId: id,
     initialVisibilityType,
+  });
+
+  const { clientId } = useChatClient({
+    chatId: id,
+    initialClientId,
   });
 
   const { mutate } = useSWRConfig();
@@ -126,6 +134,7 @@ export function Chat({
               : { message: lastMessage }),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
+            selectedClientId: clientId,
             ...request.body,
           },
         };
@@ -191,6 +200,7 @@ export function Chat({
         <ChatHeader
           chatId={id}
           isReadonly={isReadonly}
+          selectedClientId={initialClientId}
           selectedVisibilityType={initialVisibilityType}
         />
 

@@ -68,17 +68,13 @@ function getMarkdownParser(): MarkdownParser {
 export const buildDocumentFromContent = (content: string) => {
   if (!content) {
     // Return an empty document with a single empty paragraph
-    return documentSchema.node("doc", null, [
-      documentSchema.node("paragraph"),
-    ]);
+    return documentSchema.node("doc", null, [documentSchema.node("paragraph")]);
   }
 
   const doc = getMarkdownParser().parse(content);
   if (!doc) {
     // Fallback: return empty document if parsing fails
-    return documentSchema.node("doc", null, [
-      documentSchema.node("paragraph"),
-    ]);
+    return documentSchema.node("doc", null, [documentSchema.node("paragraph")]);
   }
 
   return doc;

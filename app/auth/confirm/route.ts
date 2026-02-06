@@ -1,4 +1,4 @@
-import { type EmailOtpType } from "@supabase/supabase-js";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { createClient } from "@/utils/supabase/server";
@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
 
   // Return the user to an error page with some instructions
   redirectTo.pathname = "/sign-in";
-  redirectTo.searchParams.set("error", "Could not verify email. Please try again.");
+  redirectTo.searchParams.set(
+    "error",
+    "Could not verify email. Please try again."
+  );
   return NextResponse.redirect(redirectTo);
 }

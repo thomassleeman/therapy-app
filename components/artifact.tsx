@@ -114,10 +114,19 @@ function PureArtifact({
 
   useEffect(() => {
     // Revalidate when artifact becomes visible with a valid document ID
-    if (artifact.isVisible && artifact.documentId !== "init" && artifact.status !== "streaming") {
+    if (
+      artifact.isVisible &&
+      artifact.documentId !== "init" &&
+      artifact.status !== "streaming"
+    ) {
       mutateDocuments();
     }
-  }, [artifact.isVisible, artifact.documentId, artifact.status, mutateDocuments]);
+  }, [
+    artifact.isVisible,
+    artifact.documentId,
+    artifact.status,
+    mutateDocuments,
+  ]);
 
   // Determine content based on mode:
   // - Streaming: use artifact.content (accumulated from stream)
@@ -246,7 +255,8 @@ function PureArtifact({
   // when documents load but currentVersionIndex hasn't been set yet
   const isCurrentVersion =
     documents && documents.length > 0
-      ? currentVersionIndex === -1 || currentVersionIndex === documents.length - 1
+      ? currentVersionIndex === -1 ||
+        currentVersionIndex === documents.length - 1
       : true;
 
   const { width: windowWidth, height: windowHeight } = useWindowSize();

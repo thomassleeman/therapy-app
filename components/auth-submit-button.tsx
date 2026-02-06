@@ -24,8 +24,8 @@ export function AuthSubmitButton({
       aria-disabled={pending}
       className="relative"
       disabled={pending}
-      type="submit"
       formAction={formAction}
+      type="submit"
     >
       {pending ? (pendingText ?? children) : children}
 

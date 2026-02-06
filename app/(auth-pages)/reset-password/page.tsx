@@ -1,13 +1,11 @@
+import { Suspense } from "react";
 import { resetPasswordAction } from "@/app/actions";
 import { AuthSubmitButton } from "@/components/auth-submit-button";
-import { FormMessage, Message } from "@/components/form-message";
+import { FormMessage, type Message } from "@/components/form-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Suspense } from "react";
 
-async function ResetPasswordMessage(props: {
-  searchParams: Promise<Message>;
-}) {
+async function ResetPasswordMessage(props: { searchParams: Promise<Message> }) {
   const searchParams = await props.searchParams;
   return <FormMessage message={searchParams} />;
 }
@@ -24,19 +22,19 @@ export default function ResetPassword(props: {
       <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
         <Label htmlFor="password">New password</Label>
         <Input
-          type="password"
+          minLength={6}
           name="password"
           placeholder="New password"
-          minLength={6}
           required
+          type="password"
         />
         <Label htmlFor="confirmPassword">Confirm password</Label>
         <Input
-          type="password"
+          minLength={6}
           name="confirmPassword"
           placeholder="Confirm password"
-          minLength={6}
           required
+          type="password"
         />
         <AuthSubmitButton formAction={resetPasswordAction}>
           Reset password

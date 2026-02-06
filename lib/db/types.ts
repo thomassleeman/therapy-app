@@ -11,6 +11,16 @@ export interface Chat {
   title: string;
   userId: string;
   visibility: VisibilityType;
+  clientId: string | null;
+}
+
+export interface Client {
+  id: string;
+  therapistId: string;
+  name: string;
+  background: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DBMessage {
@@ -62,6 +72,14 @@ export interface ChatInsert {
   title: string;
   userId: string;
   visibility?: VisibilityType;
+  clientId?: string | null;
+}
+
+export interface ClientInsert {
+  id?: string;
+  therapistId: string;
+  name: string;
+  background?: string | null;
 }
 
 export interface DBMessageInsert {

@@ -1,11 +1,12 @@
 import "server-only";
 
-import { createClient } from "@/utils/supabase/server";
 import type { ArtifactKind } from "@/components/artifact";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { createClient } from "@/utils/supabase/server";
 import { ChatSDKError } from "../errors";
 import type {
   Chat,
+  Client,
   DBMessage,
   Document,
   Suggestion,
@@ -13,21 +14,36 @@ import type {
 } from "./types";
 
 // Re-export types for backward compatibility
-export type { Chat, DBMessage, Document, Suggestion, Vote } from "./types";
+export type {
+  Chat,
+  Client,
+  DBMessage,
+  Document,
+  Suggestion,
+  Vote,
+} from "./types";
 
 // Helper function to handle Supabase errors
-function handleSupabaseError(error: { message: string; code?: string }, operation: string): never {
+function handleSupabaseError(
+  error: { message: string; code?: string },
+  operation: string
+): never {
   console.error(`Supabase error in ${operation}:`, error);
   throw new ChatSDKError("bad_request:database", `Failed to ${operation}`);
 }
 
-export async function getUser(email: string): Promise<{ id: string; email: string }[]> {
+export async function getUser(
+  email: string
+): Promise<{ id: string; email: string }[]> {
   try {
     const supabase = await createClient();
 
     // With Supabase Auth, users are in auth.users table
     // We query by email through the admin API or use the current user's session
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
     if (error || !user) {
       return [];
@@ -51,11 +67,13 @@ export async function saveChat({
   userId,
   title,
   visibility,
+  clientId,
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: VisibilityType;
+  clientId?: string | null;
 }) {
   try {
     const supabase = await createClient();
@@ -67,6 +85,7 @@ export async function saveChat({
         userId,
         title,
         visibility,
+        clientId: clientId ?? null,
       })
       .select()
       .single();
@@ -227,14 +246,16 @@ export async function saveMessages({ messages }: { messages: DBMessage[] }) {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("Message_v2")
-      .insert(messages.map(msg => ({
-        id: msg.id,
-        chatId: msg.chatId,
-        role: msg.role,
-        parts: msg.parts,
-        attachments: msg.attachments,
-        createdAt: msg.createdAt,
-      })))
+      .insert(
+        messages.map((msg) => ({
+          id: msg.id,
+          chatId: msg.chatId,
+          role: msg.role,
+          parts: msg.parts,
+          attachments: msg.attachments,
+          createdAt: msg.createdAt,
+        }))
+      )
       .select();
 
     if (error) handleSupabaseError(error, "save messages");
@@ -445,7 +466,8 @@ export async function deleteDocumentsByIdAfterTimestamp({
       .gt("createdAt", timestamp.toISOString())
       .select();
 
-    if (error) handleSupabaseError(error, "delete documents by id after timestamp");
+    if (error)
+      handleSupabaseError(error, "delete documents by id after timestamp");
     return data;
   } catch (error) {
     if (error instanceof ChatSDKError) throw error;
@@ -465,17 +487,19 @@ export async function saveSuggestions({
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("Suggestion")
-      .insert(suggestions.map(s => ({
-        id: s.id,
-        documentId: s.documentId,
-        documentCreatedAt: s.documentCreatedAt,
-        originalText: s.originalText,
-        suggestedText: s.suggestedText,
-        description: s.description,
-        isResolved: s.isResolved,
-        userId: s.userId,
-        createdAt: s.createdAt,
-      })))
+      .insert(
+        suggestions.map((s) => ({
+          id: s.id,
+          documentId: s.documentId,
+          documentCreatedAt: s.documentCreatedAt,
+          originalText: s.originalText,
+          suggestedText: s.suggestedText,
+          description: s.description,
+          isResolved: s.isResolved,
+          userId: s.userId,
+          createdAt: s.createdAt,
+        }))
+      )
       .select();
 
     if (error) handleSupabaseError(error, "save suggestions");
@@ -550,7 +574,7 @@ export async function deleteMessagesByChatIdAfterTimestamp({
 
     if (selectError) handleSupabaseError(selectError, "get messages to delete");
 
-    const messageIds = (messagesToDelete || []).map(m => m.id);
+    const messageIds = (messagesToDelete || []).map((m) => m.id);
 
     if (messageIds.length > 0) {
       // Delete votes for these messages
@@ -641,11 +665,10 @@ export async function getMessageCountByUserId({
     const supabase = await createClient();
 
     // Use the database function we created for rate limiting
-    const { data, error } = await supabase
-      .rpc("get_user_message_count", {
-        p_user_id: id,
-        p_hours_ago: differenceInHours,
-      });
+    const { data, error } = await supabase.rpc("get_user_message_count", {
+      p_user_id: id,
+      p_hours_ago: differenceInHours,
+    });
 
     if (error) {
       // If the function doesn't exist, fall back to a manual query
@@ -661,11 +684,12 @@ export async function getMessageCountByUserId({
         .select("id")
         .eq("userId", id);
 
-      if (chatError) handleSupabaseError(chatError, "get user chats for message count");
+      if (chatError)
+        handleSupabaseError(chatError, "get user chats for message count");
 
       if (!userChats || userChats.length === 0) return 0;
 
-      const chatIds = userChats.map(c => c.id);
+      const chatIds = userChats.map((c) => c.id);
 
       const { count, error: countError } = await supabase
         .from("Message_v2")
@@ -698,13 +722,11 @@ export async function createStreamId({
 }) {
   try {
     const supabase = await createClient();
-    const { error } = await supabase
-      .from("Stream")
-      .insert({
-        id: streamId,
-        chatId,
-        createdAt: new Date().toISOString(),
-      });
+    const { error } = await supabase.from("Stream").insert({
+      id: streamId,
+      chatId,
+      createdAt: new Date().toISOString(),
+    });
 
     if (error) handleSupabaseError(error, "create stream id");
   } catch (error) {
@@ -732,6 +754,187 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
+    );
+  }
+}
+
+// Client CRUD operations
+
+export async function getClientsByUserId({ userId }: { userId: string }) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("therapist_id", userId)
+      .order("name", { ascending: true });
+
+    if (error) handleSupabaseError(error, "get clients by user id");
+
+    // Map snake_case to camelCase
+    return (data || []).map((client) => ({
+      id: client.id,
+      therapistId: client.therapist_id,
+      name: client.name,
+      background: client.background,
+      createdAt: client.created_at,
+      updatedAt: client.updated_at,
+    })) as Client[];
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get clients by user id"
+    );
+  }
+}
+
+export async function getClientById({ id }: { id: string }) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") return null;
+      handleSupabaseError(error, "get client by id");
+    }
+
+    return {
+      id: data.id,
+      therapistId: data.therapist_id,
+      name: data.name,
+      background: data.background,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    } as Client;
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get client by id"
+    );
+  }
+}
+
+export async function createClientRecord({
+  therapistId,
+  name,
+  background,
+}: {
+  therapistId: string;
+  name: string;
+  background?: string | null;
+}) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clients")
+      .insert({
+        therapist_id: therapistId,
+        name,
+        background: background ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) handleSupabaseError(error, "create client");
+
+    return {
+      id: data.id,
+      therapistId: data.therapist_id,
+      name: data.name,
+      background: data.background,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    } as Client;
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError("bad_request:database", "Failed to create client");
+  }
+}
+
+export async function updateClientById({
+  id,
+  name,
+  background,
+}: {
+  id: string;
+  name: string;
+  background?: string | null;
+}) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clients")
+      .update({
+        name,
+        background: background ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) handleSupabaseError(error, "update client by id");
+
+    return {
+      id: data.id,
+      therapistId: data.therapist_id,
+      name: data.name,
+      background: data.background,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    } as Client;
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update client by id"
+    );
+  }
+}
+
+export async function deleteClientById({ id }: { id: string }) {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("clients").delete().eq("id", id);
+
+    if (error) handleSupabaseError(error, "delete client by id");
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete client by id"
+    );
+  }
+}
+
+export async function updateChatClientById({
+  chatId,
+  clientId,
+}: {
+  chatId: string;
+  clientId: string | null;
+}) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("Chat")
+      .update({ clientId })
+      .eq("id", chatId)
+      .select();
+
+    if (error) handleSupabaseError(error, "update chat client by id");
+    return data;
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update chat client by id"
     );
   }
 }

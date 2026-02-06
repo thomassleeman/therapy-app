@@ -1,9 +1,9 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
 import { ChevronUp } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
 import { useTheme } from "next-themes";
 import {
   DropdownMenu,

@@ -1,10 +1,11 @@
-import { signUpAction } from "@/app/actions";
-import { AuthSubmitButton } from "@/components/auth-submit-button";
-import { FormMessage, Message } from "@/components/form-message";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { Suspense } from "react";
+import { signUpAction } from "@/app/actions";
+import { AuthSubmitButton } from "@/components/auth-submit-button";
+import { FormMessage, type Message } from "@/components/form-message";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 // import { SmtpMessage } from "../smtp-message";
 
 async function SignupMessage(props: {
@@ -15,24 +16,25 @@ async function SignupMessage(props: {
 
   return (
     <>
-      {plan && <input type="hidden" name="plan" value={plan} />}
+      {plan && <input name="plan" type="hidden" value={plan} />}
       <FormMessage message={searchParams} />
-      {"error" in searchParams && searchParams.error?.includes("already exists") && (
-        <div className="flex flex-col gap-2 mt-2 text-sm">
-          <Link
-            href="/sign-in"
-            className="text-primary font-medium underline text-center"
-          >
-            Go to sign in
-          </Link>
-          <Link
-            href="/forgot-password"
-            className="text-muted-foreground underline text-center"
-          >
-            Forgot password?
-          </Link>
-        </div>
-      )}
+      {"error" in searchParams &&
+        searchParams.error?.includes("already exists") && (
+          <div className="flex flex-col gap-2 mt-2 text-sm">
+            <Link
+              className="text-primary font-medium underline text-center"
+              href="/sign-in"
+            >
+              Go to sign in
+            </Link>
+            <Link
+              className="text-muted-foreground underline text-center"
+              href="/forgot-password"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        )}
     </>
   );
 }
@@ -55,21 +57,24 @@ export default function Signup(props: {
           <Input name="email" placeholder="you@example.com" required />
           <Label htmlFor="password">Password</Label>
           <Input
-            type="password"
+            minLength={6}
             name="password"
             placeholder="Your password"
-            minLength={6}
             required
+            type="password"
           />
           <Label htmlFor="confirmPassword">Confirm Password</Label>
           <Input
-            type="password"
+            minLength={6}
             name="confirmPassword"
             placeholder="Confirm your password"
-            minLength={6}
             required
+            type="password"
           />
-          <AuthSubmitButton formAction={signUpAction} pendingText="Signing up...">
+          <AuthSubmitButton
+            formAction={signUpAction}
+            pendingText="Signing up..."
+          >
             Sign up
           </AuthSubmitButton>
           <Suspense fallback={<div className="h-6" />}>

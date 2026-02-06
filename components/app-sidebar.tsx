@@ -1,9 +1,9 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import type { User } from "@supabase/supabase-js";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -23,6 +23,7 @@ import {
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
+import Logo from "@/public/images/brainLogoCompressed.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +35,6 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import Logo from "@/public/images/brainLogoCompressed.png"
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
@@ -74,7 +74,12 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 }}
               >
                 <span className="cursor-pointer rounded-md px-2 font-semibold text-lg hover:bg-muted">
-                  <Image src={Logo} alt="Therapy Reflection Agent Logo" width={32} height={32} />
+                  <Image
+                    alt="Therapy Reflection Agent Logo"
+                    height={32}
+                    src={Logo}
+                    width={32}
+                  />
                 </span>
               </Link>
               <div className="flex flex-row gap-1">
