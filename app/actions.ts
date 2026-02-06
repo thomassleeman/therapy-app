@@ -1,8 +1,8 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { createClient } from "@/utils/supabase/server";
 
 const encodedRedirect = (
   type: "error" | "success",
@@ -21,7 +21,11 @@ export const signUpAction = async (formData: FormData) => {
   const origin = (await headers()).get("origin");
 
   if (!email || !password) {
-    return encodedRedirect("error", "/sign-up", "Email and password are required");
+    return encodedRedirect(
+      "error",
+      "/sign-up",
+      "Email and password are required"
+    );
   }
 
   if (password !== confirmPassword) {
@@ -29,7 +33,11 @@ export const signUpAction = async (formData: FormData) => {
   }
 
   if (password.length < 6) {
-    return encodedRedirect("error", "/sign-up", "Password must be at least 6 characters");
+    return encodedRedirect(
+      "error",
+      "/sign-up",
+      "Password must be at least 6 characters"
+    );
   }
 
   const { error } = await supabase.auth.signUp({
@@ -46,7 +54,11 @@ export const signUpAction = async (formData: FormData) => {
   if (error) {
     console.error("Sign up error:", error.code, error.message);
     if (error.message.includes("already registered")) {
-      return encodedRedirect("error", "/sign-up", "An account with this email already exists");
+      return encodedRedirect(
+        "error",
+        "/sign-up",
+        "An account with this email already exists"
+      );
     }
     return encodedRedirect("error", "/sign-up", error.message);
   }
@@ -60,7 +72,11 @@ export const signInAction = async (formData: FormData) => {
   const supabase = await createClient();
 
   if (!email || !password) {
-    return encodedRedirect("error", "/sign-in", "Email and password are required");
+    return encodedRedirect(
+      "error",
+      "/sign-in",
+      "Email and password are required"
+    );
   }
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -91,7 +107,11 @@ export const forgotPasswordAction = async (formData: FormData) => {
 
   if (error) {
     console.error("Forgot password error:", error.code, error.message);
-    return encodedRedirect("error", "/forgot-password", "Could not reset password");
+    return encodedRedirect(
+      "error",
+      "/forgot-password",
+      "Could not reset password"
+    );
   }
 
   return encodedRedirect(
@@ -107,15 +127,27 @@ export const resetPasswordAction = async (formData: FormData) => {
   const supabase = await createClient();
 
   if (!password || !confirmPassword) {
-    return encodedRedirect("error", "/reset-password", "Password and confirm password are required");
+    return encodedRedirect(
+      "error",
+      "/reset-password",
+      "Password and confirm password are required"
+    );
   }
 
   if (password !== confirmPassword) {
-    return encodedRedirect("error", "/reset-password", "Passwords do not match");
+    return encodedRedirect(
+      "error",
+      "/reset-password",
+      "Passwords do not match"
+    );
   }
 
   if (password.length < 6) {
-    return encodedRedirect("error", "/reset-password", "Password must be at least 6 characters");
+    return encodedRedirect(
+      "error",
+      "/reset-password",
+      "Password must be at least 6 characters"
+    );
   }
 
   const { error } = await supabase.auth.updateUser({
@@ -124,10 +156,18 @@ export const resetPasswordAction = async (formData: FormData) => {
 
   if (error) {
     console.error("Reset password error:", error.code, error.message);
-    return encodedRedirect("error", "/reset-password", "Password update failed");
+    return encodedRedirect(
+      "error",
+      "/reset-password",
+      "Password update failed"
+    );
   }
 
-  return encodedRedirect("success", "/reset-password", "Password updated successfully");
+  return encodedRedirect(
+    "success",
+    "/reset-password",
+    "Password updated successfully"
+  );
 };
 
 export const signOutAction = async () => {

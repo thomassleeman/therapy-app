@@ -69,9 +69,9 @@ export async function POST(request: Request) {
       }
 
       // Get the public URL for the uploaded file
-      const { data: { publicUrl } } = supabase.storage
-        .from("uploads")
-        .getPublicUrl(data.path);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("uploads").getPublicUrl(data.path);
 
       return NextResponse.json({
         url: publicUrl,

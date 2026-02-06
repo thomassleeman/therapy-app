@@ -1,5 +1,5 @@
-import { createClient } from "@/utils/supabase/server";
 import type { User } from "@supabase/supabase-js";
+import { createClient } from "@/utils/supabase/server";
 
 export type UserType = "guest" | "regular";
 
@@ -18,7 +18,10 @@ export interface Session {
  */
 export async function auth(): Promise<Session | null> {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
   if (error || !user) {
     return null;

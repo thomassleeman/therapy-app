@@ -1,10 +1,10 @@
-import { signInAction } from "@/app/actions";
-import { AuthSubmitButton } from "@/components/auth-submit-button";
-import { FormMessage, Message } from "@/components/form-message";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { Suspense } from "react";
+import { signInAction } from "@/app/actions";
+import { AuthSubmitButton } from "@/components/auth-submit-button";
+import { FormMessage, type Message } from "@/components/form-message";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 async function LoginMessage(props: { searchParams: Promise<Message> }) {
   const searchParams = await props.searchParams;
@@ -34,12 +34,12 @@ export default function Login(props: { searchParams: Promise<Message> }) {
           </Link>
         </div>
         <Input
-          type="password"
           name="password"
           placeholder="Your password"
           required
+          type="password"
         />
-        <AuthSubmitButton pendingText="Signing In..." formAction={signInAction}>
+        <AuthSubmitButton formAction={signInAction} pendingText="Signing In...">
           Sign in
         </AuthSubmitButton>
         <Suspense fallback={<div className="h-6" />}>

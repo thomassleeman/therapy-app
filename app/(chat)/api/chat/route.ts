@@ -9,17 +9,17 @@ import {
 } from "ai";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
-import { auth, type UserType } from "@/lib/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import {
   type RequestHints,
-  type TherapeuticOrientation,
   systemPrompt,
+  type TherapeuticOrientation,
 } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
+import { auth, type UserType } from "@/lib/auth";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -68,6 +68,7 @@ export async function POST(request: Request) {
       messages,
       selectedChatModel,
       selectedVisibilityType,
+      selectedClientId,
       therapeuticOrientation,
     } = requestBody;
 
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
         userId: session.user.id,
         title: "New chat",
         visibility: selectedVisibilityType,
+        clientId: selectedClientId ?? null,
       });
       titlePromise = generateTitleFromUserMessage({ message });
     }
