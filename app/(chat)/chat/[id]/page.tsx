@@ -31,14 +31,9 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     redirect("/api/auth/guest");
   }
 
-  if (chat.visibility === "private") {
-    if (!session.user) {
-      return notFound();
-    }
-
-    if (session.user.id !== chat.userId) {
-      return notFound();
-    }
+  // All chats are private - only the owner can access
+  if (!session.user || session.user.id !== chat.userId) {
+    return notFound();
   }
 
   const messagesFromDb = await getMessagesByChatId({
@@ -58,8 +53,7 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
           id={chat.id}
           initialChatModel={DEFAULT_CHAT_MODEL}
           initialMessages={uiMessages}
-          initialVisibilityType={chat.visibility}
-          isReadonly={session?.user?.id !== chat.userId}
+          isReadonly={false}
         />
         <DataStreamHandler />
       </>
@@ -73,8 +67,7 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
         id={chat.id}
         initialChatModel={chatModelFromCookie.value}
         initialMessages={uiMessages}
-        initialVisibilityType={chat.visibility}
-        isReadonly={session?.user?.id !== chat.userId}
+        isReadonly={false}
       />
       <DataStreamHandler />
     </>

@@ -2,8 +2,9 @@ import "server-only";
 
 import { createClient } from "@/utils/supabase/server";
 import type { ArtifactKind } from "@/components/artifact";
-import type { VisibilityType } from "@/components/visibility-selector";
 import { ChatSDKError } from "../errors";
+
+type VisibilityType = "private" | "public";
 import type {
   Chat,
   DBMessage,
@@ -576,32 +577,6 @@ export async function deleteMessagesByChatIdAfterTimestamp({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete messages by chat id after timestamp"
-    );
-  }
-}
-
-export async function updateChatVisibilityById({
-  chatId,
-  visibility,
-}: {
-  chatId: string;
-  visibility: "private" | "public";
-}) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("Chat")
-      .update({ visibility })
-      .eq("id", chatId)
-      .select();
-
-    if (error) handleSupabaseError(error, "update chat visibility by id");
-    return data;
-  } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to update chat visibility by id"
     );
   }
 }
