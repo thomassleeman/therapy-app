@@ -9,16 +9,12 @@ import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "./icons";
 import { useSidebar } from "./ui/sidebar";
-import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
-
 function PureChatHeader({
   chatId,
-  selectedVisibilityType,
   selectedClientId,
   isReadonly,
 }: {
   chatId: string;
-  selectedVisibilityType: VisibilityType;
   selectedClientId: string | null;
   isReadonly: boolean;
 }) {
@@ -37,7 +33,7 @@ function PureChatHeader({
           <Button
             className="order-2 ml-auto h-8 px-2 md:order-1 md:ml-0 md:h-fit md:px-2"
             onClick={() => {
-              router.push("/");
+              router.push("/chat/new");
               router.refresh();
             }}
             variant="outline"
@@ -48,19 +44,12 @@ function PureChatHeader({
         )}
 
         {!isReadonly && (
-          <>
-            <ClientSelector
-              chatId={chatId}
-              className="order-1 md:order-2"
-              onCreateClient={() => setShowClientDialog(true)}
-              selectedClientId={selectedClientId}
-            />
-            <VisibilitySelector
-              chatId={chatId}
-              className="order-1 md:order-3"
-              selectedVisibilityType={selectedVisibilityType}
-            />
-          </>
+          <ClientSelector
+            chatId={chatId}
+            className="order-1 md:order-2"
+            onCreateClient={() => setShowClientDialog(true)}
+            selectedClientId={selectedClientId}
+          />
         )}
       </header>
 
@@ -75,7 +64,6 @@ function PureChatHeader({
 export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
   return (
     prevProps.chatId === nextProps.chatId &&
-    prevProps.selectedVisibilityType === nextProps.selectedVisibilityType &&
     prevProps.selectedClientId === nextProps.selectedClientId &&
     prevProps.isReadonly === nextProps.isReadonly
   );

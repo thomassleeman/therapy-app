@@ -127,7 +127,7 @@ function ClientSection({
   onDelete: (chatId: string) => void;
   setOpenMobile: (open: boolean) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <Collapsible onOpenChange={setIsOpen} open={isOpen}>
@@ -179,7 +179,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [uncategorizedOpen, setUncategorizedOpen] = useState(true);
+  const [uncategorizedOpen, setUncategorizedOpen] = useState(false);
 
   const hasReachedEnd = paginatedChatHistories
     ? paginatedChatHistories.some((page) => page.hasMore === false)

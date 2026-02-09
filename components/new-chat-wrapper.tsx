@@ -31,7 +31,6 @@ export function NewChatWrapper({
         initialChatModel={initialChatModel}
         initialClientId={selectedClientId}
         initialMessages={[]}
-        initialVisibilityType="private"
         isReadonly={false}
         key={id}
       />

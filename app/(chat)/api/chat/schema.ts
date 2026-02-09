@@ -42,7 +42,7 @@ export const postRequestBodySchema = z.object({
   message: userMessageSchema.optional(),
   messages: z.array(messageSchema).optional(),
   selectedChatModel: z.string(),
-  selectedVisibilityType: z.enum(["public", "private"]),
+  selectedVisibilityType: z.enum(["public", "private"]).optional(),
   selectedClientId: z.string().uuid().nullable().optional(),
   therapeuticOrientation: therapeuticOrientationSchema.optional(),
 });

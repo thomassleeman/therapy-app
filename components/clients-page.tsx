@@ -33,7 +33,6 @@ import {
   TrashIcon,
   UserIcon,
 } from "./icons";
-import { SidebarToggle } from "./sidebar-toggle";
 
 type ChatCounts = { clientId: string | null; count: number }[];
 
@@ -143,7 +142,7 @@ function GeneralSection({ chatCount }: { chatCount: number }) {
           <span className="mr-2 text-sm text-muted-foreground">
             {chatCount} {chatCount === 1 ? "chat" : "chats"}
           </span>
-          <Link href="/?clientId=general">
+          <Link href="/chat/new?clientId=general">
             <Button size="icon" variant="ghost">
               <PlusIcon />
             </Button>
@@ -218,8 +217,7 @@ export function ClientsPage() {
 
   return (
     <div className="flex h-dvh flex-col bg-background">
-      <header className="sticky top-0 flex items-center gap-2 bg-background px-2 py-1.5 md:px-2">
-        <SidebarToggle />
+      <header className="sticky top-0 flex items-center gap-2 bg-background px-4 py-1.5">
         <h1 className="text-lg font-semibold">Clients</h1>
         <div className="ml-auto">
           <Button
@@ -236,10 +234,10 @@ export function ClientsPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8">
-        <div className="mx-auto max-w-2xl space-y-3 pt-4">
+        <div className="pt-4">
           {isLoadingClients ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
+            <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
                 <div className="rounded-lg border p-4" key={i}>
                   <div className="flex items-center gap-3">
                     <div className="size-10 animate-pulse rounded-full bg-muted" />
@@ -274,21 +272,23 @@ export function ClientsPage() {
                 </div>
               )}
 
-              {clients.map((client) => (
-                <ClientCard
-                  chatCount={getCountForClient(client.id)}
-                  client={client}
-                  key={client.id}
-                  onDelete={() => setDeleteClient(client)}
-                  onEdit={() => {
-                    setEditingClient(client);
-                    setShowClientDialog(true);
-                  }}
-                  onNewChat={() => router.push(`/?clientId=${client.id}`)}
-                />
-              ))}
+              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {clients.map((client) => (
+                  <ClientCard
+                    chatCount={getCountForClient(client.id)}
+                    client={client}
+                    key={client.id}
+                    onDelete={() => setDeleteClient(client)}
+                    onEdit={() => {
+                      setEditingClient(client);
+                      setShowClientDialog(true);
+                    }}
+                    onNewChat={() => router.push(`/chat/new?clientId=${client.id}`)}
+                  />
+                ))}
 
-              <GeneralSection chatCount={getCountForClient(null)} />
+                <GeneralSection chatCount={getCountForClient(null)} />
+              </div>
             </>
           )}
         </div>
@@ -310,7 +310,9 @@ export function ClientsPage() {
 
       <AlertDialog
         onOpenChange={(open) => {
-          if (!open) setDeleteClient(null);
+          if (!open) {
+            setDeleteClient(null);
+          }
         }}
         open={deleteClient !== null}
       >

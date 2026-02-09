@@ -21,7 +21,7 @@ export function ClientPicker({
 
   return (
     <div className="flex h-dvh flex-col items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-5xl space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
             Who is this session for?
@@ -32,7 +32,7 @@ export function ClientPicker({
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           <button
             className="flex w-full items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"
             onClick={() => onSelect(null)}
@@ -49,9 +49,8 @@ export function ClientPicker({
             </div>
           </button>
 
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
+          {isLoading
+            ? [1, 2, 3].map((i) => (
                 <div
                   className="flex items-center gap-3 rounded-lg border p-4"
                   key={i}
@@ -62,9 +61,8 @@ export function ClientPicker({
                     <div className="h-3 w-40 animate-pulse rounded bg-muted" />
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
+              ))
+            : (
             clients.map((client) => (
               <button
                 className="flex w-full items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"

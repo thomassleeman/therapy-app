@@ -67,7 +67,6 @@ export async function POST(request: Request) {
       message,
       messages,
       selectedChatModel,
-      selectedVisibilityType,
       selectedClientId,
       therapeuticOrientation,
     } = requestBody;
@@ -107,7 +106,7 @@ export async function POST(request: Request) {
         id,
         userId: session.user.id,
         title: "New chat",
-        visibility: selectedVisibilityType,
+        visibility: "private",
         clientId: selectedClientId ?? null,
       });
       titlePromise = generateTitleFromUserMessage({ message });

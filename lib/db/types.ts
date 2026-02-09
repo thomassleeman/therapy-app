@@ -123,3 +123,4 @@ export interface StreamInsert {
   chatId: string;
   createdAt?: string;
 }
+

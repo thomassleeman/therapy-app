@@ -23,7 +23,6 @@ import {
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -110,7 +109,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       className="h-8 p-1 md:h-fit md:p-2"
                       onClick={() => {
                         setOpenMobile(false);
-                        router.push("/");
+                        router.push("/chat/new");
                         router.refresh();
                       }}
                       type="button"
@@ -133,17 +132,16 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-
                     {/* <SidebarMenuButton asChild> */}
-                      <Link
-                        href="/clients"
-                        onClick={() => setOpenMobile(false)}
-                        >
-                    <button className="border bg-white gap-x-4 items-center flex w-full border-gray-200 rounded-lg p-2 font-bold hover:bg-gray-100 cursor-pointer">
+                    <Link href="/clients" onClick={() => setOpenMobile(false)}>
+                      <button
+                        className="border bg-white gap-x-4 items-center flex w-full border-gray-200 rounded-lg px-3 py-2 font-bold hover:bg-gray-100 cursor-pointer"
+                        type="button"
+                      >
                         <UserIcon />
                         <span>Clients</span>
-                        </button>
-                      </Link>
+                      </button>
+                    </Link>
                     {/* </SidebarMenuButton> */}
                   </SidebarMenuItem>
                 </SidebarMenu>

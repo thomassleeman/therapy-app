@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { ArtifactKind } from "@/components/artifact";
-import type { VisibilityType } from "@/components/visibility-selector";
 import { createClient } from "@/utils/supabase/server";
 import { ChatSDKError } from "../errors";
 import type {
@@ -72,7 +71,7 @@ export async function saveChat({
   id: string;
   userId: string;
   title: string;
-  visibility: VisibilityType;
+  visibility: "private" | "public";
   clientId?: string | null;
 }) {
   try {
@@ -604,32 +603,6 @@ export async function deleteMessagesByChatIdAfterTimestamp({
   }
 }
 
-export async function updateChatVisibilityById({
-  chatId,
-  visibility,
-}: {
-  chatId: string;
-  visibility: "private" | "public";
-}) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("Chat")
-      .update({ visibility })
-      .eq("id", chatId)
-      .select();
-
-    if (error) handleSupabaseError(error, "update chat visibility by id");
-    return data;
-  } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to update chat visibility by id"
-    );
-  }
-}
-
 export async function updateChatTitleById({
   chatId,
   title,
@@ -972,6 +945,33 @@ export async function getChatCountsByClient({ userId }: { userId: string }) {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get chat counts by client"
+    );
+  }
+}
+
+export async function getRecentDocumentsByUserId({
+  userId,
+  limit = 5,
+}: {
+  userId: string;
+  limit?: number;
+}) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("Document")
+      .select("*")
+      .eq("userId", userId)
+      .order("createdAt", { ascending: false })
+      .limit(limit);
+
+    if (error) handleSupabaseError(error, "get recent documents by user id");
+    return data as Document[];
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get recent documents by user id"
     );
   }
 }
