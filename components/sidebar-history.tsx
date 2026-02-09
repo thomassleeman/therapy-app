@@ -326,9 +326,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     >
                       <ChevronDownIcon />
                     </motion.div>
-                    <span className="truncate flex-1 text-left">
-                      Uncategorized
-                    </span>
+                    <span className="truncate flex-1 text-left">General</span>
                     <span className="text-sidebar-foreground/30">
                       {groupedChats.uncategorized.length}
                     </span>
@@ -361,7 +359,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
 
           {hasReachedEnd ? (
             <div className="mt-8 flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
-              You have reached the end of your chat history.
+               --------
             </div>
           ) : (
             <div className="mt-8 flex flex-row items-center gap-2 p-2 text-zinc-500 dark:text-zinc-400">

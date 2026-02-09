@@ -58,7 +58,7 @@ export function ClientSelector({
         >
           <UserIcon />
           <span className="max-w-[100px] truncate md:sr-only lg:not-sr-only">
-            {selectedClient?.name ?? "No Client"}
+            {selectedClient?.name ?? "General"}
           </span>
           <ChevronDownIcon />
         </Button>
@@ -75,9 +75,9 @@ export function ClientSelector({
           }}
         >
           <div className="flex flex-col items-start gap-1">
-            <span>No Client</span>
+            <span>General</span>
             <span className="text-muted-foreground text-xs">
-              Chat without client assignment
+              General reflection (no specific client)
             </span>
           </div>
           <div className="text-foreground opacity-0 group-data-[active=true]/item:opacity-100 dark:text-foreground">

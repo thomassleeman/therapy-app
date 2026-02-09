@@ -1,54 +1,47 @@
 import { cookies } from "next/headers";
 import { Suspense } from "react";
-import { Chat } from "@/components/chat";
-import { DataStreamHandler } from "@/components/data-stream-handler";
+import { NewChatWrapper } from "@/components/new-chat-wrapper";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateUUID } from "@/lib/utils";
 
-export default function Page() {
+export default function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ clientId?: string }>;
+}) {
   return (
     <Suspense fallback={<div className="flex h-dvh" />}>
-      <NewChatPage />
+      <NewChatPage searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function NewChatPage() {
-  const cookieStore = await cookies();
+async function NewChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ clientId?: string }>;
+}) {
+  const [cookieStore, resolvedParams] = await Promise.all([
+    cookies(),
+    searchParams,
+  ]);
+
   const modelIdFromCookie = cookieStore.get("chat-model");
   const id = generateUUID();
+  const chatModel = modelIdFromCookie?.value ?? DEFAULT_CHAT_MODEL;
 
-  if (!modelIdFromCookie) {
-    return (
-      <>
-        <Chat
-          autoResume={false}
-          id={id}
-          initialChatModel={DEFAULT_CHAT_MODEL}
-          initialClientId={null}
-          initialMessages={[]}
-          initialVisibilityType="private"
-          isReadonly={false}
-          key={id}
-        />
-        <DataStreamHandler />
-      </>
-    );
-  }
+  // If ?clientId is provided, skip the picker and pre-select that client
+  // "general" maps to null (no client), absent = undefined (show picker)
+  const preselectedClientId =
+    resolvedParams.clientId === "general"
+      ? null
+      : (resolvedParams.clientId ?? undefined);
 
   return (
-    <>
-      <Chat
-        autoResume={false}
-        id={id}
-        initialChatModel={modelIdFromCookie.value}
-        initialClientId={null}
-        initialMessages={[]}
-        initialVisibilityType="private"
-        isReadonly={false}
-        key={id}
-      />
-      <DataStreamHandler />
-    </>
+    <NewChatWrapper
+      id={id}
+      initialChatModel={chatModel}
+      preselectedClientId={preselectedClientId}
+    />
   );
 }

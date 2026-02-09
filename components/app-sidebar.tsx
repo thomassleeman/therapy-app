@@ -8,7 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
-import { PlusIcon, TrashIcon } from "@/components/icons";
+import { PlusIcon, TrashIcon, UserIcon } from "@/components/icons";
 import {
   getChatHistoryPaginationKey,
   SidebarHistory,
@@ -19,8 +19,12 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import Logo from "@/public/images/brainLogoCompressed.png";
@@ -124,6 +128,28 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
+          {user && (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+
+                    {/* <SidebarMenuButton asChild> */}
+                      <Link
+                        href="/clients"
+                        onClick={() => setOpenMobile(false)}
+                        >
+                    <button className="border bg-white gap-x-4 items-center flex w-full border-gray-200 rounded-lg p-2 font-bold hover:bg-gray-100 cursor-pointer">
+                        <UserIcon />
+                        <span>Clients</span>
+                        </button>
+                      </Link>
+                    {/* </SidebarMenuButton> */}
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
           <SidebarHistory user={user} />
         </SidebarContent>
         <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>

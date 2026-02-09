@@ -913,6 +913,69 @@ export async function deleteClientById({ id }: { id: string }) {
   }
 }
 
+export async function getChatsByClientId({
+  clientId,
+  userId,
+}: {
+  clientId: string | null;
+  userId: string;
+}) {
+  try {
+    const supabase = await createClient();
+    let query = supabase
+      .from("Chat")
+      .select("*")
+      .eq("userId", userId)
+      .order("createdAt", { ascending: false });
+
+    if (clientId === null) {
+      query = query.is("clientId", null);
+    } else {
+      query = query.eq("clientId", clientId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) handleSupabaseError(error, "get chats by client id");
+    return data as Chat[];
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get chats by client id"
+    );
+  }
+}
+
+export async function getChatCountsByClient({ userId }: { userId: string }) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("Chat")
+      .select("clientId")
+      .eq("userId", userId);
+
+    if (error) handleSupabaseError(error, "get chat counts by client");
+
+    const counts = new Map<string | null, number>();
+    for (const chat of data || []) {
+      const key = chat.clientId ?? null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries()).map(([clientId, count]) => ({
+      clientId,
+      count,
+    }));
+  } catch (error) {
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get chat counts by client"
+    );
+  }
+}
+
 export async function updateChatClientById({
   chatId,
   clientId,
