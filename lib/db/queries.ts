@@ -6,6 +6,8 @@ import { ChatSDKError } from "../errors";
 import type {
   Chat,
   Client,
+  ClientInsert,
+  ClientTag,
   DBMessage,
   Document,
   Suggestion,
@@ -16,11 +18,38 @@ import type {
 export type {
   Chat,
   Client,
+  ClientTag,
   DBMessage,
   Document,
   Suggestion,
   Vote,
 } from "./types";
+
+// Helper: map a raw clients row (snake_case) to the Client interface (camelCase)
+function mapRowToClient(row: any): Client {
+  return {
+    id: row.id,
+    therapistId: row.therapist_id,
+    name: row.name,
+    background: row.background ?? null,
+    therapeuticModalities: row.therapeutic_modalities ?? [],
+    presentingIssues: row.presenting_issues ?? null,
+    treatmentGoals: row.treatment_goals ?? null,
+    riskConsiderations: row.risk_considerations ?? null,
+    status: row.status ?? "active",
+    sessionFrequency: row.session_frequency ?? null,
+    deliveryMethod: row.delivery_method ?? null,
+    therapyStartDate: row.therapy_start_date ?? null,
+    referralSource: row.referral_source ?? null,
+    ageBracket: row.age_bracket ?? null,
+    sessionDurationMinutes: row.session_duration_minutes ?? null,
+    contractedSessions: row.contracted_sessions ?? null,
+    feePerSession: row.fee_per_session != null ? Number(row.fee_per_session) : null,
+    supervisorNotes: row.supervisor_notes ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 // Helper function to handle Supabase errors
 function handleSupabaseError(
@@ -744,15 +773,34 @@ export async function getClientsByUserId({ userId }: { userId: string }) {
 
     if (error) handleSupabaseError(error, "get clients by user id");
 
-    // Map snake_case to camelCase
-    return (data || []).map((client) => ({
-      id: client.id,
-      therapistId: client.therapist_id,
-      name: client.name,
-      background: client.background,
-      createdAt: client.created_at,
-      updatedAt: client.updated_at,
-    })) as Client[];
+    const clients = (data || []).map(mapRowToClient);
+
+    // Bulk-fetch tags for all clients
+    if (clients.length > 0) {
+      const clientIds = clients.map((c) => c.id);
+      const { data: tagData } = await supabase
+        .from("client_tag_assignments")
+        .select("client_id, tag_id, client_tags(name)")
+        .in("client_id", clientIds);
+
+      if (tagData) {
+        const tagsByClient = new Map<string, string[]>();
+        for (const row of tagData) {
+          const clientId = row.client_id as string;
+          const tagName = (row as any).client_tags?.name as string | undefined;
+          if (tagName) {
+            const existing = tagsByClient.get(clientId) ?? [];
+            existing.push(tagName);
+            tagsByClient.set(clientId, existing);
+          }
+        }
+        for (const client of clients) {
+          client.tags = tagsByClient.get(client.id) ?? [];
+        }
+      }
+    }
+
+    return clients;
   } catch (error) {
     if (error instanceof ChatSDKError) throw error;
     throw new ChatSDKError(
@@ -776,14 +824,19 @@ export async function getClientById({ id }: { id: string }) {
       handleSupabaseError(error, "get client by id");
     }
 
-    return {
-      id: data.id,
-      therapistId: data.therapist_id,
-      name: data.name,
-      background: data.background,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    } as Client;
+    const client = mapRowToClient(data);
+
+    // Fetch tags
+    const { data: tagData } = await supabase
+      .from("client_tag_assignments")
+      .select("client_id, tag_id, client_tags(name)")
+      .eq("client_id", id);
+
+    client.tags = (tagData ?? [])
+      .map((row: any) => (row as any).client_tags?.name as string | undefined)
+      .filter((name): name is string => Boolean(name));
+
+    return client;
   } catch (error) {
     if (error instanceof ChatSDKError) throw error;
     throw new ChatSDKError(
@@ -793,37 +846,38 @@ export async function getClientById({ id }: { id: string }) {
   }
 }
 
-export async function createClientRecord({
-  therapistId,
-  name,
-  background,
-}: {
-  therapistId: string;
-  name: string;
-  background?: string | null;
-}) {
+export async function createClientRecord(
+  params: ClientInsert,
+) {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("clients")
       .insert({
-        therapist_id: therapistId,
-        name,
-        background: background ?? null,
+        therapist_id: params.therapistId,
+        name: params.name,
+        background: params.background ?? null,
+        therapeutic_modalities: params.therapeuticModalities ?? [],
+        presenting_issues: params.presentingIssues ?? null,
+        treatment_goals: params.treatmentGoals ?? null,
+        risk_considerations: params.riskConsiderations ?? null,
+        status: params.status ?? "active",
+        session_frequency: params.sessionFrequency ?? null,
+        delivery_method: params.deliveryMethod ?? null,
+        therapy_start_date: params.therapyStartDate ?? null,
+        referral_source: params.referralSource ?? null,
+        age_bracket: params.ageBracket ?? null,
+        session_duration_minutes: params.sessionDurationMinutes ?? null,
+        contracted_sessions: params.contractedSessions ?? null,
+        fee_per_session: params.feePerSession ?? null,
+        supervisor_notes: params.supervisorNotes ?? null,
       })
       .select()
       .single();
 
     if (error) handleSupabaseError(error, "create client");
 
-    return {
-      id: data.id,
-      therapistId: data.therapist_id,
-      name: data.name,
-      background: data.background,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    } as Client;
+    return mapRowToClient(data);
   } catch (error) {
     if (error instanceof ChatSDKError) throw error;
     throw new ChatSDKError("bad_request:database", "Failed to create client");
@@ -832,36 +886,51 @@ export async function createClientRecord({
 
 export async function updateClientById({
   id,
-  name,
-  background,
-}: {
-  id: string;
-  name: string;
-  background?: string | null;
-}) {
+  ...fields
+}: Omit<ClientInsert, "therapistId"> & { id: string }) {
   try {
     const supabase = await createClient();
+
+    // Map camelCase fields to snake_case columns, only including provided fields
+    const fieldMap: [string, string, unknown][] = [
+      ["name", "name", fields.name],
+      ["background", "background", fields.background],
+      ["therapeuticModalities", "therapeutic_modalities", fields.therapeuticModalities],
+      ["presentingIssues", "presenting_issues", fields.presentingIssues],
+      ["treatmentGoals", "treatment_goals", fields.treatmentGoals],
+      ["riskConsiderations", "risk_considerations", fields.riskConsiderations],
+      ["status", "status", fields.status],
+      ["sessionFrequency", "session_frequency", fields.sessionFrequency],
+      ["deliveryMethod", "delivery_method", fields.deliveryMethod],
+      ["therapyStartDate", "therapy_start_date", fields.therapyStartDate],
+      ["referralSource", "referral_source", fields.referralSource],
+      ["ageBracket", "age_bracket", fields.ageBracket],
+      ["sessionDurationMinutes", "session_duration_minutes", fields.sessionDurationMinutes],
+      ["contractedSessions", "contracted_sessions", fields.contractedSessions],
+      ["feePerSession", "fee_per_session", fields.feePerSession],
+      ["supervisorNotes", "supervisor_notes", fields.supervisorNotes],
+    ];
+
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    for (const [camelKey, snakeKey, value] of fieldMap) {
+      if ((fields as Record<string, unknown>)[camelKey] !== undefined) {
+        updatePayload[snakeKey] = value;
+      }
+    }
+
     const { data, error } = await supabase
       .from("clients")
-      .update({
-        name,
-        background: background ?? null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", id)
       .select()
       .single();
 
     if (error) handleSupabaseError(error, "update client by id");
 
-    return {
-      id: data.id,
-      therapistId: data.therapist_id,
-      name: data.name,
-      background: data.background,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    } as Client;
+    return mapRowToClient(data);
   } catch (error) {
     if (error instanceof ChatSDKError) throw error;
     throw new ChatSDKError(
@@ -998,6 +1067,124 @@ export async function updateChatClientById({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to update chat client by id"
+    );
+  }
+}
+
+// ============================================================
+// Tag management
+// ============================================================
+
+export async function getTagsByTherapistId({
+  therapistId,
+}: {
+  therapistId: string;
+}): Promise<ClientTag[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("client_tags")
+      .select("*")
+      .eq("therapist_id", therapistId)
+      .order("name", { ascending: true });
+
+    if (error) {
+      handleSupabaseError(error, "get tags by therapist id");
+    }
+
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      therapistId: row.therapist_id,
+      name: row.name,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get tags by therapist id"
+    );
+  }
+}
+
+export async function createTag({
+  therapistId,
+  name,
+}: {
+  therapistId: string;
+  name: string;
+}): Promise<ClientTag> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("client_tags")
+      .insert({ therapist_id: therapistId, name })
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "create tag");
+    }
+
+    return {
+      id: data.id,
+      therapistId: data.therapist_id,
+      name: data.name,
+      createdAt: data.created_at,
+    };
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError("bad_request:database", "Failed to create tag");
+  }
+}
+
+export async function deleteTag({ id }: { id: string }) {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("client_tags")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      handleSupabaseError(error, "delete tag");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError("bad_request:database", "Failed to delete tag");
+  }
+}
+
+export async function setClientTags({
+  clientId,
+  tagIds,
+}: {
+  clientId: string;
+  tagIds: string[];
+}) {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("set_client_tags", {
+      p_client_id: clientId,
+      p_tag_ids: tagIds,
+    });
+
+    if (error) {
+      handleSupabaseError(error, "set client tags");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to set client tags"
     );
   }
 }

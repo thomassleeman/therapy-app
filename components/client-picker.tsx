@@ -4,8 +4,26 @@ import { useState } from "react";
 import { ClientDialog } from "@/components/client-dialog";
 import { Button } from "@/components/ui/button";
 import { useClients } from "@/hooks/use-clients";
-import type { Client } from "@/lib/db/types";
+import type { Client, ClientStatus } from "@/lib/db/types";
+import { CLIENT_STATUS_LABELS } from "@/lib/db/types";
 import { MessageIcon, PlusIcon, UserIcon } from "./icons";
+
+const STATUS_COLORS: Record<ClientStatus, string> = {
+  active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  paused: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  waitlisted: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+};
+
+function PickerStatusBadge({ status }: { status: ClientStatus }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_COLORS[status]}`}
+    >
+      {CLIENT_STATUS_LABELS[status]}
+    </span>
+  );
+}
 
 export function ClientPicker({
   onSelect,
@@ -62,28 +80,31 @@ export function ClientPicker({
                   </div>
                 </div>
               ))
-            : (
-            clients.map((client) => (
-              <button
-                className="flex w-full items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"
-                key={client.id}
-                onClick={() => onSelect(client.id)}
-                type="button"
-              >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <UserIcon />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{client.name}</div>
-                  {client.background && (
-                    <div className="truncate text-sm text-muted-foreground">
-                      {client.background}
+            : clients.map((client) => (
+                <button
+                  className="flex w-full items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"
+                  key={client.id}
+                  onClick={() => onSelect(client.id)}
+                  type="button"
+                >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <UserIcon />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">
+                        {client.name}
+                      </span>
+                      <PickerStatusBadge status={client.status} />
                     </div>
-                  )}
-                </div>
-              </button>
-            ))
-          )}
+                    {client.therapeuticModalities.length > 0 && (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {client.therapeuticModalities.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
         </div>
 
         <Button

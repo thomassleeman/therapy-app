@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -22,7 +23,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useClients } from "@/hooks/use-clients";
-import type { Chat, Client } from "@/lib/db/types";
+import type { Chat, Client, ClientStatus } from "@/lib/db/types";
+import { CLIENT_STATUS_LABELS } from "@/lib/db/types";
 import { fetcher } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
 import {
@@ -35,6 +37,23 @@ import {
 } from "./icons";
 
 type ChatCounts = { clientId: string | null; count: number }[];
+
+const STATUS_COLORS: Record<ClientStatus, string> = {
+  active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  paused: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  waitlisted: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+};
+
+function StatusBadge({ status }: { status: ClientStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status]}`}
+    >
+      {CLIENT_STATUS_LABELS[status]}
+    </span>
+  );
+}
 
 function ClientCard({
   client,
@@ -55,6 +74,11 @@ function ClientCard({
     fetcher
   );
 
+  const modalities = client.therapeuticModalities ?? [];
+  const tags = client.tags ?? [];
+  const showOverflow = modalities.length > 3;
+  const displayModalities = showOverflow ? modalities.slice(0, 3) : modalities;
+
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex items-center gap-3 p-4">
@@ -62,9 +86,43 @@ function ClientCard({
           <UserIcon />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-medium">{client.name}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{client.name}</span>
+            <StatusBadge status={client.status} />
+          </div>
+          {modalities.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {displayModalities.map((m) => (
+                <Badge
+                  className="px-1.5 py-0 text-[10px]"
+                  key={m}
+                  variant="outline"
+                >
+                  {m}
+                </Badge>
+              ))}
+              {showOverflow && (
+                <span className="text-[10px] text-muted-foreground">
+                  +{modalities.length - 3} more
+                </span>
+              )}
+            </div>
+          )}
+          {tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {tags.map((t) => (
+                <Badge
+                  className="px-1.5 py-0 text-[10px]"
+                  key={t}
+                  variant="secondary"
+                >
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          )}
           {client.background && (
-            <div className="truncate text-sm text-muted-foreground">
+            <div className="mt-1 truncate text-sm text-muted-foreground">
               {client.background}
             </div>
           )}
@@ -283,7 +341,9 @@ export function ClientsPage() {
                       setEditingClient(client);
                       setShowClientDialog(true);
                     }}
-                    onNewChat={() => router.push(`/chat/new?clientId=${client.id}`)}
+                    onNewChat={() =>
+                      router.push(`/chat/new?clientId=${client.id}`)
+                    }
                   />
                 ))}
 

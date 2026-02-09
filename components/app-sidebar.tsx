@@ -8,7 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
-import { PlusIcon, TrashIcon, UserIcon } from "@/components/icons";
+import { HomeIcon, PlusIcon, TrashIcon, UserIcon } from "@/components/icons";
 import {
   getChatHistoryPaginationKey,
   SidebarHistory,
@@ -132,17 +132,34 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    {/* <SidebarMenuButton asChild> */}
-                    <Link href="/clients" onClick={() => setOpenMobile(false)}>
-                      <button
-                        className="border bg-white gap-x-4 items-center flex w-full border-gray-200 rounded-lg px-3 py-2 font-bold hover:bg-gray-100 cursor-pointer"
-                        type="button"
+                    <div className="flex gap-2">
+                      <Link
+                        className="flex-1"
+                        href="/clients"
+                        onClick={() => setOpenMobile(false)}
                       >
-                        <UserIcon />
-                        <span>Clients</span>
-                      </button>
-                    </Link>
-                    {/* </SidebarMenuButton> */}
+                        <button
+                          className="border bg-white gap-x-2 items-center flex w-full border-gray-200 rounded-lg px-3 py-2 font-bold hover:bg-gray-100 cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
+                          type="button"
+                        >
+                          <UserIcon />
+                          <span>Clients</span>
+                        </button>
+                      </Link>
+                      <Link
+                        className="flex-1"
+                        href="/"
+                        onClick={() => setOpenMobile(false)}
+                      >
+                        <button
+                          className="border bg-white gap-x-2 items-center flex w-full border-gray-200 rounded-lg px-3 py-2 font-bold hover:bg-gray-100 cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
+                          type="button"
+                        >
+                          <HomeIcon size={16} />
+                          <span>Dashboard</span>
+                        </button>
+                      </Link>
+                    </div>
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
