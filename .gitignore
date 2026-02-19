@@ -42,3 +42,8 @@ yarn-error.log*
 /playwright-report/
 /blob-report/
 /playwright/*
+
+# RAG knowledge base content (sensitive therapeutic/regulatory material)
+knowledge-base/**
+!knowledge-base/**/
+!knowledge-base/**/.gitkeep

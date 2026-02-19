@@ -10,6 +10,7 @@ import type {
   ClientTag,
   DBMessage,
   Document,
+  HybridSearchResult,
   Suggestion,
   Vote,
 } from "./types";
@@ -21,6 +22,7 @@ export type {
   ClientTag,
   DBMessage,
   Document,
+  HybridSearchResult,
   Suggestion,
   Vote,
 } from "./types";
@@ -1186,5 +1188,72 @@ export async function setClientTags({
       "bad_request:database",
       "Failed to set client tags"
     );
+  }
+}
+
+// ============================================================
+// RAG hybrid search
+// ============================================================
+
+export async function hybridSearch({
+  queryText,
+  queryEmbedding,
+  matchCount = 5,
+  filterCategory,
+  filterModality,
+  filterJurisdiction,
+  fullTextWeight = 1.0,
+  semanticWeight = 1.0,
+  rrfK = 60,
+}: {
+  queryText: string;
+  queryEmbedding: number[];
+  matchCount?: number;
+  filterCategory?: string | null;
+  filterModality?: string | null;
+  filterJurisdiction?: string | null;
+  fullTextWeight?: number;
+  semanticWeight?: number;
+  rrfK?: number;
+}): Promise<HybridSearchResult[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("hybrid_search", {
+      query_text: queryText,
+      query_embedding: `[${queryEmbedding.join(",")}]`,
+      match_count: matchCount,
+      filter_category: filterCategory ?? null,
+      filter_modality: filterModality ?? null,
+      filter_jurisdiction: filterJurisdiction ?? null,
+      full_text_weight: fullTextWeight,
+      semantic_weight: semanticWeight,
+      rrf_k: rrfK,
+    });
+
+    if (error) {
+      handleSupabaseError(error, "hybrid search");
+    }
+
+    if (!data) {
+      return [];
+    }
+
+    return (data as any[]).map((row) => ({
+      id: row.id,
+      content: row.content,
+      documentId: row.document_id,
+      sectionPath: row.section_path,
+      modality: row.modality,
+      jurisdiction: row.jurisdiction,
+      documentType: row.document_type,
+      metadata: row.metadata,
+      similarityScore: row.similarity_score,
+      combinedRrfScore: row.combined_rrf_score,
+    }));
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError("bad_request:database", "Failed to hybrid search");
   }
 }

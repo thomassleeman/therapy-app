@@ -175,6 +175,63 @@ export interface Stream {
   createdAt: string;
 }
 
+// RAG knowledge base types
+
+export const DOCUMENT_CATEGORIES = [
+  "legislation",
+  "guideline",
+  "therapeutic_content",
+] as const;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+export const DOCUMENT_JURISDICTIONS = ["UK", "EU"] as const;
+export type DocumentJurisdiction = (typeof DOCUMENT_JURISDICTIONS)[number];
+
+export const CHUNK_JURISDICTIONS = ["UK", "EU"] as const;
+export type ChunkJurisdiction = (typeof CHUNK_JURISDICTIONS)[number];
+
+export interface KnowledgeDocument {
+  id: string;
+  title: string;
+  category: DocumentCategory;
+  sourceUrl: string | null;
+  version: string | null;
+  source: string;
+  modality: string | null;
+  jurisdiction: DocumentJurisdiction | null;
+  supersededBy: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  documentId: string;
+  content: string;
+  embedding: number[] | null;
+  chunkIndex: number;
+  modality: string | null;
+  jurisdiction: ChunkJurisdiction | null;
+  documentType: DocumentCategory;
+  sectionPath: string | null;
+  metadata: Record<string, unknown>;
+  parentChunkId: string | null;
+  createdAt: string;
+}
+
+export interface HybridSearchResult {
+  id: string;
+  content: string;
+  documentId: string;
+  sectionPath: string | null;
+  modality: string | null;
+  jurisdiction: string | null;
+  documentType: DocumentCategory;
+  metadata: Record<string, unknown>;
+  similarityScore: number;
+  combinedRrfScore: number;
+}
+
 // Insert types (for creating new records)
 export interface ChatInsert {
   id?: string;
@@ -245,5 +302,34 @@ export interface SuggestionInsert {
 export interface StreamInsert {
   id?: string;
   chatId: string;
+  createdAt?: string;
+}
+
+export interface KnowledgeDocumentInsert {
+  id?: string;
+  title: string;
+  category: DocumentCategory;
+  sourceUrl?: string | null;
+  version?: string | null;
+  source: string;
+  modality?: string | null;
+  jurisdiction?: DocumentJurisdiction | null;
+  supersededBy?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface KnowledgeChunkInsert {
+  id?: string;
+  documentId: string;
+  content: string;
+  embedding?: number[] | null;
+  chunkIndex: number;
+  modality?: string | null;
+  jurisdiction?: ChunkJurisdiction | null;
+  documentType: DocumentCategory;
+  sectionPath?: string | null;
+  metadata?: Record<string, unknown>;
+  parentChunkId?: string | null;
   createdAt?: string;
 }

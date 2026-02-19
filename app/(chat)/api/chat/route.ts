@@ -18,6 +18,7 @@ import {
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { searchKnowledgeBase } from "@/lib/ai/tools/search-knowledge-base";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { auth, type UserType } from "@/lib/auth";
 import { isProductionEnvironment } from "@/lib/constants";
@@ -161,8 +162,13 @@ export async function POST(request: Request) {
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools: isReasoningModel
-            ? []
-            : ["createDocument", "updateDocument", "requestSuggestions"],
+            ? ["searchKnowledgeBase"]
+            : [
+                "createDocument",
+                "updateDocument",
+                "requestSuggestions",
+                "searchKnowledgeBase",
+              ],
           providerOptions: isReasoningModel
             ? {
                 anthropic: {
@@ -174,6 +180,7 @@ export async function POST(request: Request) {
             createDocument: createDocument({ session, dataStream }),
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({ session, dataStream }),
+            searchKnowledgeBase: searchKnowledgeBase({ session }),
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,

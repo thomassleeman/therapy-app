@@ -10,13 +10,17 @@
     "format": "ultracite fix",
     "db:types": "npx supabase gen types typescript --local > lib/db/database.types.ts",
     "db:push": "npx supabase db push",
-    "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
+    "test": "export PLAYWRIGHT=True && pnpm exec playwright test",
+    "ingest": "tsx scripts/ingest-knowledge.ts"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.15",
+    "@ai-sdk/openai": "^3.0.30",
     "@ai-sdk/provider": "^3.0.3",
     "@ai-sdk/react": "3.0.39",
     "@icons-pack/react-simple-icons": "^13.7.0",
+    "@langchain/core": "^1.1.24",
+    "@langchain/textsplitters": "^1.0.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/api-logs": "^0.200.0",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -49,6 +53,7 @@
     "fast-deep-equal": "^3.1.3",
     "framer-motion": "^11.3.19",
     "geist": "^1.3.1",
+    "gray-matter": "^4.0.3",
     "katex": "^0.16.25",
     "lucide-react": "^0.446.0",
     "motion": "^12.23.26",
