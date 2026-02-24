@@ -1,8 +1,13 @@
 import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
 
 const mockUsage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
-  outputTokens: { total: 20, text: 20, reasoning: 0 },
+  inputTokens: {
+    total: 10,
+    noCache: 10,
+    cacheRead: undefined,
+    cacheWrite: undefined,
+  },
+  outputTokens: { total: 20, text: 20, reasoning: undefined },
 };
 
 export function getResponseChunksByPrompt(
@@ -26,6 +31,7 @@ export function getResponseChunksByPrompt(
     {
       type: "finish",
       finishReason: { unified: "stop", raw: "stop" },
+      logprobs: undefined,
       usage: mockUsage,
     }
   );

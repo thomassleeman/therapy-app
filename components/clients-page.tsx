@@ -25,7 +25,7 @@ import {
 import { useClients } from "@/hooks/use-clients";
 import type { Chat, Client, ClientStatus } from "@/lib/db/types";
 import { CLIENT_STATUS_LABELS } from "@/lib/db/types";
-import { fetcher } from "@/lib/utils";
+import { fetcher, formatDate } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
 import {
   ChevronDownIcon,
@@ -165,7 +165,7 @@ function ClientCard({
                   <MessageIcon size={14} />
                   <span className="truncate flex-1">{chat.title}</span>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(chat.createdAt).toLocaleDateString()}
+                    {formatDate(chat.createdAt)}
                   </span>
                 </Link>
               ))}
@@ -225,7 +225,7 @@ function GeneralSection({ chatCount }: { chatCount: number }) {
                   <MessageIcon size={14} />
                   <span className="truncate flex-1">{chat.title}</span>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(chat.createdAt).toLocaleDateString()}
+                    {formatDate(chat.createdAt)}
                   </span>
                 </Link>
               ))}

@@ -136,7 +136,7 @@ export const searchLegislation = tool({
       .enum(["UK", "EU"])
       .describe(
         "The therapist's jurisdiction. Infer from the therapist's profile or ask if unclear. " +
-          "UK covers England, Wales, Scotland, and Northern Ireland. IE covers Republic of Ireland."
+          "UK covers England, Wales, Scotland, and Northern Ireland. EU covers Republic of Ireland and other EU member states."
       ),
   }),
   execute: async ({ query, jurisdiction }) =>
@@ -176,7 +176,7 @@ export const searchGuidelines = tool({
       .optional()
       .describe(
         "Optional. The therapist's jurisdiction to scope results to the relevant regulatory body. " +
-          "BACP/UKCP/HCPC for UK, relevant EU bodies for IE. Omit to search across all jurisdictions."
+          "BACP/UKCP/HCPC for UK, IACP/CORU for EU. Omit to search across all jurisdictions."
       ),
   }),
   execute: async ({ query, jurisdiction }) =>
@@ -215,7 +215,7 @@ export const searchTherapeuticContent = tool({
       .enum(["cbt", "person_centred", "psychodynamic"])
       .describe(
         "The therapeutic modality to filter by. Should match the therapist's declared modality. " +
-          "Use CBT for cognitive behavioural therapy, person_centred for Rogerian/humanistic approaches, " +
+          "Use cbt for cognitive behavioural therapy, person_centred for Rogerian/humanistic approaches, " +
           "psychodynamic for psychoanalytic/psychodynamic approaches."
       ),
   }),

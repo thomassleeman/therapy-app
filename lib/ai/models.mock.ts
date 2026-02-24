@@ -7,8 +7,13 @@ const mockResponses: Record<string, string> = {
 };
 
 const mockUsage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
-  outputTokens: { total: 20, text: 20, reasoning: 0 },
+  inputTokens: {
+    total: 10,
+    noCache: 10,
+    cacheRead: undefined,
+    cacheWrite: undefined,
+  },
+  outputTokens: { total: 20, text: 20, reasoning: undefined },
 };
 
 function getResponseForPrompt(prompt: unknown): string {
@@ -36,7 +41,7 @@ const createMockModel = (): LanguageModel => {
     defaultObjectGenerationMode: "tool",
     supportedUrls: {},
     doGenerate: async ({ prompt }: { prompt: unknown }) => ({
-      finishReason: "stop",
+      finishReason: { unified: "stop", raw: undefined },
       usage: mockUsage,
       content: [{ type: "text", text: getResponseForPrompt(prompt) }],
       warnings: [],
@@ -62,7 +67,8 @@ const createMockModel = (): LanguageModel => {
             controller.enqueue({ type: "text-end", id: "t1" });
             controller.enqueue({
               type: "finish",
-              finishReason: "stop",
+              finishReason: { unified: "stop", raw: undefined },
+              logprobs: undefined,
               usage: mockUsage,
             });
             controller.close();
@@ -81,7 +87,7 @@ const createMockReasoningModel = (): LanguageModel => {
     defaultObjectGenerationMode: "tool",
     supportedUrls: {},
     doGenerate: async () => ({
-      finishReason: "stop",
+      finishReason: { unified: "stop", raw: undefined },
       usage: mockUsage,
       content: [{ type: "text", text: "This is a reasoned response." }],
       reasoning: [
@@ -111,7 +117,8 @@ const createMockReasoningModel = (): LanguageModel => {
           controller.enqueue({ type: "text-end", id: "t1" });
           controller.enqueue({
             type: "finish",
-            finishReason: "stop",
+            finishReason: { unified: "stop", raw: undefined },
+            logprobs: undefined,
             usage: mockUsage,
           });
           controller.close();
@@ -129,10 +136,15 @@ const createMockTitleModel = (): LanguageModel => {
     defaultObjectGenerationMode: "tool",
     supportedUrls: {},
     doGenerate: async () => ({
-      finishReason: "stop",
+      finishReason: { unified: "stop", raw: undefined },
       usage: {
-        inputTokens: { total: 5, noCache: 5, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 5, text: 5, reasoning: 0 },
+        inputTokens: {
+          total: 5,
+          noCache: 5,
+          cacheRead: undefined,
+          cacheWrite: undefined,
+        },
+        outputTokens: { total: 5, text: 5, reasoning: undefined },
       },
       content: [{ type: "text", text: "Test Conversation" }],
       warnings: [],
@@ -149,15 +161,16 @@ const createMockTitleModel = (): LanguageModel => {
           controller.enqueue({ type: "text-end", id: "t1" });
           controller.enqueue({
             type: "finish",
-            finishReason: "stop",
+            finishReason: { unified: "stop", raw: undefined },
+            logprobs: undefined,
             usage: {
               inputTokens: {
                 total: 5,
                 noCache: 5,
-                cacheRead: 0,
-                cacheWrite: 0,
+                cacheRead: undefined,
+                cacheWrite: undefined,
               },
-              outputTokens: { total: 5, text: 5, reasoning: 0 },
+              outputTokens: { total: 5, text: 5, reasoning: undefined },
             },
           });
           controller.close();

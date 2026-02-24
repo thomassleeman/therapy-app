@@ -4,13 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Chat, Client, Document } from "@/lib/db/types";
+import { formatDate } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
-import {
-  FileIcon,
-  MessageIcon,
-  PlusIcon,
-  UserIcon,
-} from "./icons";
+import { FileIcon, MessageIcon, PlusIcon, UserIcon } from "./icons";
 
 type ChatCount = { clientId: string | null; count: number };
 
@@ -52,10 +48,7 @@ export function DashboardPage({
               <span>Start General Chat</span>
             </Button>
           </Link>
-          <Button
-            onClick={() => setShowClientDialog(true)}
-            variant="outline"
-          >
+          <Button onClick={() => setShowClientDialog(true)} variant="outline">
             <PlusIcon size={16} />
             <span>Add Client</span>
           </Button>
@@ -98,7 +91,7 @@ export function DashboardPage({
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {getClientName(chat.clientId)} &middot;{" "}
-                        {new Date(chat.createdAt).toLocaleDateString()}
+                        {formatDate(chat.createdAt)}
                       </div>
                     </div>
                   </Link>
@@ -129,7 +122,7 @@ export function DashboardPage({
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {doc.kind} &middot;{" "}
-                        {new Date(doc.createdAt).toLocaleDateString()}
+                        {formatDate(doc.createdAt)}
                       </div>
                     </div>
                   </div>

@@ -93,6 +93,10 @@ export function getTrailingMessageId({
   return trailingMessage.id;
 }
 
+export function formatDate(date: Date | string): string {
+  return new Date(date).toLocaleDateString("en-GB");
+}
+
 export function sanitizeText(text: string) {
   return text.replace('<has_function_call>', '');
 }

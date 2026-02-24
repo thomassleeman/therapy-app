@@ -118,27 +118,57 @@ const getOrientationPrompt = (orientation?: TherapeuticOrientation): string => {
   return `\n\n## Therapeutic Framework for This Session\n${orientationDescriptions[orientation]}`;
 };
 
+const getToolContextPrompt = (
+  modality: string | null | undefined,
+  jurisdiction: string | null | undefined,
+): string => {
+  const parts: string[] = [];
+
+  if (modality) {
+    parts.push(
+      `The therapist's active modality is "${modality}". When calling searchTherapeuticContent, use modality: "${modality}". This prevents cross-modality content bleeding.`,
+    );
+  }
+
+  if (jurisdiction) {
+    parts.push(
+      `The therapist's jurisdiction is "${jurisdiction}". When calling searchLegislation, always pass jurisdiction: "${jurisdiction}". When calling searchGuidelines, pass jurisdiction: "${jurisdiction}" unless the therapist explicitly asks about another jurisdiction's standards.`,
+    );
+  }
+
+  if (parts.length === 0) {
+    return "";
+  }
+
+  return `\n\n## Search Tool Context\n${parts.join("\n")}`;
+};
+
 export const systemPrompt = ({
   selectedChatModel,
   requestHints,
   therapeuticOrientation,
+  effectiveModality,
+  effectiveJurisdiction,
 }: {
   selectedChatModel: string;
   requestHints: RequestHints;
   therapeuticOrientation?: TherapeuticOrientation;
+  effectiveModality?: string | null;
+  effectiveJurisdiction?: string | null;
 }) => {
   const requestPrompt = getRequestPromptFromHints(requestHints);
   const orientationPrompt = getOrientationPrompt(therapeuticOrientation);
+  const toolContextPrompt = getToolContextPrompt(effectiveModality, effectiveJurisdiction);
 
   // reasoning models don't need artifacts prompt (they can't use tools)
   if (
     selectedChatModel.includes("reasoning") ||
     selectedChatModel.includes("thinking")
   ) {
-    return `${therapyReflectionPrompt}${orientationPrompt}\n\n${requestPrompt}`;
+    return `${therapyReflectionPrompt}${orientationPrompt}${toolContextPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${therapyReflectionPrompt}${orientationPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+  return `${therapyReflectionPrompt}${orientationPrompt}${toolContextPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
 };
 
 export const updateDocumentPrompt = (currentContent: string | null) => {

@@ -12,6 +12,8 @@ import type {
   Document,
   HybridSearchResult,
   Suggestion,
+  TherapistProfile,
+  TherapistProfileInsert,
   Vote,
 } from "./types";
 
@@ -24,6 +26,8 @@ export type {
   Document,
   HybridSearchResult,
   Suggestion,
+  TherapistProfile,
+  TherapistProfileInsert,
   Vote,
 } from "./types";
 
@@ -1256,4 +1260,56 @@ export async function hybridSearch({
     }
     throw new ChatSDKError("bad_request:database", "Failed to hybrid search");
   }
+}
+
+// ============================================================
+// Therapist profile
+// ============================================================
+
+export async function getTherapistProfile({
+  userId,
+}: {
+  userId: string;
+}): Promise<TherapistProfile | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("therapist_profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") { return null; }
+    handleSupabaseError(error, "get therapist profile");
+  }
+
+  return data
+    ? ({
+        id: data.id,
+        jurisdiction: data.jurisdiction,
+        defaultModality: data.default_modality,
+        professionalBody: data.professional_body,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      } as TherapistProfile)
+    : null;
+}
+
+export async function upsertTherapistProfile(
+  profile: TherapistProfileInsert,
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("therapist_profiles")
+    .upsert({
+      id: profile.id,
+      jurisdiction: profile.jurisdiction,
+      default_modality: profile.defaultModality ?? null,
+      professional_body: profile.professionalBody ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) { handleSupabaseError(error, "upsert therapist profile"); }
+  return data;
 }

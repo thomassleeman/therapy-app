@@ -26,14 +26,17 @@ import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
   deleteChatById,
+  getClientById,
   getChatById,
   getMessageCountByUserId,
   getMessagesByChatId,
+  getTherapistProfile,
   saveChat,
   saveMessages,
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
+import { resolveModality } from "@/lib/ai/modality";
 import type { DBMessage } from "@/lib/db/types";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -148,18 +151,38 @@ export async function POST(request: Request) {
 
     const modelMessages = await convertToModelMessages(uiMessages);
 
+    const [therapistProfile, client] = await Promise.all([
+      getTherapistProfile({ userId: session.user.id }),
+      selectedClientId
+        ? getClientById({ id: selectedClientId })
+        : Promise.resolve(null),
+    ]);
+
+    const effectiveModality = resolveModality({
+      chatOrientation: therapeuticOrientation as
+        | TherapeuticOrientation
+        | undefined,
+      clientModalities: client?.therapeuticModalities,
+      therapistDefault: therapistProfile?.defaultModality,
+    });
+
+    const effectiveJurisdiction = therapistProfile?.jurisdiction ?? null;
+
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(selectedChatModel),
+          // TODO(Task 9): systemPrompt signature will be updated to accept effectiveModality/effectiveJurisdiction
           system: systemPrompt({
             selectedChatModel,
             requestHints,
             therapeuticOrientation: therapeuticOrientation as
               | TherapeuticOrientation
               | undefined,
-          }),
+            effectiveModality,
+            effectiveJurisdiction,
+          } as Parameters<typeof systemPrompt>[0]),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools: isReasoningModel

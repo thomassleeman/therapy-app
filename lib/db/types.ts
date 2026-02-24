@@ -1,6 +1,8 @@
 // Database types for Supabase
 // These types mirror the database schema
 
+import { JURISDICTIONS, type Jurisdiction } from "@/lib/types/knowledge";
+
 export type VisibilityType = "public" | "private";
 export type ArtifactKind = "text";
 export type MessageRole = "user" | "assistant" | "system" | "tool";
@@ -184,12 +186,6 @@ export const DOCUMENT_CATEGORIES = [
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
-export const DOCUMENT_JURISDICTIONS = ["UK", "EU"] as const;
-export type DocumentJurisdiction = (typeof DOCUMENT_JURISDICTIONS)[number];
-
-export const CHUNK_JURISDICTIONS = ["UK", "EU"] as const;
-export type ChunkJurisdiction = (typeof CHUNK_JURISDICTIONS)[number];
-
 export interface KnowledgeDocument {
   id: string;
   title: string;
@@ -198,7 +194,7 @@ export interface KnowledgeDocument {
   version: string | null;
   source: string;
   modality: string | null;
-  jurisdiction: DocumentJurisdiction | null;
+  jurisdiction: Jurisdiction | null;
   supersededBy: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -211,12 +207,31 @@ export interface KnowledgeChunk {
   embedding: number[] | null;
   chunkIndex: number;
   modality: string | null;
-  jurisdiction: ChunkJurisdiction | null;
+  jurisdiction: Jurisdiction | null;
   documentType: DocumentCategory;
   sectionPath: string | null;
   metadata: Record<string, unknown>;
   parentChunkId: string | null;
   createdAt: string;
+}
+
+export const THERAPIST_JURISDICTIONS = JURISDICTIONS;
+export type TherapistJurisdiction = Jurisdiction;
+
+export interface TherapistProfile {
+  id: string;
+  jurisdiction: Jurisdiction;
+  defaultModality: string | null;
+  professionalBody: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TherapistProfileInsert {
+  id: string;
+  jurisdiction: Jurisdiction;
+  defaultModality?: string | null;
+  professionalBody?: string | null;
 }
 
 export interface HybridSearchResult {
@@ -313,7 +328,7 @@ export interface KnowledgeDocumentInsert {
   version?: string | null;
   source: string;
   modality?: string | null;
-  jurisdiction?: DocumentJurisdiction | null;
+  jurisdiction?: Jurisdiction | null;
   supersededBy?: string | null;
   metadata?: Record<string, unknown>;
   createdAt?: string;
@@ -326,7 +341,7 @@ export interface KnowledgeChunkInsert {
   embedding?: number[] | null;
   chunkIndex: number;
   modality?: string | null;
-  jurisdiction?: ChunkJurisdiction | null;
+  jurisdiction?: Jurisdiction | null;
   documentType: DocumentCategory;
   sectionPath?: string | null;
   metadata?: Record<string, unknown>;
