@@ -10,6 +10,7 @@ import {
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { resolveModality } from "@/lib/ai/modality";
 import {
   type RequestHints,
   systemPrompt,
@@ -26,8 +27,8 @@ import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
   deleteChatById,
-  getClientById,
   getChatById,
+  getClientById,
   getMessageCountByUserId,
   getMessagesByChatId,
   getTherapistProfile,
@@ -36,7 +37,6 @@ import {
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
-import { resolveModality } from "@/lib/ai/modality";
 import type { DBMessage } from "@/lib/db/types";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -173,7 +173,6 @@ export async function POST(request: Request) {
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(selectedChatModel),
-          // TODO(Task 9): systemPrompt signature will be updated to accept effectiveModality/effectiveJurisdiction
           system: systemPrompt({
             selectedChatModel,
             requestHints,
@@ -184,6 +183,11 @@ export async function POST(request: Request) {
             effectiveJurisdiction,
           } as Parameters<typeof systemPrompt>[0]),
           messages: modelMessages,
+          // Step 1 is the initial LLM generation; steps 2–5 allow up to 4 sequential
+          // tool calls — enough for a maximally complex cross-domain query to hit all
+          // four search tools (searchKnowledgeBase, searchLegislation, searchGuidelines,
+          // searchTherapeuticContent) in a single turn. Each additional step increases
+          // latency and token cost proportionally, so keep this in sync with the tool count.
           stopWhen: stepCountIs(5),
           experimental_activeTools: isReasoningModel
             ? [
@@ -213,7 +217,7 @@ export async function POST(request: Request) {
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({ session, dataStream }),
             searchKnowledgeBase: searchKnowledgeBase({ session }),
-            ...knowledgeSearchTools,
+            ...knowledgeSearchTools({ session }),
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,

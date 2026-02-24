@@ -33,6 +33,7 @@ import { openai } from "@ai-sdk/openai";
 import { embed, tool } from "ai";
 import { z } from "zod";
 import type { Session } from "@/lib/auth";
+import { applyConfidenceThreshold } from "@/lib/ai/confidence";
 import { DOCUMENT_CATEGORIES, JURISDICTIONS, MODALITIES } from "@/lib/types/knowledge";
 import { createClient } from "@/utils/supabase/server";
 
@@ -74,7 +75,7 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
       "specific techniques, ethical obligations, legal requirements, or clinical " +
       "frameworks. Always search before providing clinical guidance.",
 
-    parameters: z.object({
+    inputSchema: z.object({
       query: z
         .string()
         .describe(
@@ -160,33 +161,49 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
         console.error("[searchKnowledgeBase] hybrid_search RPC error:", error);
         return {
           results: [],
-          error:
-            "Knowledge base search failed. Please try rephrasing your query.",
+          result_count: 0,
+          error: "Knowledge base search failed. Please try rephrasing your query.",
+          confidenceTier: "low" as const,
+          confidenceNote: "Knowledge base search failed. Please try rephrasing your query.",
+          averageSimilarity: 0,
+          maxSimilarity: 0,
+          query_used: query,
+          filters_applied: {
+            category: category ?? "all",
+            modality: modality ?? "all",
+            jurisdiction: jurisdiction ?? "all",
+          },
         };
       }
 
-      const results = (data as HybridSearchResult[]) ?? [];
+      const mapped = ((data as HybridSearchResult[]) ?? []).map((chunk) => ({
+        content: chunk.content,
+        section_path: chunk.section_path,
+        document_title: chunk.document_title,
+        document_type: chunk.document_type,
+        modality: chunk.modality,
+        jurisdiction: chunk.jurisdiction,
+        similarity_score: chunk.similarity_score,
+        rrf_score: chunk.combined_rrf_score,
+        metadata: chunk.metadata,
+      }));
 
       // ----------------------------------------------------------------
-      // Step 4: Shape the response for the LLM
-      // Return structured results the model can cite. We include the
-      // similarity_score so the model (and downstream safety logic) can
-      // assess retrieval confidence — low scores suggest the knowledge
-      // base may not contain relevant content for this query.
+      // Step 4: Assess confidence and shape the response for the LLM
+      // The confidence threshold system filters out low-relevance results
+      // and assigns a tier (high/moderate/low) that the LLM uses to
+      // decide whether to cite results directly, add hedging, or refer
+      // the therapist to their supervisor.
       // ----------------------------------------------------------------
+      const assessed = applyConfidenceThreshold(mapped);
+
       return {
-        results: results.map((chunk) => ({
-          content: chunk.content,
-          section_path: chunk.section_path,
-          document_title: chunk.document_title,
-          document_type: chunk.document_type,
-          modality: chunk.modality,
-          jurisdiction: chunk.jurisdiction,
-          similarity_score: chunk.similarity_score,
-          rrf_score: chunk.combined_rrf_score,
-          metadata: chunk.metadata,
-        })),
-        result_count: results.length,
+        results: assessed.results,
+        result_count: assessed.results.length,
+        confidenceTier: assessed.confidenceTier,
+        confidenceNote: assessed.confidenceNote,
+        averageSimilarity: assessed.averageSimilarity,
+        maxSimilarity: assessed.maxSimilarity,
         query_used: query,
         filters_applied: {
           category: category ?? "all",

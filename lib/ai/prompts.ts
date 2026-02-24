@@ -134,10 +134,13 @@ const getToolContextPrompt = (
     parts.push(
       `The therapist's jurisdiction is "${jurisdiction}". When calling searchLegislation, always pass jurisdiction: "${jurisdiction}". When calling searchGuidelines, pass jurisdiction: "${jurisdiction}" unless the therapist explicitly asks about another jurisdiction's standards.`,
     );
-  }
-
-  if (parts.length === 0) {
-    return "";
+  } else {
+    parts.push(
+      "The therapist's jurisdiction is not set. If the therapist asks about legal obligations or legislation, do not call `searchLegislation`. Instead, explain that you need to know their jurisdiction to search legislation accurately, and ask them to set it in their profile settings.",
+    );
+    parts.push(
+      "You may still call `searchGuidelines` without a jurisdiction parameter — results will span multiple jurisdictions. If you do, mention to the therapist that results may not be specific to their regulatory body and recommend setting their jurisdiction in profile settings for more targeted results.",
+    );
   }
 
   return `\n\n## Search Tool Context\n${parts.join("\n")}`;

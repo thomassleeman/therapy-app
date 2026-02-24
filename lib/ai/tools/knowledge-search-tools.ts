@@ -14,6 +14,8 @@
 import { openai } from "@ai-sdk/openai";
 import { embed, tool } from "ai";
 import { z } from "zod";
+import type { Session } from "@/lib/auth";
+import { applyConfidenceThreshold } from "@/lib/ai/confidence";
 import { createClient } from "@/utils/supabase/server";
 
 // ─── Shared types ───────────────────────────────────────────────────────────
@@ -42,6 +44,9 @@ interface HybridSearchParams {
   matchCount?: number;
   fullTextWeight?: number;
   semanticWeight?: number;
+  // Accepted for consistency with the factory pattern and future use
+  // (e.g. audit logging, rate limiting). Not used by the RPC itself.
+  session?: Session;
 }
 
 // ─── Shared search executor ─────────────────────────────────────────────────
@@ -88,23 +93,38 @@ async function executeHybridSearch({
       modality,
       jurisdiction,
     });
-    return { results: [], error: error.message };
+    return {
+      results: [],
+      error: error.message,
+      confidenceTier: "low" as const,
+      confidenceNote: "Knowledge base search failed. Please try rephrasing your query.",
+      averageSimilarity: 0,
+      maxSimilarity: 0,
+    };
   }
 
+  const mapped = (data as HybridSearchResult[]).map((chunk) => ({
+    id: chunk.id,
+    content: chunk.content,
+    sectionPath: chunk.section_path,
+    documentId: chunk.document_id,
+    documentTitle: chunk.document_title,
+    documentType: chunk.document_type,
+    jurisdiction: chunk.jurisdiction,
+    modality: chunk.modality,
+    metadata: chunk.metadata,
+    similarityScore: chunk.similarity_score,
+    rrfScore: chunk.combined_rrf_score,
+  }));
+
+  const assessed = applyConfidenceThreshold(mapped);
+
   return {
-    results: (data as HybridSearchResult[]).map((chunk) => ({
-      id: chunk.id,
-      content: chunk.content,
-      sectionPath: chunk.section_path,
-      documentId: chunk.document_id,
-      documentTitle: chunk.document_title,
-      documentType: chunk.document_type,
-      jurisdiction: chunk.jurisdiction,
-      modality: chunk.modality,
-      metadata: chunk.metadata,
-      similarityScore: chunk.similarity_score,
-      rrfScore: chunk.combined_rrf_score,
-    })),
+    results: assessed.results,
+    confidenceTier: assessed.confidenceTier,
+    confidenceNote: assessed.confidenceNote,
+    averageSimilarity: assessed.averageSimilarity,
+    maxSimilarity: assessed.maxSimilarity,
   };
 }
 
@@ -234,27 +254,35 @@ export const searchTherapeuticContent = tool({
 
 // ─── Tool map for streamText registration ───────────────────────────────────
 
+type KnowledgeSearchToolsProps = {
+  session: Session;
+};
+
 /**
- * All domain-specific search tools, ready to spread into the `tools` parameter
- * of `streamText`. Import and use as:
+ * Factory returning all domain-specific search tools, ready to spread into the
+ * `tools` parameter of `streamText`. Accepts `session` for consistency with the
+ * other tool factories and future use (e.g. audit logging, rate limiting).
+ * Import and use as:
  *
  * ```ts
- * import { knowledgeSearchTools } from '@/lib/ai/knowledge-search-tools';
+ * import { streamText, stepCountIs } from 'ai';
+ * import { knowledgeSearchTools } from '@/lib/ai/tools/knowledge-search-tools';
  *
  * const result = streamText({
  *   model: openai('gpt-4o'),
  *   system: systemPrompt,
  *   messages,
  *   tools: {
- *     ...knowledgeSearchTools,
+ *     ...knowledgeSearchTools({ session }),
  *     // ... other tools
  *   },
- *   maxSteps: 3, // Allow multi-tool calls for cross-domain questions
+ *   stopWhen: stepCountIs(5), // Allow multi-tool calls for cross-domain questions
  * });
  * ```
  */
-export const knowledgeSearchTools = {
-  searchLegislation,
-  searchGuidelines,
-  searchTherapeuticContent,
-} as const;
+export const knowledgeSearchTools = ({ session: _session }: KnowledgeSearchToolsProps) =>
+  ({
+    searchLegislation,
+    searchGuidelines,
+    searchTherapeuticContent,
+  }) as const;
