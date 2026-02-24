@@ -21,6 +21,7 @@
  */
 
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import type { DocumentCategory } from "../../lib/types/knowledge";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -55,10 +56,7 @@ export interface ChunkMetadata {
 }
 
 /** The three document categories that drive chunking strategy selection. */
-export type DocumentCategory =
-  | "legislation"
-  | "guideline"
-  | "therapeutic_content";
+export type { DocumentCategory } from "../../lib/types/knowledge";
 
 // ---------------------------------------------------------------------------
 // Helpers

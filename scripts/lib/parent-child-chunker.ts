@@ -53,16 +53,11 @@
  */
 
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import type { DocumentCategory } from "@/lib/types/knowledge";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** The document categories that drive chunking strategy selection. */
-export type DocumentCategory =
-  | "legislation"
-  | "guideline"
-  | "therapeutic_content";
 
 /** A single chunk in the parent-child hierarchy. */
 export interface ParentChildChunk {
@@ -148,12 +143,47 @@ function getSplitterConfig(category: DocumentCategory): SplitterConfig {
         childChunkOverlap: 200,
         separators: ["\n\n", "\n", ". ", " "],
       };
-
     default: {
-      const _exhaustive: never = category;
-      throw new Error(`Unknown document category: ${_exhaustive}`);
+      const exhaustiveCheck: never = category;
+      throw new Error(`Unknown document category: ${exhaustiveCheck}`);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Offset tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Locate each chunk's character offset within a source text by searching
+ * progressively forward. This avoids the fragility of naive `indexOf` —
+ * since chunks are produced in document order, we search from the last
+ * known position rather than from 0, which prevents false matches when
+ * overlapping chunks share identical text.
+ *
+ * Falls back to 0 if a chunk can't be found (should not happen with
+ * well-behaved splitters, but defensive coding for safety).
+ */
+function findChunkOffsets(sourceText: string, chunkTexts: string[]): number[] {
+  const offsets: number[] = [];
+  let searchFrom = 0;
+
+  for (const chunk of chunkTexts) {
+    const idx = sourceText.indexOf(chunk, searchFrom);
+    if (idx !== -1) {
+      offsets.push(idx);
+      // Advance past the start of this chunk, but not past it entirely —
+      // overlapping chunks may start before the end of the previous one
+      searchFrom = idx + 1;
+    } else {
+      // Chunk was modified by the splitter (trimmed whitespace, etc.) —
+      // try from the beginning as a last resort
+      const fallbackIdx = sourceText.indexOf(chunk);
+      offsets.push(fallbackIdx !== -1 ? fallbackIdx : 0);
+    }
+  }
+
+  return offsets;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +244,9 @@ export async function generateParentChildChunks(
 
   const parentTexts = await parentSplitter.splitText(text);
 
+  // Track where each parent starts in the original document
+  const parentOffsets = findChunkOffsets(text, parentTexts);
+
   // -------------------------------------------------------------------------
   // Step 2: Split each parent into child-sized chunks
   // -------------------------------------------------------------------------
@@ -231,6 +264,7 @@ export async function generateParentChildChunks(
 
   for (let parentIdx = 0; parentIdx < parentTexts.length; parentIdx++) {
     const parentText = parentTexts[parentIdx];
+    const parentCharStart = parentOffsets[parentIdx];
 
     // --- Insert the parent chunk ---
     const parentPosition = result.length;
@@ -242,6 +276,8 @@ export async function generateParentChildChunks(
       metadata: {
         level: "parent",
         parentDocOrder: parentIdx,
+        charStart: parentCharStart,
+        charEnd: parentCharStart + parentText.length,
         estimatedTokens: Math.round(parentText.length / 4),
       },
     });
@@ -249,8 +285,13 @@ export async function generateParentChildChunks(
     // --- Split parent text into children ---
     const childTexts = await childSplitter.splitText(parentText);
 
+    // Track child offsets within the parent text, then convert to
+    // document-level offsets by adding the parent's offset
+    const childOffsetsInParent = findChunkOffsets(parentText, childTexts);
+
     for (let childIdx = 0; childIdx < childTexts.length; childIdx++) {
       const childText = childTexts[childIdx];
+      const childCharStart = parentCharStart + childOffsetsInParent[childIdx];
 
       result.push({
         content: childText,
@@ -262,6 +303,8 @@ export async function generateParentChildChunks(
           parentDocOrder: parentIdx,
           childPositionInParent: childIdx,
           totalChildrenInParent: childTexts.length,
+          charStart: childCharStart,
+          charEnd: childCharStart + childText.length,
           estimatedTokens: Math.round(childText.length / 4),
         },
       });

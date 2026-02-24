@@ -37,6 +37,16 @@ import { createClient } from "@supabase/supabase-js";
 import { embedMany } from "ai";
 import { config } from "dotenv";
 import matter from "gray-matter";
+import {
+  DOCUMENT_CATEGORIES,
+  JURISDICTIONS,
+  MODALITIES,
+  type DocumentFrontmatter,
+  type DocumentCategory,
+  type Jurisdiction,
+  type Modality,
+  type DocumentTags,
+} from "../lib/types/knowledge";
 import type { Chunk } from "./lib/chunker";
 import { chunkDocument } from "./lib/chunker";
 import type { EnrichmentInput } from "./lib/contextual-enrichment";
@@ -127,18 +137,6 @@ function parseFlags(): CliFlags {
 // Types
 // ---------------------------------------------------------------------------
 
-/** Parsed frontmatter fields expected in each knowledge base markdown file. */
-interface DocumentFrontmatter {
-  title: string;
-  category: "legislation" | "guideline" | "therapeutic_content";
-  jurisdiction?: "UK" | "IE" | null;
-  modality?: string | null;
-  source: string;
-  version?: string | null;
-  source_url?: string | null;
-  tags?: Record<string, unknown>;
-}
-
 /** A chunk ready for embedding and insertion. */
 interface PreparedChunk {
   content: string;
@@ -200,43 +198,83 @@ function parseFrontmatter(
 ): { frontmatter: DocumentFrontmatter; content: string } {
   const { data, content } = matter(raw);
 
-  // Validate required fields
+  // ── Required fields ───────────────────────────────────────────────────
   if (!data.title || typeof data.title !== "string") {
     throw new Error(`Missing or invalid 'title' in frontmatter of ${filePath}`);
   }
-  const validCategories = ["legislation", "guideline", "therapeutic_content"];
-  if (!validCategories.includes(data.category)) {
+
+  if (!DOCUMENT_CATEGORIES.includes(data.category)) {
     throw new Error(
       `Invalid 'category' in ${filePath}: "${data.category}". ` +
-        `Must be one of: ${validCategories.join(", ")}`
+        `Must be one of: ${DOCUMENT_CATEGORIES.join(", ")}`
     );
   }
+
   if (!data.source || typeof data.source !== "string") {
     throw new Error(
       `Missing or invalid 'source' in frontmatter of ${filePath}`
     );
   }
 
-  // Validate jurisdiction if present
+  // ── Optional constrained fields ───────────────────────────────────────
   if (
     data.jurisdiction !== undefined &&
     data.jurisdiction !== null &&
-    !["UK", "IE"].includes(data.jurisdiction)
+    !JURISDICTIONS.includes(data.jurisdiction as Jurisdiction)
   ) {
     throw new Error(
-      `Invalid 'jurisdiction' in ${filePath}: "${data.jurisdiction}". Must be 'UK', 'IE', or null.`
+      `Invalid 'jurisdiction' in ${filePath}: "${data.jurisdiction}". ` +
+        `Must be one of: ${JURISDICTIONS.join(", ")}, or null.`
     );
   }
 
+  if (
+    data.modality !== undefined &&
+    data.modality !== null &&
+    !MODALITIES.includes(data.modality as Modality)
+  ) {
+    throw new Error(
+      `Invalid 'modality' in ${filePath}: "${data.modality}". ` +
+        `Must be one of: ${MODALITIES.join(", ")}, or null.`
+    );
+  }
+
+  // ── Tags validation (warn on unrecognised keys, don't fail) ───────────
+  const knownTagKeys = ["stage", "competency", "condition"];
+  if (data.tags && typeof data.tags === "object") {
+    const unknownKeys = Object.keys(data.tags).filter(
+      (key) => !knownTagKeys.includes(key)
+    );
+    if (unknownKeys.length > 0) {
+      console.warn(
+        `⚠️  Unrecognised tag keys in ${filePath}: ${unknownKeys.join(", ")}. ` +
+          `Known keys: ${knownTagKeys.join(", ")}`
+      );
+    }
+  }
+
+  // ── Effective date validation (if present, must be ISO 8601) ──────────
+  if (data.effective_date !== undefined && data.effective_date !== null) {
+    const parsed = Date.parse(data.effective_date);
+    if (Number.isNaN(parsed)) {
+      throw new Error(
+        `Invalid 'effective_date' in ${filePath}: "${data.effective_date}". ` +
+          `Must be an ISO 8601 date string (e.g. "2024-06-01").`
+      );
+    }
+  }
+
+  // ── Assemble (safe to cast — validated above) ─────────────────────────
   const frontmatter: DocumentFrontmatter = {
     title: data.title,
-    category: data.category as DocumentFrontmatter["category"],
-    jurisdiction: data.jurisdiction ?? null,
-    modality: data.modality ?? null,
+    category: data.category as DocumentCategory,
+    jurisdiction: (data.jurisdiction as Jurisdiction) ?? null,
+    modality: (data.modality as Modality) ?? null,
     source: data.source,
-    version: data.version ?? null,
-    source_url: data.source_url ?? null,
-    tags: data.tags ?? undefined,
+    version: data.version ?? undefined,
+    source_url: data.source_url ?? undefined,
+    effective_date: data.effective_date ?? undefined,
+    tags: data.tags as DocumentTags | undefined,
   };
 
   return { frontmatter, content: content.trim() };

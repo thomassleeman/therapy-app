@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
+import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { searchKnowledgeBase } from "@/lib/ai/tools/search-knowledge-base";
 import { updateDocument } from "@/lib/ai/tools/update-document";
@@ -162,12 +163,20 @@ export async function POST(request: Request) {
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools: isReasoningModel
-            ? ["searchKnowledgeBase"]
+            ? [
+                "searchKnowledgeBase",
+                "searchLegislation",
+                "searchGuidelines",
+                "searchTherapeuticContent",
+              ]
             : [
                 "createDocument",
                 "updateDocument",
                 "requestSuggestions",
                 "searchKnowledgeBase",
+                "searchLegislation",
+                "searchGuidelines",
+                "searchTherapeuticContent",
               ],
           providerOptions: isReasoningModel
             ? {
@@ -181,6 +190,7 @@ export async function POST(request: Request) {
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({ session, dataStream }),
             searchKnowledgeBase: searchKnowledgeBase({ session }),
+            ...knowledgeSearchTools,
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,

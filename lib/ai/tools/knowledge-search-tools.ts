@@ -23,6 +23,7 @@ interface HybridSearchResult {
   id: string;
   content: string;
   document_id: string;
+  document_title: string;
   section_path: string | null;
   modality: string | null;
   jurisdiction: string | null;
@@ -96,6 +97,7 @@ async function executeHybridSearch({
       content: chunk.content,
       sectionPath: chunk.section_path,
       documentId: chunk.document_id,
+      documentTitle: chunk.document_title,
       documentType: chunk.document_type,
       jurisdiction: chunk.jurisdiction,
       modality: chunk.modality,
@@ -131,7 +133,7 @@ export const searchLegislation = tool({
         "The search query — include specific statutory references where known."
       ),
     jurisdiction: z
-      .enum(["UK", "IE"])
+      .enum(["UK", "EU"])
       .describe(
         "The therapist's jurisdiction. Infer from the therapist's profile or ask if unclear. " +
           "UK covers England, Wales, Scotland, and Northern Ireland. IE covers Republic of Ireland."
@@ -170,7 +172,7 @@ export const searchGuidelines = tool({
           '(e.g. "informed consent", "dual relationships", "fitness to practise").'
       ),
     jurisdiction: z
-      .enum(["UK", "IE"])
+      .enum(["UK", "EU"])
       .optional()
       .describe(
         "Optional. The therapist's jurisdiction to scope results to the relevant regulatory body. " +
@@ -210,7 +212,7 @@ export const searchTherapeuticContent = tool({
           '(e.g. "Socratic questioning", "formulation", "therapeutic alliance").'
       ),
     modality: z
-      .enum(["CBT", "person_centred", "psychodynamic"])
+      .enum(["cbt", "person_centred", "psychodynamic"])
       .describe(
         "The therapeutic modality to filter by. Should match the therapist's declared modality. " +
           "Use CBT for cognitive behavioural therapy, person_centred for Rogerian/humanistic approaches, " +

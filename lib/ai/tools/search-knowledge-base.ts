@@ -33,6 +33,7 @@ import { openai } from "@ai-sdk/openai";
 import { embed, tool } from "ai";
 import { z } from "zod";
 import type { Session } from "@/lib/auth";
+import { DOCUMENT_CATEGORIES, JURISDICTIONS, MODALITIES } from "@/lib/types/knowledge";
 import { createClient } from "@/utils/supabase/server";
 
 // ---------------------------------------------------------------------------
@@ -83,7 +84,7 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
             '"what do I need to do about keeping things private with kids".'
         ),
       category: z
-        .enum(["legislation", "guideline", "therapeutic_content"])
+        .enum(DOCUMENT_CATEGORIES)
         .optional()
         .describe(
           'Filter by content category. Use "legislation" for legal/statutory ' +
@@ -92,7 +93,7 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
             "to search across all categories."
         ),
       modality: z
-        .enum(["cbt", "person_centred", "psychodynamic"])
+        .enum(MODALITIES)
         .optional()
         .describe(
           "Filter by therapeutic modality. IMPORTANT: always set this when the " +
@@ -101,13 +102,13 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
             "reflection)."
         ),
       jurisdiction: z
-        .enum(["UK", "IE"])
+        .enum(JURISDICTIONS)
         .optional()
         .describe(
           'Filter by legal jurisdiction. Set to "UK" for therapists in England, ' +
-            'Wales, Scotland, or Northern Ireland; "IE" for Republic of Ireland. ' +
-            "Critical for legislation queries to avoid surfacing the wrong " +
-            "jurisdiction's legal requirements."
+            'Wales, Scotland, or Northern Ireland; "EU" for Republic of Ireland ' +
+            "and other EU member states. Critical for legislation queries to avoid " +
+            "surfacing the wrong jurisdiction's legal requirements."
         ),
     }),
 
