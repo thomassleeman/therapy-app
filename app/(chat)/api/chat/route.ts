@@ -17,6 +17,7 @@ import {
   type TherapeuticOrientation,
 } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
+import { detectSensitiveContent } from "@/lib/ai/sensitive-content";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -168,6 +169,53 @@ export async function POST(request: Request) {
 
     const effectiveJurisdiction = therapistProfile?.jurisdiction ?? null;
 
+    // ── Sensitive content detection ─────────────────────────────────
+    // Lightweight keyword scan on the latest user message. Runs in <1ms.
+    // When triggered, appends safety-critical instructions to the system
+    // prompt and directs the LLM to call specific search tools.
+    const lastUserMessage = [...uiMessages].reverse().find((m) => m.role === "user");
+    const lastUserMessageText =
+      lastUserMessage?.parts
+        ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join(" ") ?? "";
+
+    const sensitiveContent = detectSensitiveContent(lastUserMessageText);
+
+    let sensitiveContentPrompt = "";
+    if (sensitiveContent.detectedCategories.length > 0) {
+      const autoSearchDirectives = sensitiveContent.autoSearchQueries
+        .map(
+          (q) =>
+            `- You MUST call the \`${q.tool}\` tool with query: "${q.query}"`
+        )
+        .join("\n");
+
+      sensitiveContentPrompt = [
+        "",
+        "## Sensitive Content — Safety-Critical Instructions",
+        "",
+        "The following sensitive content categories were detected in the therapist's message:",
+        sensitiveContent.detectedCategories
+          .map((c) => `- ${c.replace(/_/g, " ")}`)
+          .join("\n"),
+        "",
+        sensitiveContent.additionalInstructions,
+        "",
+        "### Required Tool Calls",
+        "",
+        "You MUST make the following search calls before responding, in addition to any other searches you decide are relevant:",
+        autoSearchDirectives,
+      ].join("\n");
+
+      console.log(
+        "[sensitive-content] Detected:",
+        sensitiveContent.detectedCategories.join(", "),
+        "| Auto-searches:",
+        sensitiveContent.autoSearchQueries.map((q) => `${q.tool}("${q.query}")`).join(", ")
+      );
+    }
+
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
@@ -181,7 +229,7 @@ export async function POST(request: Request) {
               | undefined,
             effectiveModality,
             effectiveJurisdiction,
-          } as Parameters<typeof systemPrompt>[0]),
+          } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
           messages: modelMessages,
           // Step 1 is the initial LLM generation; steps 2–5 allow up to 4 sequential
           // tool calls — enough for a maximally complex cross-domain query to hit all
