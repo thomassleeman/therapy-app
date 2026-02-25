@@ -14,8 +14,8 @@
 import { openai } from "@ai-sdk/openai";
 import { embed, tool } from "ai";
 import { z } from "zod";
-import type { Session } from "@/lib/auth";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
+import type { Session } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 
 // ─── Shared types ───────────────────────────────────────────────────────────
@@ -71,9 +71,13 @@ async function executeHybridSearch({
 
   // Generate a 512-dimension embedding using Matryoshka truncation.
   const { embedding } = await embed({
-    model: openai.embedding("text-embedding-3-small", { dimensions: 512 }),
+    model: openai.embedding("text-embedding-3-small"),
     value: query,
+    providerOptions: {
+      openai: { dimensions: 512 },
+    },
   });
+  console.log("[RAG] embedding dimensions:", embedding.length);
 
   const { data, error } = await supabase.rpc("hybrid_search", {
     query_text: query,
@@ -97,7 +101,8 @@ async function executeHybridSearch({
       results: [],
       error: error.message,
       confidenceTier: "low" as const,
-      confidenceNote: "Knowledge base search failed. Please try rephrasing your query.",
+      confidenceNote:
+        "Knowledge base search failed. Please try rephrasing your query.",
       averageSimilarity: 0,
       maxSimilarity: 0,
     };
@@ -118,6 +123,13 @@ async function executeHybridSearch({
   }));
 
   const assessed = applyConfidenceThreshold(mapped);
+
+  console.log("[RAG] search results:", {
+    resultCount: assessed.results.length,
+    confidenceTier: assessed.confidenceTier,
+    maxSimilarity: assessed.maxSimilarity,
+    titles: mapped.map((r) => r.documentTitle),
+  });
 
   return {
     results: assessed.results,
@@ -280,7 +292,9 @@ type KnowledgeSearchToolsProps = {
  * });
  * ```
  */
-export const knowledgeSearchTools = ({ session: _session }: KnowledgeSearchToolsProps) =>
+export const knowledgeSearchTools = ({
+  session: _session,
+}: KnowledgeSearchToolsProps) =>
   ({
     searchLegislation,
     searchGuidelines,

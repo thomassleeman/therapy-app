@@ -23,6 +23,7 @@ import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
+import { SEARCH_TOOL_TYPES, SearchToolStatus } from "./search-tool-status";
 import { Weather } from "./weather";
 
 const PurePreviewMessage = ({
@@ -348,6 +349,27 @@ const PurePreviewMessage = ({
                     )}
                   </ToolContent>
                 </Tool>
+              );
+            }
+
+            /* ── Knowledge-search tools ─────────────────────────── */
+
+            if (SEARCH_TOOL_TYPES.has(type)) {
+              const toolPart = part as {
+                toolCallId: string;
+                state: string;
+                output?: unknown;
+              };
+              const { toolCallId, state } = toolPart;
+
+              return (
+                <SearchToolStatus
+                  key={toolCallId}
+                  output={toolPart.output}
+                  state={state as import("ai").ToolUIPart["state"]}
+                  toolCallId={toolCallId}
+                  type={type}
+                />
               );
             }
 

@@ -49,7 +49,7 @@ export const HIGH_CONFIDENCE_THRESHOLD = 0.8;
  * in general-purpose RAG systems. Clinical applications require
  * higher precision to avoid misleading practitioners.
  */
-export const LOW_CONFIDENCE_THRESHOLD = 0.65;
+export const LOW_CONFIDENCE_THRESHOLD = 0.55;
 
 /**
  * Maximum number of chunks to include in a confident response.

@@ -32,9 +32,13 @@
 import { openai } from "@ai-sdk/openai";
 import { embed, tool } from "ai";
 import { z } from "zod";
-import type { Session } from "@/lib/auth";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
-import { DOCUMENT_CATEGORIES, JURISDICTIONS, MODALITIES } from "@/lib/types/knowledge";
+import type { Session } from "@/lib/auth";
+import {
+  DOCUMENT_CATEGORIES,
+  JURISDICTIONS,
+  MODALITIES,
+} from "@/lib/types/knowledge";
 import { createClient } from "@/utils/supabase/server";
 
 // ---------------------------------------------------------------------------
@@ -132,8 +136,11 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
       // produce garbage similarity scores.
       // ----------------------------------------------------------------
       const { embedding } = await embed({
-        model: openai.embedding("text-embedding-3-small", { dimensions: 512 }),
+        model: openai.embedding("text-embedding-3-small"),
         value: query,
+        providerOptions: {
+          openai: { dimensions: 512 },
+        },
       });
 
       // ----------------------------------------------------------------
@@ -162,9 +169,11 @@ export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
         return {
           results: [],
           result_count: 0,
-          error: "Knowledge base search failed. Please try rephrasing your query.",
+          error:
+            "Knowledge base search failed. Please try rephrasing your query.",
           confidenceTier: "low" as const,
-          confidenceNote: "Knowledge base search failed. Please try rephrasing your query.",
+          confidenceNote:
+            "Knowledge base search failed. Please try rephrasing your query.",
           averageSimilarity: 0,
           maxSimilarity: 0,
           query_used: query,
