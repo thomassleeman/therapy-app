@@ -143,6 +143,17 @@ function getSplitterConfig(category: DocumentCategory): SplitterConfig {
         childChunkOverlap: 200,
         separators: ["\n\n", "\n", ". ", " "],
       };
+
+    case "clinical_practice":
+      // Clinical practice content shares the same section-heading prose structure
+      // as guidelines. Reuse the guideline config.
+      return {
+        parentChunkSize: 3600,
+        parentChunkOverlap: 250,
+        childChunkSize: 1400,
+        childChunkOverlap: 120,
+        separators: ["\n\n", "\n", ". ", " "],
+      };
     default: {
       const exhaustiveCheck: never = category;
       throw new Error(`Unknown document category: ${exhaustiveCheck}`);

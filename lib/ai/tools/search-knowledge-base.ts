@@ -77,9 +77,10 @@ export const searchKnowledgeBase = ({
   tool({
     description:
       "Search the clinical knowledge base of legislation, ethical guidelines, " +
-      "and therapeutic framework content. Use this when the therapist asks about " +
-      "specific techniques, ethical obligations, legal requirements, or clinical " +
-      "frameworks. Always search before providing clinical guidance.",
+      "therapeutic framework content, and clinical practice guidance. Use this " +
+      "when the therapist asks about specific techniques, ethical obligations, " +
+      "legal requirements, clinical frameworks, or documentation practices. " +
+      "Always search before providing clinical guidance.",
 
     inputSchema: z.object({
       query: z
@@ -96,8 +97,9 @@ export const searchKnowledgeBase = ({
         .describe(
           'Filter by content category. Use "legislation" for legal/statutory ' +
             'questions, "guideline" for professional body standards (BACP, UKCP, ' +
-            'HCPC), "therapeutic_content" for technique/framework queries. Omit ' +
-            "to search across all categories."
+            'HCPC), "therapeutic_content" for technique/framework queries, ' +
+            '"clinical_practice" for documentation, record-keeping, and treatment ' +
+            "planning guidance. Omit to search across all categories."
         ),
       modality: z
         .enum(MODALITIES)

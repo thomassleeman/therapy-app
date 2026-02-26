@@ -46,7 +46,11 @@ export interface Chunk {
 
 export interface ChunkMetadata {
   /** Which chunking strategy produced this chunk. */
-  strategy: "legislation" | "guideline" | "therapeutic_content";
+  strategy:
+    | "legislation"
+    | "guideline"
+    | "therapeutic_content"
+    | "clinical_practice";
   /** Character offset where this chunk starts in the original text. */
   charStart: number;
   /** Character offset where this chunk ends in the original text. */
@@ -257,7 +261,39 @@ export async function chunkTherapeuticContent(text: string): Promise<Chunk[]> {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Dispatcher
+// 4. Clinical practice chunking
+// ---------------------------------------------------------------------------
+
+/**
+ * Chunking for clinical practice content (note-taking, record management,
+ * treatment planning, documentation standards).
+ *
+ * Delegates to {@link chunkGuidelines} internally. Clinical practice content
+ * is structured professional guidance with section headings, numbered
+ * procedures, and inline references to legislation and standards — the same
+ * prose structure as clinical guidelines.
+ *
+ * The `clinical_practice` category is preserved as a separate document type
+ * for retrieval filtering, not because it needs a different chunking approach.
+ *
+ * @param text - The clinical practice text (markdown, authored by clinical expert).
+ * @returns Array of chunks using the guidelines chunking strategy.
+ */
+export async function chunkClinicalPractice(text: string): Promise<Chunk[]> {
+  const chunks = await chunkGuidelines(text);
+
+  // Re-tag strategy so downstream code can distinguish document category
+  return chunks.map((chunk) => ({
+    ...chunk,
+    metadata: {
+      ...chunk.metadata,
+      strategy: "clinical_practice" as const,
+    },
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// 5. Dispatcher
 // ---------------------------------------------------------------------------
 
 /**
@@ -272,7 +308,7 @@ export async function chunkTherapeuticContent(text: string): Promise<Chunk[]> {
  * chunking behaviour.
  *
  * @param text     - The full document text to chunk.
- * @param category - One of 'legislation', 'guideline', 'therapeutic_content'.
+ * @param category - One of 'legislation', 'guideline', 'therapeutic_content', 'clinical_practice'.
  * @returns Array of chunks with strategy-appropriate metadata.
  *
  * @example
@@ -291,6 +327,8 @@ export function chunkDocument(
       return chunkGuidelines(text);
     case "therapeutic_content":
       return chunkTherapeuticContent(text);
+    case "clinical_practice":
+      return chunkClinicalPractice(text);
     default: {
       const exhaustiveCheck: never = category;
       throw new Error(`Unknown document category: ${exhaustiveCheck}`);

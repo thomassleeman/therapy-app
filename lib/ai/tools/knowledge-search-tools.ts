@@ -7,7 +7,7 @@
  * single turn for cross-domain questions (e.g. "What CBT techniques help with
  * anxiety, and what confidentiality obligations apply?").
  *
- * All three tools plus the general `searchKnowledgeBase` are registered in the
+ * All four tools plus the general `searchKnowledgeBase` are registered in the
  * `streamText` call so the model can route queries intelligently.
  */
 
@@ -264,6 +264,64 @@ export const searchTherapeuticContent = tool({
     }),
 });
 
+/**
+ * Searches clinical practice and professional documentation content.
+ *
+ * Pre-sets category to 'clinical_practice'. Both jurisdiction and modality
+ * are optional — most clinical practice content is cross-modality, but some
+ * documents (e.g. data protection guidance) are jurisdiction-specific, and
+ * future content may have modality-flavoured variants.
+ */
+export const searchClinicalPractice = tool({
+  description:
+    "Search professional practice guidance on clinical documentation, record-keeping, " +
+    "treatment planning, progress note formats, data protection in records, disclosure " +
+    "protocols, and documentation standards. Use when the therapist asks about HOW TO " +
+    "DOCUMENT their work — note-taking structure, what to include in records, consent " +
+    "documentation, crisis documentation, or the 'Golden Thread' connecting assessment " +
+    "to termination. This differs from searchLegislation (which covers the law itself) " +
+    "and searchGuidelines (which covers professional body standards) — clinical practice " +
+    "content applies those frameworks to day-to-day documentation practice.",
+  inputSchema: z.object({
+    query: z
+      .string()
+      .describe(
+        "The search query — include documentation-specific terms where known " +
+          '(e.g. "SOAP notes", "progress notes", "treatment plan", "Golden Thread", ' +
+          '"crisis documentation", "informed consent records").'
+      ),
+    jurisdiction: z
+      .enum(["UK", "EU"])
+      .optional()
+      .describe(
+        "Optional. The therapist's jurisdiction — relevant for documents covering " +
+          "data protection, access rights, and statutory record-keeping requirements. " +
+          "Omit for general documentation methodology (e.g. note formats, treatment planning)."
+      ),
+    modality: z
+      .enum(["cbt", "person_centred", "psychodynamic"])
+      .optional()
+      .describe(
+        "Optional. Filter by therapeutic modality if relevant. Most clinical practice " +
+          "content is cross-modality, but some documentation guidance may have " +
+          "modality-specific considerations."
+      ),
+  }),
+  execute: async ({ query, jurisdiction, modality }) =>
+    executeHybridSearch({
+      query,
+      category: "clinical_practice",
+      jurisdiction: jurisdiction ?? null,
+      modality: modality ?? null,
+      // Slightly semantic-leaning — therapists describe documentation needs
+      // in varied language ("how should I write up my sessions" needs to
+      // find "Structuring Progress Notes"). But balanced enough that specific
+      // terms like "SOAP" or "Golden Thread" still rank well via FTS.
+      fullTextWeight: 1.0,
+      semanticWeight: 1.1,
+    }),
+});
+
 // ─── Tool map for streamText registration ───────────────────────────────────
 
 type KnowledgeSearchToolsProps = {
@@ -288,7 +346,7 @@ type KnowledgeSearchToolsProps = {
  *     ...knowledgeSearchTools({ session }),
  *     // ... other tools
  *   },
- *   stopWhen: stepCountIs(5), // Allow multi-tool calls for cross-domain questions
+ *   stopWhen: stepCountIs(6), // Allow multi-tool calls for cross-domain questions
  * });
  * ```
  */
@@ -299,4 +357,5 @@ export const knowledgeSearchTools = ({
     searchLegislation,
     searchGuidelines,
     searchTherapeuticContent,
+    searchClinicalPractice,
   }) as const;

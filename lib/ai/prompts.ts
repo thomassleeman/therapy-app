@@ -90,8 +90,12 @@ The \`documentType\` field in each search result tells you which style to use:
 1. *Legislation and guidelines* (\`legislation\` or \`guideline\`): Use formal bracketed citations after factual claims.
    Example: "Therapists must ensure lawful processing of health data [Source: Data Protection Act 2018 Briefing]."
 
-2. *Therapeutic content* (\`therapeutic_content\`): Do NOT use bracketed citations. Instead, weave attribution naturally into your prose.
-   Example: "The Downward Arrow technique — as outlined in our CBT clinical guidance — involves following the chain of meaning beneath an automatic thought."
+2. **Therapeutic and clinical practice content** (\`documentType\` is \`therapeutic_content\` or \`clinical_practice\`):
+   Do NOT use bracketed citations. Instead, weave attribution naturally into your response.
+   Use phrases like: "Drawing from clinical documentation guidance on [topic]..." or
+   "The platform's guidance on progress notes suggests..."
+   This content is authored clinical guidance, not an external reference — present it
+   as the platform's expertise rather than an academic source.
 
 Never fabricate citations to documents that were not returned by your search tools.
 
@@ -186,6 +190,20 @@ const getToolContextPrompt = (
       "You may still call `searchGuidelines` without a jurisdiction parameter — results will span multiple jurisdictions. If you do, mention to the therapist that results may not be specific to their regulatory body and recommend setting their jurisdiction in profile settings for more targeted results."
     );
   }
+
+  // Always include clinical practice tool guidance — it's relevant regardless
+  // of modality or jurisdiction settings
+  parts.push(
+    "When the therapist asks about clinical documentation, record-keeping, " +
+      "note-taking, treatment planning, progress note formats, or how to document " +
+      "specific clinical scenarios (e.g. risk assessments, crisis events, consent), " +
+      "use `searchClinicalPractice`. This is distinct from `searchLegislation` " +
+      "(which covers what the law requires) and `searchGuidelines` (which covers " +
+      "professional body standards) — clinical practice content shows how to apply " +
+      "those frameworks in day-to-day documentation. For questions that span both " +
+      "(e.g. 'how should I document consent given GDPR requirements?'), call both " +
+      "the relevant tool AND `searchClinicalPractice`."
+  );
 
   return `\n\n## Search Tool Context\n${parts.join("\n")}`;
 };

@@ -7,6 +7,7 @@ export const DOCUMENT_CATEGORIES = [
   "legislation",
   "guideline",
   "therapeutic_content",
+  "clinical_practice",
 ] as const;
 
 export const JURISDICTIONS = ["UK", "EU"] as const;

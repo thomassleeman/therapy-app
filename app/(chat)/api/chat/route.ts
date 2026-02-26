@@ -236,18 +236,20 @@ export async function POST(request: Request) {
               effectiveJurisdiction,
             } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
           messages: modelMessages,
-          // Step 1 is the initial LLM generation; steps 2–5 allow up to 4 sequential
+          // Step 1 is the initial LLM generation; steps 2–6 allow up to 5 sequential
           // tool calls — enough for a maximally complex cross-domain query to hit all
-          // four search tools (searchKnowledgeBase, searchLegislation, searchGuidelines,
-          // searchTherapeuticContent) in a single turn. Each additional step increases
-          // latency and token cost proportionally, so keep this in sync with the tool count.
-          stopWhen: stepCountIs(5),
+          // five search tools (searchKnowledgeBase, searchLegislation, searchGuidelines,
+          // searchTherapeuticContent, searchClinicalPractice) in a single turn. Each
+          // additional step increases latency and token cost proportionally, so keep
+          // this in sync with the tool count.
+          stopWhen: stepCountIs(6),
           experimental_activeTools: isReasoningModel
             ? [
                 "searchKnowledgeBase",
                 "searchLegislation",
                 "searchGuidelines",
                 "searchTherapeuticContent",
+                "searchClinicalPractice",
               ]
             : [
                 "createDocument",
@@ -257,6 +259,7 @@ export async function POST(request: Request) {
                 "searchLegislation",
                 "searchGuidelines",
                 "searchTherapeuticContent",
+                "searchClinicalPractice",
               ],
           providerOptions: isReasoningModel
             ? {
