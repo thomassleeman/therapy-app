@@ -308,7 +308,7 @@ describe("buildContextualResponse — edge cases", () => {
 
     expect(result.contextString).toContain(
       "Risk &amp; Safety: &quot;Best Practice&quot; Guide"
-    ).toBeFalsy;
+    );
     // More precisely: should not contain unescaped &
     expect(result.contextString).toContain("Risk &amp;");
   });

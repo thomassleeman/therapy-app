@@ -112,10 +112,11 @@ ${sectionInfo}
 ${chunk}
 </chunk>
 
-Generate a short context snippet (50–100 tokens) that:
+Generate a short context snippet (75–150 tokens) that:
 1. States where this chunk sits within "${documentTitle}" (section, topic area)
 2. Resolves any pronouns or vague references ("this", "the above", "as mentioned") to their concrete referents
-3. Provides enough context for the chunk to be understood in isolation
+3. Describes the clinical situations, presenting behaviours, or real-world scenarios where a therapist would need this content — use the everyday language a practitioner might use to describe what is happening in the room (e.g. "client goes quiet", "client intellectually agrees but emotionally resists", "therapist feels stuck")
+4. Provides enough context for the chunk to be understood in isolation
 
 Return ONLY the context snippet — no preamble, no labels, no quotes. The snippet will be prepended to the chunk before embedding.`;
 }
@@ -147,7 +148,7 @@ export async function enrichChunkWithContext(
   }
 
   try {
-    const { text, usage } = await generateText({
+    const { text } = await generateText({
       model: gateway(model),
       system:
         "You are a precise document analyst. Generate concise context snippets for document chunks to improve search retrieval. Be factual and specific. Never include meta-commentary — output only the context snippet itself.",
@@ -157,7 +158,7 @@ export async function enrichChunkWithContext(
         documentTitle,
         sectionPath
       ),
-      maxOutputTokens: 150, // cap output — we want 50–100 tokens
+      maxOutputTokens: 200, // cap output
       temperature: 0, // deterministic for reproducibility
     });
 

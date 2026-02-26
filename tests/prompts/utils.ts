@@ -31,7 +31,6 @@ export function getResponseChunksByPrompt(
     {
       type: "finish",
       finishReason: { unified: "stop", raw: "stop" },
-      logprobs: undefined,
       usage: mockUsage,
     }
   );
