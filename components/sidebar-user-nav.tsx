@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useSupabaseAuth } from "@/lib/hooks/useSupabaseAuth";
+import { useSupabaseAuth } from "@/lib/hooks/use-supabase-auth";
 import { createClient } from "@/utils/supabase/client";
 import { LoaderIcon } from "./icons";
 import { toast } from "./toast";

@@ -4,8 +4,8 @@ import type { ArtifactKind } from "@/components/artifact";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
-import type { updateDocument } from "./ai/tools/update-document";
 import type { searchKnowledgeBase } from "./ai/tools/search-knowledge-base";
+import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/types";
 
 export type DataPart = { type: "append-message"; message: string };

@@ -71,7 +71,9 @@ type SearchKnowledgeBaseProps = {
 // ---------------------------------------------------------------------------
 // Tool definition (factory pattern)
 // ---------------------------------------------------------------------------
-export const searchKnowledgeBase = ({ session }: SearchKnowledgeBaseProps) =>
+export const searchKnowledgeBase = ({
+  session: _session,
+}: SearchKnowledgeBaseProps) =>
   tool({
     description:
       "Search the clinical knowledge base of legislation, ethical guidelines, " +

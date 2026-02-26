@@ -173,7 +173,9 @@ export async function POST(request: Request) {
     // Lightweight keyword scan on the latest user message. Runs in <1ms.
     // When triggered, appends safety-critical instructions to the system
     // prompt and directs the LLM to call specific search tools.
-    const lastUserMessage = [...uiMessages].reverse().find((m) => m.role === "user");
+    const lastUserMessage = [...uiMessages]
+      .reverse()
+      .find((m) => m.role === "user");
     const lastUserMessageText =
       lastUserMessage?.parts
         ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
@@ -212,7 +214,9 @@ export async function POST(request: Request) {
         "[sensitive-content] Detected:",
         sensitiveContent.detectedCategories.join(", "),
         "| Auto-searches:",
-        sensitiveContent.autoSearchQueries.map((q) => `${q.tool}("${q.query}")`).join(", ")
+        sensitiveContent.autoSearchQueries
+          .map((q) => `${q.tool}("${q.query}")`)
+          .join(", ")
       );
     }
 
@@ -221,15 +225,16 @@ export async function POST(request: Request) {
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(selectedChatModel),
-          system: systemPrompt({
-            selectedChatModel,
-            requestHints,
-            therapeuticOrientation: therapeuticOrientation as
-              | TherapeuticOrientation
-              | undefined,
-            effectiveModality,
-            effectiveJurisdiction,
-          } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
+          system:
+            systemPrompt({
+              selectedChatModel,
+              requestHints,
+              therapeuticOrientation: therapeuticOrientation as
+                | TherapeuticOrientation
+                | undefined,
+              effectiveModality,
+              effectiveJurisdiction,
+            } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
           messages: modelMessages,
           // Step 1 is the initial LLM generation; steps 2–5 allow up to 4 sequential
           // tool calls — enough for a maximally complex cross-domain query to hit all

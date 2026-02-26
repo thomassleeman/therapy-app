@@ -39,13 +39,13 @@ import { config } from "dotenv";
 import matter from "gray-matter";
 import {
   DOCUMENT_CATEGORIES,
-  JURISDICTIONS,
-  MODALITIES,
-  type DocumentFrontmatter,
   type DocumentCategory,
-  type Jurisdiction,
-  type Modality,
+  type DocumentFrontmatter,
   type DocumentTags,
+  JURISDICTIONS,
+  type Jurisdiction,
+  MODALITIES,
+  type Modality,
 } from "../lib/types/knowledge";
 import type { Chunk } from "./lib/chunker";
 import { chunkDocument } from "./lib/chunker";
@@ -554,7 +554,7 @@ async function generateEmbeddings(
 type SupabaseAdmin = ReturnType<typeof createClient<any>>;
 
 function createSupabaseClient(): SupabaseAdmin {
-  return createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  return createClient(SUPABASE_URL ?? "", SUPABASE_SERVICE_ROLE_KEY ?? "", {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -765,8 +765,13 @@ async function processFile(
   const embeddings = await generateEmbeddings(chunks);
 
   // Step 4: Upsert into Supabase
+  // supabase is non-null here: dry-run returns early above, and the client is
+  // only null when flags.dryRun is true (see main()).
+  if (!supabase) {
+    throw new Error("Supabase client not initialized");
+  }
   console.log("  Inserting into Supabase...");
-  await upsertDocument(supabase!, frontmatter, filePath, chunks, embeddings);
+  await upsertDocument(supabase, frontmatter, filePath, chunks, embeddings);
 
   return { chunks: chunks.filter((c) => !c.isParent).length, skipped: false };
 }
@@ -791,11 +796,8 @@ async function main(): Promise<void> {
   // Validate environment (skip for dry-run if we only need to parse)
   if (!flags.dryRun) {
     validateEnv();
-  } else if (!OPENAI_API_KEY) {
-    // Dry run still needs OPENAI_API_KEY if --with-context is set
-    if (flags.withContext) {
-      validateEnv();
-    }
+  } else if (!OPENAI_API_KEY && flags.withContext) {
+    validateEnv();
   }
 
   // Discover files

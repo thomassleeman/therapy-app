@@ -75,7 +75,7 @@ function PureArtifact({
   isReadonly: boolean;
   selectedModelId: string;
 }) {
-  const { artifact, setArtifact, metadata, setMetadata } = useArtifact();
+  const { artifact, metadata, setMetadata } = useArtifact();
 
   const {
     data: documents,

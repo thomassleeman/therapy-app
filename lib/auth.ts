@@ -42,6 +42,6 @@ export async function auth(): Promise<Session | null> {
  * Future: check user.user_metadata.subscription_tier or app_metadata
  * Example: if (user.user_metadata?.is_premium) return "premium";
  */
-function getUserType(user: User): UserType {
+function getUserType(_user: User): UserType {
   return "regular";
 }

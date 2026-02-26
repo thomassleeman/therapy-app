@@ -18,7 +18,9 @@ const ORIENTATION_TO_MODALITY: Record<TherapeuticOrientation, string | null> = {
 export function orientationToModality(
   orientation: TherapeuticOrientation | undefined
 ): string | null {
-  if (!orientation) return null;
+  if (!orientation) {
+    return null;
+  }
   return ORIENTATION_TO_MODALITY[orientation] ?? null;
 }
 
@@ -43,7 +45,9 @@ export function resolveModality({
   // 1. Per-chat override
   if (chatOrientation) {
     const mapped = orientationToModality(chatOrientation);
-    if (mapped) return mapped;
+    if (mapped) {
+      return mapped;
+    }
   }
 
   // 2. Per-client (already in tool-compatible format)

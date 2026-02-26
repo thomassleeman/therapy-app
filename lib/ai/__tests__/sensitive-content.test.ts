@@ -13,12 +13,16 @@ function expectCategories(
   result: SensitiveContentDetection,
   expected: SensitiveCategory[]
 ) {
+  // biome-ignore lint/suspicious/noMisplacedAssertion: helper called from within test callbacks
   expect(result.detectedCategories.sort()).toEqual(expected.sort());
 }
 
 function expectNoDetection(result: SensitiveContentDetection) {
+  // biome-ignore lint/suspicious/noMisplacedAssertion: helper called from within test callbacks
   expect(result.detectedCategories).toEqual([]);
+  // biome-ignore lint/suspicious/noMisplacedAssertion: helper called from within test callbacks
   expect(result.additionalInstructions).toBe("");
+  // biome-ignore lint/suspicious/noMisplacedAssertion: helper called from within test callbacks
   expect(result.autoSearchQueries).toEqual([]);
 }
 
@@ -519,7 +523,7 @@ describe("detectSensitiveContent", () => {
       const filler = "This is a normal therapy reflection sentence. ".repeat(
         200
       );
-      const message = filler + "The client is suicidal." + filler;
+      const message = `${filler}The client is suicidal.${filler}`;
       const result = detectSensitiveContent(message);
       expectCategories(result, ["suicidal_ideation"]);
     });

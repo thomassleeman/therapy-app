@@ -24,7 +24,9 @@ export function DashboardPage({
   const [showClientDialog, setShowClientDialog] = useState(false);
 
   const getClientName = (clientId: string | null) => {
-    if (!clientId) return "General";
+    if (!clientId) {
+      return "General";
+    }
     return clients.find((c) => c.id === clientId)?.name ?? "Unknown";
   };
 
@@ -121,8 +123,7 @@ export function DashboardPage({
                         {doc.title}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {doc.kind} &middot;{" "}
-                        {formatDate(doc.createdAt)}
+                        {doc.kind} &middot; {formatDate(doc.createdAt)}
                       </div>
                     </div>
                   </div>

@@ -50,7 +50,8 @@ const PurePreviewMessage = ({
   const [mode, setMode] = useState<"view" | "edit">("view");
 
   const attachmentsFromMessage = message.parts.filter(
-    (part): part is Extract<typeof part, { type: "file" }> => part.type === "file"
+    (part): part is Extract<typeof part, { type: "file" }> =>
+      part.type === "file"
   );
 
   useDataStream();

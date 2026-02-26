@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { DashboardPage } from "@/components/dashboard-page";
 import { auth } from "@/lib/auth";
 import {
-  getChatsByUserId,
   getChatCountsByClient,
+  getChatsByUserId,
   getClientsByUserId,
   getRecentDocumentsByUserId,
 } from "@/lib/db/queries";

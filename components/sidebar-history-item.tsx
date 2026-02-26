@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { memo } from "react";
 import type { Chat } from "@/lib/db/types";
-import {
-  MoreHorizontalIcon,
-  TrashIcon,
-} from "./icons";
+import { MoreHorizontalIcon, TrashIcon } from "./icons";
 import {
   DropdownMenu,
   DropdownMenuContent,

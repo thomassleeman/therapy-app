@@ -11,11 +11,7 @@ export const DOCUMENT_CATEGORIES = [
 
 export const JURISDICTIONS = ["UK", "EU"] as const;
 
-export const MODALITIES = [
-  "cbt",
-  "person_centred",
-  "psychodynamic",
-] as const;
+export const MODALITIES = ["cbt", "person_centred", "psychodynamic"] as const;
 
 export const THERAPY_STAGES = [
   "assessment",

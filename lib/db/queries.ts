@@ -50,7 +50,8 @@ function mapRowToClient(row: any): Client {
     ageBracket: row.age_bracket ?? null,
     sessionDurationMinutes: row.session_duration_minutes ?? null,
     contractedSessions: row.contracted_sessions ?? null,
-    feePerSession: row.fee_per_session != null ? Number(row.fee_per_session) : null,
+    feePerSession:
+      row.fee_per_session != null ? Number(row.fee_per_session) : null,
     supervisorNotes: row.supervisor_notes ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -124,10 +125,14 @@ export async function saveChat({
       .select()
       .single();
 
-    if (error) handleSupabaseError(error, "save chat");
+    if (error) {
+      handleSupabaseError(error, "save chat");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to save chat");
   }
 }
@@ -145,10 +150,14 @@ export async function deleteChatById({ id }: { id: string }) {
       .select()
       .single();
 
-    if (error) handleSupabaseError(error, "delete chat by id");
+    if (error) {
+      handleSupabaseError(error, "delete chat by id");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete chat by id"
@@ -167,10 +176,14 @@ export async function deleteAllChatsByUserId({ userId }: { userId: string }) {
       .eq("userId", userId)
       .select();
 
-    if (error) handleSupabaseError(error, "delete all chats by user id");
+    if (error) {
+      handleSupabaseError(error, "delete all chats by user id");
+    }
     return { deletedCount: data?.length ?? 0 };
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete all chats by user id"
@@ -235,7 +248,9 @@ export async function getChatsByUserId({
 
     const { data: filteredChats, error } = await query;
 
-    if (error) handleSupabaseError(error, "get chats by user id");
+    if (error) {
+      handleSupabaseError(error, "get chats by user id");
+    }
 
     const chats = filteredChats as Chat[];
     const hasMore = chats.length > limit;
@@ -245,7 +260,9 @@ export async function getChatsByUserId({
       hasMore,
     };
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get chats by user id"
@@ -264,13 +281,17 @@ export async function getChatById({ id }: { id: string }) {
 
     if (error) {
       // PGRST116 is "not found" error
-      if (error.code === "PGRST116") return null;
+      if (error.code === "PGRST116") {
+        return null;
+      }
       handleSupabaseError(error, "get chat by id");
     }
 
     return data as Chat;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to get chat by id");
   }
 }
@@ -292,10 +313,14 @@ export async function saveMessages({ messages }: { messages: DBMessage[] }) {
       )
       .select();
 
-    if (error) handleSupabaseError(error, "save messages");
+    if (error) {
+      handleSupabaseError(error, "save messages");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to save messages");
   }
 }
@@ -315,10 +340,14 @@ export async function updateMessage({
       .eq("id", id)
       .select();
 
-    if (error) handleSupabaseError(error, "update message");
+    if (error) {
+      handleSupabaseError(error, "update message");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to update message");
   }
 }
@@ -332,10 +361,14 @@ export async function getMessagesByChatId({ id }: { id: string }) {
       .eq("chatId", id)
       .order("createdAt", { ascending: true });
 
-    if (error) handleSupabaseError(error, "get messages by chat id");
+    if (error) {
+      handleSupabaseError(error, "get messages by chat id");
+    }
     return data as DBMessage[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get messages by chat id"
@@ -368,10 +401,14 @@ export async function voteMessage({
       )
       .select();
 
-    if (error) handleSupabaseError(error, "vote message");
+    if (error) {
+      handleSupabaseError(error, "vote message");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to vote message");
   }
 }
@@ -384,10 +421,14 @@ export async function getVotesByChatId({ id }: { id: string }) {
       .select("*")
       .eq("chatId", id);
 
-    if (error) handleSupabaseError(error, "get votes by chat id");
+    if (error) {
+      handleSupabaseError(error, "get votes by chat id");
+    }
     return data as Vote[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get votes by chat id"
@@ -422,10 +463,14 @@ export async function saveDocument({
       })
       .select();
 
-    if (error) handleSupabaseError(error, "save document");
+    if (error) {
+      handleSupabaseError(error, "save document");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to save document");
   }
 }
@@ -439,10 +484,14 @@ export async function getDocumentsById({ id }: { id: string }) {
       .eq("id", id)
       .order("createdAt", { ascending: true });
 
-    if (error) handleSupabaseError(error, "get documents by id");
+    if (error) {
+      handleSupabaseError(error, "get documents by id");
+    }
     return data as Document[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get documents by id"
@@ -462,12 +511,16 @@ export async function getDocumentById({ id }: { id: string }) {
       .single();
 
     if (error) {
-      if (error.code === "PGRST116") return null;
+      if (error.code === "PGRST116") {
+        return null;
+      }
       handleSupabaseError(error, "get document by id");
     }
     return data as Document;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get document by id"
@@ -500,11 +553,14 @@ export async function deleteDocumentsByIdAfterTimestamp({
       .gt("createdAt", timestamp.toISOString())
       .select();
 
-    if (error)
+    if (error) {
       handleSupabaseError(error, "delete documents by id after timestamp");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete documents by id after timestamp"
@@ -536,10 +592,14 @@ export async function saveSuggestions({
       )
       .select();
 
-    if (error) handleSupabaseError(error, "save suggestions");
+    if (error) {
+      handleSupabaseError(error, "save suggestions");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to save suggestions"
@@ -559,10 +619,14 @@ export async function getSuggestionsByDocumentId({
       .select("*")
       .eq("documentId", documentId);
 
-    if (error) handleSupabaseError(error, "get suggestions by document id");
+    if (error) {
+      handleSupabaseError(error, "get suggestions by document id");
+    }
     return data as Suggestion[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get suggestions by document id"
@@ -578,10 +642,14 @@ export async function getMessageById({ id }: { id: string }) {
       .select("*")
       .eq("id", id);
 
-    if (error) handleSupabaseError(error, "get message by id");
+    if (error) {
+      handleSupabaseError(error, "get message by id");
+    }
     return data as DBMessage[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get message by id"
@@ -606,7 +674,9 @@ export async function deleteMessagesByChatIdAfterTimestamp({
       .eq("chatId", chatId)
       .gte("createdAt", timestamp.toISOString());
 
-    if (selectError) handleSupabaseError(selectError, "get messages to delete");
+    if (selectError) {
+      handleSupabaseError(selectError, "get messages to delete");
+    }
 
     const messageIds = (messagesToDelete || []).map((m) => m.id);
 
@@ -625,12 +695,16 @@ export async function deleteMessagesByChatIdAfterTimestamp({
         .eq("chatId", chatId)
         .in("id", messageIds);
 
-      if (deleteError) handleSupabaseError(deleteError, "delete messages");
+      if (deleteError) {
+        handleSupabaseError(deleteError, "delete messages");
+      }
     }
 
     return { deleted: messageIds.length };
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete messages by chat id after timestamp"
@@ -692,10 +766,13 @@ export async function getMessageCountByUserId({
         .select("id")
         .eq("userId", id);
 
-      if (chatError)
+      if (chatError) {
         handleSupabaseError(chatError, "get user chats for message count");
+      }
 
-      if (!userChats || userChats.length === 0) return 0;
+      if (!userChats || userChats.length === 0) {
+        return 0;
+      }
 
       const chatIds = userChats.map((c) => c.id);
 
@@ -706,14 +783,18 @@ export async function getMessageCountByUserId({
         .eq("role", "user")
         .gte("createdAt", timeThreshold);
 
-      if (countError) handleSupabaseError(countError, "count messages");
+      if (countError) {
+        handleSupabaseError(countError, "count messages");
+      }
 
       return count ?? 0;
     }
 
     return data ?? 0;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get message count by user id"
@@ -736,9 +817,13 @@ export async function createStreamId({
       createdAt: new Date().toISOString(),
     });
 
-    if (error) handleSupabaseError(error, "create stream id");
+    if (error) {
+      handleSupabaseError(error, "create stream id");
+    }
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create stream id"
@@ -755,10 +840,14 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
       .eq("chatId", chatId)
       .order("createdAt", { ascending: true });
 
-    if (error) handleSupabaseError(error, "get stream ids by chat id");
+    if (error) {
+      handleSupabaseError(error, "get stream ids by chat id");
+    }
     return (data || []).map(({ id }) => id);
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
@@ -777,7 +866,9 @@ export async function getClientsByUserId({ userId }: { userId: string }) {
       .eq("therapist_id", userId)
       .order("name", { ascending: true });
 
-    if (error) handleSupabaseError(error, "get clients by user id");
+    if (error) {
+      handleSupabaseError(error, "get clients by user id");
+    }
 
     const clients = (data || []).map(mapRowToClient);
 
@@ -808,7 +899,9 @@ export async function getClientsByUserId({ userId }: { userId: string }) {
 
     return clients;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get clients by user id"
@@ -826,7 +919,9 @@ export async function getClientById({ id }: { id: string }) {
       .single();
 
     if (error) {
-      if (error.code === "PGRST116") return null;
+      if (error.code === "PGRST116") {
+        return null;
+      }
       handleSupabaseError(error, "get client by id");
     }
 
@@ -844,7 +939,9 @@ export async function getClientById({ id }: { id: string }) {
 
     return client;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get client by id"
@@ -852,9 +949,7 @@ export async function getClientById({ id }: { id: string }) {
   }
 }
 
-export async function createClientRecord(
-  params: ClientInsert,
-) {
+export async function createClientRecord(params: ClientInsert) {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -881,11 +976,15 @@ export async function createClientRecord(
       .select()
       .single();
 
-    if (error) handleSupabaseError(error, "create client");
+    if (error) {
+      handleSupabaseError(error, "create client");
+    }
 
     return mapRowToClient(data);
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError("bad_request:database", "Failed to create client");
   }
 }
@@ -901,7 +1000,11 @@ export async function updateClientById({
     const fieldMap: [string, string, unknown][] = [
       ["name", "name", fields.name],
       ["background", "background", fields.background],
-      ["therapeuticModalities", "therapeutic_modalities", fields.therapeuticModalities],
+      [
+        "therapeuticModalities",
+        "therapeutic_modalities",
+        fields.therapeuticModalities,
+      ],
       ["presentingIssues", "presenting_issues", fields.presentingIssues],
       ["treatmentGoals", "treatment_goals", fields.treatmentGoals],
       ["riskConsiderations", "risk_considerations", fields.riskConsiderations],
@@ -911,7 +1014,11 @@ export async function updateClientById({
       ["therapyStartDate", "therapy_start_date", fields.therapyStartDate],
       ["referralSource", "referral_source", fields.referralSource],
       ["ageBracket", "age_bracket", fields.ageBracket],
-      ["sessionDurationMinutes", "session_duration_minutes", fields.sessionDurationMinutes],
+      [
+        "sessionDurationMinutes",
+        "session_duration_minutes",
+        fields.sessionDurationMinutes,
+      ],
       ["contractedSessions", "contracted_sessions", fields.contractedSessions],
       ["feePerSession", "fee_per_session", fields.feePerSession],
       ["supervisorNotes", "supervisor_notes", fields.supervisorNotes],
@@ -934,11 +1041,15 @@ export async function updateClientById({
       .select()
       .single();
 
-    if (error) handleSupabaseError(error, "update client by id");
+    if (error) {
+      handleSupabaseError(error, "update client by id");
+    }
 
     return mapRowToClient(data);
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to update client by id"
@@ -951,9 +1062,13 @@ export async function deleteClientById({ id }: { id: string }) {
     const supabase = await createClient();
     const { error } = await supabase.from("clients").delete().eq("id", id);
 
-    if (error) handleSupabaseError(error, "delete client by id");
+    if (error) {
+      handleSupabaseError(error, "delete client by id");
+    }
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete client by id"
@@ -984,10 +1099,14 @@ export async function getChatsByClientId({
 
     const { data, error } = await query;
 
-    if (error) handleSupabaseError(error, "get chats by client id");
+    if (error) {
+      handleSupabaseError(error, "get chats by client id");
+    }
     return data as Chat[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get chats by client id"
@@ -1003,7 +1122,9 @@ export async function getChatCountsByClient({ userId }: { userId: string }) {
       .select("clientId")
       .eq("userId", userId);
 
-    if (error) handleSupabaseError(error, "get chat counts by client");
+    if (error) {
+      handleSupabaseError(error, "get chat counts by client");
+    }
 
     const counts = new Map<string | null, number>();
     for (const chat of data || []) {
@@ -1016,7 +1137,9 @@ export async function getChatCountsByClient({ userId }: { userId: string }) {
       count,
     }));
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get chat counts by client"
@@ -1040,10 +1163,14 @@ export async function getRecentDocumentsByUserId({
       .order("createdAt", { ascending: false })
       .limit(limit);
 
-    if (error) handleSupabaseError(error, "get recent documents by user id");
+    if (error) {
+      handleSupabaseError(error, "get recent documents by user id");
+    }
     return data as Document[];
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get recent documents by user id"
@@ -1066,10 +1193,14 @@ export async function updateChatClientById({
       .eq("id", chatId)
       .select();
 
-    if (error) handleSupabaseError(error, "update chat client by id");
+    if (error) {
+      handleSupabaseError(error, "update chat client by id");
+    }
     return data;
   } catch (error) {
-    if (error instanceof ChatSDKError) throw error;
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to update chat client by id"
@@ -1151,10 +1282,7 @@ export async function createTag({
 export async function deleteTag({ id }: { id: string }) {
   try {
     const supabase = await createClient();
-    const { error } = await supabase
-      .from("client_tags")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("client_tags").delete().eq("id", id);
 
     if (error) {
       handleSupabaseError(error, "delete tag");
@@ -1188,10 +1316,7 @@ export async function setClientTags({
     if (error instanceof ChatSDKError) {
       throw error;
     }
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to set client tags"
-    );
+    throw new ChatSDKError("bad_request:database", "Failed to set client tags");
   }
 }
 
@@ -1279,7 +1404,9 @@ export async function getTherapistProfile({
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") { return null; }
+    if (error.code === "PGRST116") {
+      return null;
+    }
     handleSupabaseError(error, "get therapist profile");
   }
 
@@ -1295,9 +1422,7 @@ export async function getTherapistProfile({
     : null;
 }
 
-export async function upsertTherapistProfile(
-  profile: TherapistProfileInsert,
-) {
+export async function upsertTherapistProfile(profile: TherapistProfileInsert) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("therapist_profiles")
@@ -1310,6 +1435,8 @@ export async function upsertTherapistProfile(
     .select()
     .single();
 
-  if (error) { handleSupabaseError(error, "upsert therapist profile"); }
+  if (error) {
+    handleSupabaseError(error, "upsert therapist profile");
+  }
   return data;
 }

@@ -13,11 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSupabaseAuth } from "@/lib/hooks/useSupabaseAuth";
+import { useSupabaseAuth } from "@/lib/hooks/use-supabase-auth";
+import Logo from "@/public/images/brainLogoCompressed.png";
 import { createClient } from "@/utils/supabase/client";
 import { LoaderIcon } from "./icons";
 import { toast } from "./toast";
-import Logo from "@/public/images/brainLogoCompressed.png";
 
 export function NavBar({ user }: { user: User }) {
   const router = useRouter();

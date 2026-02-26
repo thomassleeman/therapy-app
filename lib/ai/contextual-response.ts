@@ -251,7 +251,7 @@ export function buildContextualResponse(
   const normalisedChunks = chunksToInject.map(normaliseChunk);
   const xmlDocuments = normalisedChunks.map(formatChunkAsXml);
 
-  const contextBlock = "<context>\n" + xmlDocuments.join("\n") + "\n</context>";
+  const contextBlock = `<context>\n${xmlDocuments.join("\n")}\n</context>`;
 
   // Moderate tier: prepend the hedging preamble before the XML block
   const contextString =

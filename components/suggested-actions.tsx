@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { memo } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { Suggestion } from "./elements/suggestion";
+
 type SuggestedActionsProps = {
   chatId: string;
   sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];

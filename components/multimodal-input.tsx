@@ -45,6 +45,7 @@ import { ArrowUpIcon, PaperclipIcon, StopIcon } from "./icons";
 import { PreviewAttachment } from "./preview-attachment";
 import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
+
 function setCookie(name: string, value: string) {
   const maxAge = 60 * 60 * 24 * 365; // 1 year
   // biome-ignore lint/suspicious/noDocumentCookie: needed for client-side cookie setting
@@ -296,10 +297,7 @@ function PureMultimodalInput({
       {messages.length === 0 &&
         attachments.length === 0 &&
         uploadQueue.length === 0 && (
-          <SuggestedActions
-            chatId={chatId}
-            sendMessage={sendMessage}
-          />
+          <SuggestedActions chatId={chatId} sendMessage={sendMessage} />
         )}
 
       <input
