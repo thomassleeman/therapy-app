@@ -12,7 +12,8 @@
     "db:push": "npx supabase db push",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test",
     "test:unit": "vitest run",
-    "ingest": "tsx scripts/ingest-knowledge.ts"
+    "ingest": "tsx scripts/ingest-knowledge.ts",
+    "dev:logs": "tsx scripts/dev-log-viewer.ts"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.15",

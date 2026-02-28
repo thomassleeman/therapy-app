@@ -39,6 +39,7 @@ import {
   updateMessage,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/types";
+import { devLogger } from "@/lib/dev/logger";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -67,309 +68,346 @@ export async function POST(request: Request) {
     return new ChatSDKError("bad_request:api").toResponse();
   }
 
-  try {
-    const {
-      id,
-      message,
-      messages,
-      selectedChatModel,
-      selectedClientId,
-      therapeuticOrientation,
-    } = requestBody;
-
-    const session = await auth();
-
-    if (!session?.user) {
-      return new ChatSDKError("unauthorized:chat").toResponse();
-    }
-
-    const userType: UserType = session.user.type;
-
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
-    });
-
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError("rate_limit:chat").toResponse();
-    }
-
-    const isToolApprovalFlow = Boolean(messages);
-
-    const chat = await getChatById({ id });
-    let messagesFromDb: DBMessage[] = [];
-    let titlePromise: Promise<string> | null = null;
-
-    if (chat) {
-      if (chat.userId !== session.user.id) {
-        return new ChatSDKError("forbidden:chat").toResponse();
-      }
-      if (!isToolApprovalFlow) {
-        messagesFromDb = await getMessagesByChatId({ id });
-      }
-    } else if (message?.role === "user") {
-      await saveChat({
+  return devLogger.run(async () => {
+    try {
+      const {
         id,
-        userId: session.user.id,
-        title: "New chat",
-        visibility: "private",
-        clientId: selectedClientId ?? null,
+        message,
+        messages,
+        selectedChatModel,
+        selectedClientId,
+        therapeuticOrientation,
+      } = requestBody;
+
+      const session = await auth();
+
+      if (!session?.user) {
+        return new ChatSDKError("unauthorized:chat").toResponse();
+      }
+
+      const userType: UserType = session.user.type;
+
+      const messageCount = await getMessageCountByUserId({
+        id: session.user.id,
+        differenceInHours: 24,
       });
-      titlePromise = generateTitleFromUserMessage({ message });
-    }
 
-    const uiMessages = isToolApprovalFlow
-      ? (messages as ChatMessage[])
-      : [...convertToUIMessages(messagesFromDb), message as ChatMessage];
+      if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+        return new ChatSDKError("rate_limit:chat").toResponse();
+      }
 
-    const { longitude, latitude, city, country } = geolocation(request);
+      const isToolApprovalFlow = Boolean(messages);
 
-    const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
-    };
+      const chat = await getChatById({ id });
+      let messagesFromDb: DBMessage[] = [];
+      let titlePromise: Promise<string> | null = null;
 
-    if (message?.role === "user") {
-      await saveMessages({
-        messages: [
-          {
-            chatId: id,
-            id: message.id,
-            role: "user",
-            parts: message.parts,
-            attachments: [],
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
-    }
-
-    const isReasoningModel =
-      selectedChatModel.includes("reasoning") ||
-      selectedChatModel.includes("thinking");
-
-    const modelMessages = await convertToModelMessages(uiMessages);
-
-    const [therapistProfile, client] = await Promise.all([
-      getTherapistProfile({ userId: session.user.id }),
-      selectedClientId
-        ? getClientById({ id: selectedClientId })
-        : Promise.resolve(null),
-    ]);
-
-    const effectiveModality = resolveModality({
-      chatOrientation: therapeuticOrientation as
-        | TherapeuticOrientation
-        | undefined,
-      clientModalities: client?.therapeuticModalities,
-      therapistDefault: therapistProfile?.defaultModality,
-    });
-
-    const effectiveJurisdiction = therapistProfile?.jurisdiction ?? null;
-
-    // ── Sensitive content detection ─────────────────────────────────
-    // Lightweight keyword scan on the latest user message. Runs in <1ms.
-    // When triggered, appends safety-critical instructions to the system
-    // prompt and directs the LLM to call specific search tools.
-    const lastUserMessage = [...uiMessages]
-      .reverse()
-      .find((m) => m.role === "user");
-    const lastUserMessageText =
-      lastUserMessage?.parts
-        ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
-        .map((p) => p.text)
-        .join(" ") ?? "";
-
-    const sensitiveContent = detectSensitiveContent(lastUserMessageText);
-
-    let sensitiveContentPrompt = "";
-    if (sensitiveContent.detectedCategories.length > 0) {
-      const autoSearchDirectives = sensitiveContent.autoSearchQueries
-        .map(
-          (q) =>
-            `- You MUST call the \`${q.tool}\` tool with query: "${q.query}"`
-        )
-        .join("\n");
-
-      sensitiveContentPrompt = [
-        "",
-        "## Sensitive Content — Safety-Critical Instructions",
-        "",
-        "The following sensitive content categories were detected in the therapist's message:",
-        sensitiveContent.detectedCategories
-          .map((c) => `- ${c.replace(/_/g, " ")}`)
-          .join("\n"),
-        "",
-        sensitiveContent.additionalInstructions,
-        "",
-        "### Required Tool Calls",
-        "",
-        "You MUST make the following search calls before responding, in addition to any other searches you decide are relevant:",
-        autoSearchDirectives,
-      ].join("\n");
-
-      console.log(
-        "[sensitive-content] Detected:",
-        sensitiveContent.detectedCategories.join(", "),
-        "| Auto-searches:",
-        sensitiveContent.autoSearchQueries
-          .map((q) => `${q.tool}("${q.query}")`)
-          .join(", ")
-      );
-    }
-
-    const stream = createUIMessageStream({
-      originalMessages: isToolApprovalFlow ? uiMessages : undefined,
-      execute: async ({ writer: dataStream }) => {
-        const result = streamText({
-          model: getLanguageModel(selectedChatModel),
-          system:
-            systemPrompt({
-              selectedChatModel,
-              requestHints,
-              therapeuticOrientation: therapeuticOrientation as
-                | TherapeuticOrientation
-                | undefined,
-              effectiveModality,
-              effectiveJurisdiction,
-            } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
-          messages: modelMessages,
-          // Step 1 is the initial LLM generation; steps 2–6 allow up to 5 sequential
-          // tool calls — enough for a maximally complex cross-domain query to hit all
-          // five search tools (searchKnowledgeBase, searchLegislation, searchGuidelines,
-          // searchTherapeuticContent, searchClinicalPractice) in a single turn. Each
-          // additional step increases latency and token cost proportionally, so keep
-          // this in sync with the tool count.
-          stopWhen: stepCountIs(6),
-          experimental_activeTools: isReasoningModel
-            ? [
-                "searchKnowledgeBase",
-                "searchLegislation",
-                "searchGuidelines",
-                "searchTherapeuticContent",
-                "searchClinicalPractice",
-              ]
-            : [
-                "createDocument",
-                "updateDocument",
-                "requestSuggestions",
-                "searchKnowledgeBase",
-                "searchLegislation",
-                "searchGuidelines",
-                "searchTherapeuticContent",
-                "searchClinicalPractice",
-              ],
-          providerOptions: isReasoningModel
-            ? {
-                anthropic: {
-                  thinking: { type: "enabled", budgetTokens: 10_000 },
-                },
-              }
-            : undefined,
-          tools: {
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
-            requestSuggestions: requestSuggestions({ session, dataStream }),
-            searchKnowledgeBase: searchKnowledgeBase({ session }),
-            ...knowledgeSearchTools({ session }),
-          },
-          experimental_telemetry: {
-            isEnabled: isProductionEnvironment,
-            functionId: "stream-text",
-          },
+      if (chat) {
+        if (chat.userId !== session.user.id) {
+          return new ChatSDKError("forbidden:chat").toResponse();
+        }
+        if (!isToolApprovalFlow) {
+          messagesFromDb = await getMessagesByChatId({ id });
+        }
+      } else if (message?.role === "user") {
+        await saveChat({
+          id,
+          userId: session.user.id,
+          title: "New chat",
+          visibility: "private",
+          clientId: selectedClientId ?? null,
         });
+        titlePromise = generateTitleFromUserMessage({ message });
+      }
 
-        dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
+      const uiMessages = isToolApprovalFlow
+        ? (messages as ChatMessage[])
+        : [...convertToUIMessages(messagesFromDb), message as ChatMessage];
 
-        if (titlePromise) {
-          const title = await titlePromise;
-          dataStream.write({ type: "data-chat-title", data: title });
-          updateChatTitleById({ chatId: id, title });
-        }
-      },
-      generateId: generateUUID,
-      onFinish: async ({ messages: finishedMessages }) => {
-        if (isToolApprovalFlow) {
-          for (const finishedMsg of finishedMessages) {
-            const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
-            if (existingMsg) {
-              await updateMessage({
-                id: finishedMsg.id,
-                parts: finishedMsg.parts,
-              });
-            } else {
-              await saveMessages({
-                messages: [
-                  {
-                    id: finishedMsg.id,
-                    role: finishedMsg.role,
-                    parts: finishedMsg.parts,
-                    createdAt: new Date().toISOString(),
-                    attachments: [],
-                    chatId: id,
-                  },
-                ],
-              });
-            }
-          }
-        } else if (finishedMessages.length > 0) {
-          await saveMessages({
-            messages: finishedMessages.map((currentMessage) => ({
-              id: currentMessage.id,
-              role: currentMessage.role,
-              parts: currentMessage.parts,
-              createdAt: new Date().toISOString(),
-              attachments: [],
+      const { longitude, latitude, city, country } = geolocation(request);
+
+      const requestHints: RequestHints = {
+        longitude,
+        latitude,
+        city,
+        country,
+      };
+
+      if (message?.role === "user") {
+        await saveMessages({
+          messages: [
+            {
               chatId: id,
-            })),
+              id: message.id,
+              role: "user",
+              parts: message.parts,
+              attachments: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        });
+      }
+
+      const isReasoningModel =
+        selectedChatModel.includes("reasoning") ||
+        selectedChatModel.includes("thinking");
+
+      const modelMessages = await convertToModelMessages(uiMessages);
+
+      const [therapistProfile, client] = await Promise.all([
+        getTherapistProfile({ userId: session.user.id }),
+        selectedClientId
+          ? getClientById({ id: selectedClientId })
+          : Promise.resolve(null),
+      ]);
+
+      const effectiveModality = resolveModality({
+        chatOrientation: therapeuticOrientation as
+          | TherapeuticOrientation
+          | undefined,
+        clientModalities: client?.therapeuticModalities,
+        therapistDefault: therapistProfile?.defaultModality,
+      });
+
+      const effectiveJurisdiction = therapistProfile?.jurisdiction ?? null;
+
+      // ── Dev logging: start turn ─────────────────────────────────────
+      const turnLog = devLogger.startTurn({
+        chatId: id,
+        userId: session.user.id,
+        selectedModel: selectedChatModel,
+        effectiveModality,
+        effectiveJurisdiction,
+      });
+
+      // ── Sensitive content detection ─────────────────────────────────
+      // Lightweight keyword scan on the latest user message. Runs in <1ms.
+      // When triggered, appends safety-critical instructions to the system
+      // prompt and directs the LLM to call specific search tools.
+      const lastUserMessage = [...uiMessages]
+        .reverse()
+        .find((m) => m.role === "user");
+      const lastUserMessageText =
+        lastUserMessage?.parts
+          ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map((p) => p.text)
+          .join(" ") ?? "";
+
+      turnLog.setUserMessage(lastUserMessageText);
+
+      const sensitiveContent = detectSensitiveContent(lastUserMessageText);
+
+      turnLog.setSensitiveContent(
+        sensitiveContent.detectedCategories.length > 0,
+        sensitiveContent.detectedCategories
+      );
+
+      let sensitiveContentPrompt = "";
+      if (sensitiveContent.detectedCategories.length > 0) {
+        const autoSearchDirectives = sensitiveContent.autoSearchQueries
+          .map(
+            (q) =>
+              `- You MUST call the \`${q.tool}\` tool with query: "${q.query}"`
+          )
+          .join("\n");
+
+        sensitiveContentPrompt = [
+          "",
+          "## Sensitive Content — Safety-Critical Instructions",
+          "",
+          "The following sensitive content categories were detected in the therapist's message:",
+          sensitiveContent.detectedCategories
+            .map((c) => `- ${c.replace(/_/g, " ")}`)
+            .join("\n"),
+          "",
+          sensitiveContent.additionalInstructions,
+          "",
+          "### Required Tool Calls",
+          "",
+          "You MUST make the following search calls before responding, in addition to any other searches you decide are relevant:",
+          autoSearchDirectives,
+        ].join("\n");
+
+        console.log(
+          "[sensitive-content] Detected:",
+          sensitiveContent.detectedCategories.join(", "),
+          "| Auto-searches:",
+          sensitiveContent.autoSearchQueries
+            .map((q) => `${q.tool}("${q.query}")`)
+            .join(", ")
+        );
+      }
+
+      const stream = createUIMessageStream({
+        originalMessages: isToolApprovalFlow ? uiMessages : undefined,
+        execute: async ({ writer: dataStream }) => {
+          const result = streamText({
+            model: getLanguageModel(selectedChatModel),
+            system:
+              systemPrompt({
+                selectedChatModel,
+                requestHints,
+                therapeuticOrientation: therapeuticOrientation as
+                  | TherapeuticOrientation
+                  | undefined,
+                effectiveModality,
+                effectiveJurisdiction,
+              } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
+            messages: modelMessages,
+            // Step 1 is the initial LLM generation; steps 2–6 allow up to 5 sequential
+            // tool calls — enough for a maximally complex cross-domain query to hit all
+            // five search tools (searchKnowledgeBase, searchLegislation, searchGuidelines,
+            // searchTherapeuticContent, searchClinicalPractice) in a single turn. Each
+            // additional step increases latency and token cost proportionally, so keep
+            // this in sync with the tool count.
+            stopWhen: stepCountIs(6),
+            experimental_activeTools: isReasoningModel
+              ? [
+                  "searchKnowledgeBase",
+                  "searchLegislation",
+                  "searchGuidelines",
+                  "searchTherapeuticContent",
+                  "searchClinicalPractice",
+                ]
+              : [
+                  "createDocument",
+                  "updateDocument",
+                  "requestSuggestions",
+                  "searchKnowledgeBase",
+                  "searchLegislation",
+                  "searchGuidelines",
+                  "searchTherapeuticContent",
+                  "searchClinicalPractice",
+                ],
+            providerOptions: isReasoningModel
+              ? {
+                  anthropic: {
+                    thinking: { type: "enabled", budgetTokens: 10_000 },
+                  },
+                }
+              : undefined,
+            tools: {
+              createDocument: createDocument({ session, dataStream }),
+              updateDocument: updateDocument({ session, dataStream }),
+              requestSuggestions: requestSuggestions({ session, dataStream }),
+              searchKnowledgeBase: searchKnowledgeBase({ session }),
+              ...knowledgeSearchTools({ session }),
+            },
+            experimental_telemetry: {
+              isEnabled: isProductionEnvironment,
+              functionId: "stream-text",
+            },
           });
-        }
-      },
-      onError: () => "Oops, an error occurred!",
-    });
 
-    return createUIMessageStreamResponse({
-      stream,
-      async consumeSseStream({ stream: sseStream }) {
-        if (!process.env.REDIS_URL) {
-          return;
-        }
-        try {
-          const streamContext = getStreamContext();
-          if (streamContext) {
-            const streamId = generateId();
-            await createStreamId({ streamId, chatId: id });
-            await streamContext.createNewResumableStream(
-              streamId,
-              () => sseStream
-            );
+          dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
+
+          if (titlePromise) {
+            const title = await titlePromise;
+            dataStream.write({ type: "data-chat-title", data: title });
+            updateChatTitleById({ chatId: id, title });
           }
-        } catch (_) {
-          // ignore redis errors
-        }
-      },
-    });
-  } catch (error) {
-    const vercelId = request.headers.get("x-vercel-id");
+        },
+        generateId: generateUUID,
+        onFinish: async ({ messages: finishedMessages }) => {
+          if (isToolApprovalFlow) {
+            for (const finishedMsg of finishedMessages) {
+              const existingMsg = uiMessages.find(
+                (m) => m.id === finishedMsg.id
+              );
+              if (existingMsg) {
+                await updateMessage({
+                  id: finishedMsg.id,
+                  parts: finishedMsg.parts,
+                });
+              } else {
+                await saveMessages({
+                  messages: [
+                    {
+                      id: finishedMsg.id,
+                      role: finishedMsg.role,
+                      parts: finishedMsg.parts,
+                      createdAt: new Date().toISOString(),
+                      attachments: [],
+                      chatId: id,
+                    },
+                  ],
+                });
+              }
+            }
+          } else if (finishedMessages.length > 0) {
+            await saveMessages({
+              messages: finishedMessages.map((currentMessage) => ({
+                id: currentMessage.id,
+                role: currentMessage.role,
+                parts: currentMessage.parts,
+                createdAt: new Date().toISOString(),
+                attachments: [],
+                chatId: id,
+              })),
+            });
+          }
 
-    if (error instanceof ChatSDKError) {
-      return error.toResponse();
+          // ── Dev logging: capture response + derive quality signals ───
+          const assistantMsg = finishedMessages.findLast(
+            (m) => m.role === "assistant"
+          );
+          const responseText = assistantMsg?.parts
+            ?.filter(
+              (p): p is { type: "text"; text: string } => p.type === "text"
+            )
+            .map((p) => p.text)
+            .join("") ?? "";
+
+          turnLog.setResponse(responseText);
+          turnLog.computeQualitySignals();
+        },
+        onError: () => "Oops, an error occurred!",
+      });
+
+      // ── Dev logging: flush after response is sent ───────────────────
+      after(() => turnLog.flush());
+
+      return createUIMessageStreamResponse({
+        stream,
+        async consumeSseStream({ stream: sseStream }) {
+          if (!process.env.REDIS_URL) {
+            return;
+          }
+          try {
+            const streamContext = getStreamContext();
+            if (streamContext) {
+              const streamId = generateId();
+              await createStreamId({ streamId, chatId: id });
+              await streamContext.createNewResumableStream(
+                streamId,
+                () => sseStream
+              );
+            }
+          } catch (_) {
+            // ignore redis errors
+          }
+        },
+      });
+    } catch (error) {
+      const vercelId = request.headers.get("x-vercel-id");
+
+      if (error instanceof ChatSDKError) {
+        return error.toResponse();
+      }
+
+      if (
+        error instanceof Error &&
+        error.message?.includes(
+          "AI Gateway requires a valid credit card on file to service requests"
+        )
+      ) {
+        return new ChatSDKError("bad_request:activate_gateway").toResponse();
+      }
+
+      console.error("Unhandled error in chat API:", error, { vercelId });
+      return new ChatSDKError("offline:chat").toResponse();
     }
-
-    if (
-      error instanceof Error &&
-      error.message?.includes(
-        "AI Gateway requires a valid credit card on file to service requests"
-      )
-    ) {
-      return new ChatSDKError("bad_request:activate_gateway").toResponse();
-    }
-
-    console.error("Unhandled error in chat API:", error, { vercelId });
-    return new ChatSDKError("offline:chat").toResponse();
-  }
+  });
 }
 
 export async function DELETE(request: Request) {

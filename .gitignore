@@ -47,3 +47,6 @@ yarn-error.log*
 knowledge-base/**
 !knowledge-base/**/
 !knowledge-base/**/.gitkeep
+
+# Dev-only RAG quality logs (may contain fragments of therapist messages)
+logs/

@@ -34,6 +34,7 @@ import { embed, tool } from "ai";
 import { z } from "zod";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
 import type { Session } from "@/lib/auth";
+import { devLogger } from "@/lib/dev/logger";
 import {
   DOCUMENT_CATEGORIES,
   JURISDICTIONS,
@@ -122,6 +123,9 @@ export const searchKnowledgeBase = ({
     }),
 
     execute: async ({ query, category, modality, jurisdiction }) => {
+      const toolInput = { query, category, modality, jurisdiction };
+      const turnStart = performance.now();
+
       // ----------------------------------------------------------------
       // Step 1: Create the authenticated Supabase client
       // This uses the SSR-aware client from utils/supabase/server.ts which
@@ -139,6 +143,7 @@ export const searchKnowledgeBase = ({
       // used during ingestion — mismatched dimensions will silently
       // produce garbage similarity scores.
       // ----------------------------------------------------------------
+      const embedStart = performance.now();
       const { embedding } = await embed({
         model: openai.embedding("text-embedding-3-small"),
         value: query,
@@ -146,6 +151,7 @@ export const searchKnowledgeBase = ({
           openai: { dimensions: 512 },
         },
       });
+      const embeddingMs = performance.now() - embedStart;
 
       // ----------------------------------------------------------------
       // Step 3: Call the hybrid_search RPC
@@ -159,6 +165,7 @@ export const searchKnowledgeBase = ({
       // The RPC now JOINs knowledge_documents to return document_title
       // alongside chunk data — see the companion migration amendment.
       // ----------------------------------------------------------------
+      const searchStart = performance.now();
       const { data, error } = await supabase.rpc("hybrid_search", {
         query_text: query,
         query_embedding: `[${embedding.join(",")}]`,
@@ -167,9 +174,31 @@ export const searchKnowledgeBase = ({
         filter_modality: modality ?? null,
         filter_jurisdiction: jurisdiction ?? null,
       });
+      const searchMs = performance.now() - searchStart;
+      const totalMs = performance.now() - turnStart;
 
       if (error) {
         console.error("[searchKnowledgeBase] hybrid_search RPC error:", error);
+
+        devLogger.currentTurn()?.logToolCall({
+          toolName: "searchKnowledgeBase",
+          input: toolInput,
+          timing: {
+            embeddingMs: Math.round(embeddingMs),
+            searchMs: Math.round(searchMs),
+            totalMs: Math.round(totalMs),
+          },
+          rawResults: [],
+          confidenceAssessment: {
+            tier: "low",
+            note: error.message,
+            averageSimilarity: 0,
+            maxSimilarity: 0,
+            droppedCount: 0,
+          },
+          filteredResults: [],
+        });
+
         return {
           results: [],
           result_count: 0,
@@ -209,6 +238,39 @@ export const searchKnowledgeBase = ({
       // the therapist to their supervisor.
       // ----------------------------------------------------------------
       const assessed = applyConfidenceThreshold(mapped);
+
+      // ── Dev logging ────────────────────────────────────────────────
+      devLogger.currentTurn()?.logToolCall({
+        toolName: "searchKnowledgeBase",
+        input: toolInput,
+        timing: {
+          embeddingMs: Math.round(embeddingMs),
+          searchMs: Math.round(searchMs),
+          totalMs: Math.round(totalMs),
+        },
+        rawResults: mapped.map((r) => ({
+          documentTitle: r.document_title,
+          similarityScore: r.similarity_score,
+          rrfScore: r.rrf_score,
+          contentPreview: r.content.slice(0, 200),
+          modality: r.modality,
+          jurisdiction: r.jurisdiction,
+        })),
+        confidenceAssessment: {
+          tier: assessed.confidenceTier,
+          note: assessed.confidenceNote,
+          averageSimilarity: assessed.averageSimilarity,
+          maxSimilarity: assessed.maxSimilarity,
+          droppedCount: assessed.droppedCount,
+        },
+        filteredResults: assessed.results.map((r) => ({
+          documentTitle: r.document_title,
+          similarityScore: r.similarity_score,
+          contentPreview: r.content.slice(0, 200),
+          modality: r.modality,
+          jurisdiction: r.jurisdiction,
+        })),
+      });
 
       return {
         results: assessed.results,

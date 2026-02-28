@@ -16,6 +16,7 @@ import { embed, tool } from "ai";
 import { z } from "zod";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
 import type { Session } from "@/lib/auth";
+import { devLogger } from "@/lib/dev/logger";
 import { createClient } from "@/utils/supabase/server";
 
 // ─── Shared types ───────────────────────────────────────────────────────────
@@ -38,6 +39,10 @@ interface HybridSearchResult {
 /** Parameters forwarded to the `hybrid_search` RPC. */
 interface HybridSearchParams {
   query: string;
+  /** Tool name used for dev logging — matches the key in streamText's tools map. */
+  toolName: string;
+  /** Input params the LLM passed (for log fidelity). */
+  toolInput: Record<string, unknown>;
   category?: string | null;
   modality?: string | null;
   jurisdiction?: string | null;
@@ -60,6 +65,8 @@ interface HybridSearchParams {
  */
 async function executeHybridSearch({
   query,
+  toolName,
+  toolInput,
   category = null,
   modality = null,
   jurisdiction = null,
@@ -68,8 +75,10 @@ async function executeHybridSearch({
   semanticWeight = 1.0,
 }: HybridSearchParams) {
   const supabase = await createClient();
+  const turnStart = performance.now();
 
   // Generate a 512-dimension embedding using Matryoshka truncation.
+  const embedStart = performance.now();
   const { embedding } = await embed({
     model: openai.embedding("text-embedding-3-small"),
     value: query,
@@ -77,8 +86,10 @@ async function executeHybridSearch({
       openai: { dimensions: 512 },
     },
   });
+  const embeddingMs = performance.now() - embedStart;
   console.log("[RAG] embedding dimensions:", embedding.length);
 
+  const searchStart = performance.now();
   const { data, error } = await supabase.rpc("hybrid_search", {
     query_text: query,
     query_embedding: `[${embedding.join(",")}]`,
@@ -90,6 +101,7 @@ async function executeHybridSearch({
     semantic_weight: semanticWeight,
     rrf_k: 60, // Standard RRF smoothing constant
   });
+  const searchMs = performance.now() - searchStart;
 
   if (error) {
     console.error(`[hybrid_search] ${error.message}`, {
@@ -97,6 +109,27 @@ async function executeHybridSearch({
       modality,
       jurisdiction,
     });
+
+    // Log the failed call so it shows up as a content gap
+    devLogger.currentTurn()?.logToolCall({
+      toolName,
+      input: toolInput,
+      timing: {
+        embeddingMs: Math.round(embeddingMs),
+        searchMs: Math.round(searchMs),
+        totalMs: Math.round(performance.now() - turnStart),
+      },
+      rawResults: [],
+      confidenceAssessment: {
+        tier: "low",
+        note: error.message,
+        averageSimilarity: 0,
+        maxSimilarity: 0,
+        droppedCount: 0,
+      },
+      filteredResults: [],
+    });
+
     return {
       results: [],
       error: error.message,
@@ -123,12 +156,46 @@ async function executeHybridSearch({
   }));
 
   const assessed = applyConfidenceThreshold(mapped);
+  const totalMs = Math.round(performance.now() - turnStart);
 
   console.log("[RAG] search results:", {
     resultCount: assessed.results.length,
     confidenceTier: assessed.confidenceTier,
     maxSimilarity: assessed.maxSimilarity,
     titles: mapped.map((r) => r.documentTitle),
+  });
+
+  // ── Dev logging ──────────────────────────────────────────────────────────
+  devLogger.currentTurn()?.logToolCall({
+    toolName,
+    input: toolInput,
+    timing: {
+      embeddingMs: Math.round(embeddingMs),
+      searchMs: Math.round(searchMs),
+      totalMs,
+    },
+    rawResults: mapped.map((r) => ({
+      documentTitle: r.documentTitle,
+      similarityScore: r.similarityScore,
+      rrfScore: r.rrfScore,
+      contentPreview: r.content.slice(0, 200),
+      modality: r.modality,
+      jurisdiction: r.jurisdiction,
+    })),
+    confidenceAssessment: {
+      tier: assessed.confidenceTier,
+      note: assessed.confidenceNote,
+      averageSimilarity: assessed.averageSimilarity,
+      maxSimilarity: assessed.maxSimilarity,
+      droppedCount: assessed.droppedCount,
+    },
+    filteredResults: assessed.results.map((r) => ({
+      documentTitle: r.documentTitle,
+      similarityScore: r.similarityScore,
+      contentPreview: r.content.slice(0, 200),
+      modality: r.modality,
+      jurisdiction: r.jurisdiction,
+    })),
   });
 
   return {
@@ -174,6 +241,8 @@ export const searchLegislation = tool({
   execute: async ({ query, jurisdiction }) =>
     executeHybridSearch({
       query,
+      toolName: "searchLegislation",
+      toolInput: { query, jurisdiction },
       category: "legislation",
       jurisdiction,
       // Slightly stronger full-text weighting so exact statutory terms
@@ -214,6 +283,8 @@ export const searchGuidelines = tool({
   execute: async ({ query, jurisdiction }) =>
     executeHybridSearch({
       query,
+      toolName: "searchGuidelines",
+      toolInput: { query, jurisdiction },
       category: "guideline",
       jurisdiction: jurisdiction ?? null,
       // Balanced weights — guideline language is a mix of precise terms
@@ -254,6 +325,8 @@ export const searchTherapeuticContent = tool({
   execute: async ({ query, modality }) =>
     executeHybridSearch({
       query,
+      toolName: "searchTherapeuticContent",
+      toolInput: { query, modality },
       category: "therapeutic_content",
       modality,
       // Favour semantic search for therapeutic content — therapists describe
@@ -310,6 +383,8 @@ export const searchClinicalPractice = tool({
   execute: async ({ query, jurisdiction, modality }) =>
     executeHybridSearch({
       query,
+      toolName: "searchClinicalPractice",
+      toolInput: { query, jurisdiction, modality },
       category: "clinical_practice",
       jurisdiction: jurisdiction ?? null,
       modality: modality ?? null,
