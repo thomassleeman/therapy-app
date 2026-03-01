@@ -224,6 +224,12 @@ export function buildContextualResponse(
   } = options;
 
   // ── Low confidence: no chunks, supervisor referral ──────────────────
+  // NOTE: In the tool-based RAG pipeline, `low` confidence is now handled
+  // upstream by `routeByConfidence` (lib/ai/confidence-router.ts), which maps
+  // it to either `general_knowledge` (non-sensitive topic) or `graceful_decline`
+  // (sensitive topic). This path is retained for any caller that uses
+  // `buildContextualResponse` directly with a `low` tier result — it maps to
+  // the `graceful_decline` behaviour (supervisor referral, no content).
   if (confidenceTier === "low") {
     return {
       contextString: buildLowConfidenceMessage(modality),

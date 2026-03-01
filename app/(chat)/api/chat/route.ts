@@ -4,27 +4,17 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
-  stepCountIs,
-  streamText,
 } from "ai";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
+import { therapyReflectionAgent } from "@/lib/ai/agents/therapy-reflection-agent";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { checkFaithfulness } from "@/lib/ai/faithfulness-check";
 import { resolveModality } from "@/lib/ai/modality";
-import {
-  type RequestHints,
-  systemPrompt,
-  type TherapeuticOrientation,
-} from "@/lib/ai/prompts";
-import { getLanguageModel } from "@/lib/ai/providers";
+import type { RequestHints, TherapeuticOrientation } from "@/lib/ai/prompts";
 import { detectSensitiveContent } from "@/lib/ai/sensitive-content";
-import { createDocument } from "@/lib/ai/tools/create-document";
-import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
-import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
-import { searchKnowledgeBase } from "@/lib/ai/tools/search-knowledge-base";
-import { updateDocument } from "@/lib/ai/tools/update-document";
 import { auth, type UserType } from "@/lib/auth";
-import { isProductionEnvironment } from "@/lib/constants";
+import { saveFaithfulnessCheck } from "@/lib/db/faithfulness";
 import {
   createStreamId,
   deleteChatById,
@@ -148,10 +138,6 @@ export async function POST(request: Request) {
         });
       }
 
-      const isReasoningModel =
-        selectedChatModel.includes("reasoning") ||
-        selectedChatModel.includes("thinking");
-
       const modelMessages = await convertToModelMessages(uiMessages);
 
       const [therapistProfile, client] = await Promise.all([
@@ -189,7 +175,9 @@ export async function POST(request: Request) {
         .find((m) => m.role === "user");
       const lastUserMessageText =
         lastUserMessage?.parts
-          ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+          ?.filter(
+            (p): p is { type: "text"; text: string } => p.type === "text"
+          )
           .map((p) => p.text)
           .join(" ") ?? "";
 
@@ -204,13 +192,6 @@ export async function POST(request: Request) {
 
       let sensitiveContentPrompt = "";
       if (sensitiveContent.detectedCategories.length > 0) {
-        const autoSearchDirectives = sensitiveContent.autoSearchQueries
-          .map(
-            (q) =>
-              `- You MUST call the \`${q.tool}\` tool with query: "${q.query}"`
-          )
-          .join("\n");
-
         sensitiveContentPrompt = [
           "",
           "## Sensitive Content — Safety-Critical Instructions",
@@ -221,85 +202,82 @@ export async function POST(request: Request) {
             .join("\n"),
           "",
           sensitiveContent.additionalInstructions,
-          "",
-          "### Required Tool Calls",
-          "",
-          "You MUST make the following search calls before responding, in addition to any other searches you decide are relevant:",
-          autoSearchDirectives,
         ].join("\n");
 
         console.log(
           "[sensitive-content] Detected:",
-          sensitiveContent.detectedCategories.join(", "),
-          "| Auto-searches:",
-          sensitiveContent.autoSearchQueries
-            .map((q) => `${q.tool}("${q.query}")`)
-            .join(", ")
+          sensitiveContent.detectedCategories.join(", ")
         );
       }
 
       const stream = createUIMessageStream({
         originalMessages: isToolApprovalFlow ? uiMessages : undefined,
         execute: async ({ writer: dataStream }) => {
-          const result = streamText({
-            model: getLanguageModel(selectedChatModel),
-            system:
-              systemPrompt({
-                selectedChatModel,
-                requestHints,
-                therapeuticOrientation: therapeuticOrientation as
-                  | TherapeuticOrientation
-                  | undefined,
-                effectiveModality,
-                effectiveJurisdiction,
-              } as Parameters<typeof systemPrompt>[0]) + sensitiveContentPrompt,
+          const result = await therapyReflectionAgent.stream({
             messages: modelMessages,
-            // Step 1 is the initial LLM generation; steps 2–6 allow up to 5 sequential
-            // tool calls — enough for a maximally complex cross-domain query to hit all
-            // five search tools (searchKnowledgeBase, searchLegislation, searchGuidelines,
-            // searchTherapeuticContent, searchClinicalPractice) in a single turn. Each
-            // additional step increases latency and token cost proportionally, so keep
-            // this in sync with the tool count.
-            stopWhen: stepCountIs(6),
-            experimental_activeTools: isReasoningModel
-              ? [
-                  "searchKnowledgeBase",
-                  "searchLegislation",
-                  "searchGuidelines",
-                  "searchTherapeuticContent",
-                  "searchClinicalPractice",
-                ]
-              : [
-                  "createDocument",
-                  "updateDocument",
-                  "requestSuggestions",
-                  "searchKnowledgeBase",
-                  "searchLegislation",
-                  "searchGuidelines",
-                  "searchTherapeuticContent",
-                  "searchClinicalPractice",
-                ],
-            providerOptions: isReasoningModel
-              ? {
-                  anthropic: {
-                    thinking: { type: "enabled", budgetTokens: 10_000 },
-                  },
-                }
-              : undefined,
-            tools: {
-              createDocument: createDocument({ session, dataStream }),
-              updateDocument: updateDocument({ session, dataStream }),
-              requestSuggestions: requestSuggestions({ session, dataStream }),
-              searchKnowledgeBase: searchKnowledgeBase({ session }),
-              ...knowledgeSearchTools({ session }),
-            },
-            experimental_telemetry: {
-              isEnabled: isProductionEnvironment,
-              functionId: "stream-text",
+            options: {
+              therapeuticOrientation: therapeuticOrientation as
+                | TherapeuticOrientation
+                | undefined,
+              effectiveModality,
+              effectiveJurisdiction,
+              sensitiveContentPrompt,
+              sensitiveCategories: sensitiveContent.detectedCategories,
+              session,
+              requestHints,
+              selectedChatModel,
+              dataStream,
             },
           });
 
           dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
+
+          // ── Blank response detection ─────────────────────────────────────
+          // Wait for the agent to finish, then check all observables at once.
+          // result.text / totalUsage / steps / finishReason are PromiseLike and
+          // resolve internally — they don't re-consume toUIMessageStream().
+          const [fullText, totalUsage, steps, finishReason] = await Promise.all(
+            [result.text, result.totalUsage, result.steps, result.finishReason]
+          );
+
+          if (!fullText || fullText.trim().length === 0) {
+            console.warn(
+              "[chat] Agent produced no text content — injecting fallback",
+              { chatId: id }
+            );
+            const fallbackId = generateUUID();
+            try {
+              dataStream.write({ type: "text-start", id: fallbackId });
+              dataStream.write({
+                type: "text-delta",
+                delta:
+                  "I wasn't able to formulate a complete response for this question. " +
+                  "This can happen when my search didn't return the content I needed. " +
+                  "Could you try rephrasing your question, or would you like to explore this from a different angle?",
+                id: fallbackId,
+              });
+              dataStream.write({ type: "text-end", id: fallbackId });
+            } catch (err) {
+              console.error("[chat] Failed to write fallback text delta:", err);
+            }
+          }
+
+          // ── Usage and finish reason logging ──────────────────────────────
+          const toolCallCount = steps.reduce(
+            (count, step) => count + (step.toolCalls ?? []).length,
+            0
+          );
+          console.log("[chat] Response complete:", {
+            chatId: id,
+            model: selectedChatModel,
+            finishReason,
+            totalSteps: steps.length,
+            inputTokens: totalUsage.inputTokens,
+            outputTokens: totalUsage.outputTokens,
+            totalTokens: totalUsage.totalTokens,
+            toolCallCount,
+            hadSensitiveContent: sensitiveContent.detectedCategories.length > 0,
+          });
 
           if (titlePromise) {
             const title = await titlePromise;
@@ -351,15 +329,96 @@ export async function POST(request: Request) {
           const assistantMsg = finishedMessages.findLast(
             (m) => m.role === "assistant"
           );
-          const responseText = assistantMsg?.parts
-            ?.filter(
-              (p): p is { type: "text"; text: string } => p.type === "text"
-            )
-            .map((p) => p.text)
-            .join("") ?? "";
+          const responseText =
+            assistantMsg?.parts
+              ?.filter(
+                (p): p is { type: "text"; text: string } => p.type === "text"
+              )
+              .map((p) => p.text)
+              .join("") ?? "";
 
           turnLog.setResponse(responseText);
           turnLog.computeQualitySignals();
+
+          // ── Faithfulness check (fire-and-forget via after()) ─────────
+          // Only runs for grounded responses — strategy must be 'grounded'
+          // in at least one tool result. Skips general_knowledge and
+          // graceful_decline (no KB chunks to verify against).
+          if (process.env.ENABLE_FAITHFULNESS_CHECK === "true") {
+            // In AI SDK v6, tool parts are typed as `tool-{toolName}` with
+            // `state: 'output-available'` and an `output` field (not `result`).
+            // We cast to Record<string, unknown> to avoid TypeScript narrowing
+            // errors while still accessing the runtime shape safely.
+            type GroundedOutput = {
+              strategy?: string;
+              results?: Array<{
+                id: string;
+                content: string;
+                documentTitle: string;
+              }>;
+            };
+
+            const retrievedChunks: Array<{
+              id: string;
+              content: string;
+              documentTitle: string;
+            }> = [];
+
+            for (const msg of finishedMessages) {
+              for (const rawPart of msg.parts ?? []) {
+                const part = rawPart as Record<string, unknown>;
+                if (
+                  typeof part.type !== "string" ||
+                  !part.type.startsWith("tool-")
+                ) {
+                  continue;
+                }
+                if (part.state !== "output-available") {
+                  continue;
+                }
+                const output = part.output as GroundedOutput | undefined;
+                if (
+                  output?.strategy === "grounded" &&
+                  Array.isArray(output.results)
+                ) {
+                  for (const r of output.results) {
+                    if (r.id && r.content && r.documentTitle) {
+                      retrievedChunks.push({
+                        id: r.id,
+                        content: r.content,
+                        documentTitle: r.documentTitle,
+                      });
+                    }
+                  }
+                }
+              }
+            }
+
+            if (retrievedChunks.length > 0 && responseText) {
+              const faithfulnessChatId = id;
+              const faithfulnessMessageId = assistantMsg?.id ?? "";
+
+              after(async () => {
+                const result = await checkFaithfulness(
+                  responseText,
+                  retrievedChunks
+                );
+                await saveFaithfulnessCheck({
+                  chatId: faithfulnessChatId,
+                  messageId: faithfulnessMessageId,
+                  result,
+                });
+                console.log(
+                  `[faithfulness] chatId=${faithfulnessChatId} score=${result.overallScore} flagged=${result.flagged} latency=${result.evaluationLatencyMs}ms`
+                );
+                if (result.flagged) {
+                  console.warn(
+                    `[faithfulness] FLAGGED response — score ${result.overallScore} below threshold. chatId=${faithfulnessChatId} messageId=${faithfulnessMessageId}`
+                  );
+                }
+              });
+            }
+          }
         },
         onError: () => "Oops, an error occurred!",
       });

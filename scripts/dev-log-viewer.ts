@@ -14,11 +14,11 @@
  */
 
 import { readdir, readFile } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { basename, join } from "node:path";
 import type {
-  TurnEntry,
-  SessionSummary,
   AggregateSummary,
+  SessionSummary,
+  TurnEntry,
 } from "../lib/dev/types";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ async function cmdShow(chatId: string): Promise<void> {
       `Modality: ${turn.metadata.effectiveModality ?? "none"} | Jurisdiction: ${turn.metadata.effectiveJurisdiction ?? "none"}`
     );
 
-    console.log(`\nUser message (first 200 chars):`);
+    console.log("\nUser message (first 200 chars):");
     console.log(`  "${turn.userMessage.slice(0, 200)}"`);
 
     if (turn.sensitiveContent.detected) {
@@ -180,7 +180,7 @@ async function cmdShow(chatId: string): Promise<void> {
     }
 
     if (turn.response) {
-      console.log(`\nResponse (first 200 chars):`);
+      console.log("\nResponse (first 200 chars):");
       console.log(`  "${turn.response.text.slice(0, 200)}"`);
     }
   }
@@ -240,9 +240,7 @@ async function cmdFilter(filterExpr: string): Promise<void> {
     return;
   }
 
-  console.log(
-    `\nFound ${matched.length} turn(s) matching "${filterExpr}":\n`
-  );
+  console.log(`\nFound ${matched.length} turn(s) matching "${filterExpr}":\n`);
 
   for (const { turn, file } of matched) {
     console.log(
@@ -369,7 +367,9 @@ async function cmdSummary(date?: string): Promise<void> {
   console.log(`\nRAG Quality Summary — ${targetDate}\n`);
   console.log(`Total turns:        ${summary.totalTurns}`);
   console.log(`Avg turn duration:  ${summary.avgDurationMs}ms`);
-  console.log(`Avg grounding:      ${(summary.avgGroundingScore * 100).toFixed(1)}%`);
+  console.log(
+    `Avg grounding:      ${(summary.avgGroundingScore * 100).toFixed(1)}%`
+  );
 
   console.log("\nTool call distribution:");
   for (const [tool, count] of Object.entries(toolDist).sort(

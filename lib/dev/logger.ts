@@ -42,7 +42,13 @@ export interface TurnLogger {
   flush(): Promise<void>;
 }
 
-export type { ToolCallEntry, ToolCallTiming, RawSearchResultEntry, FilteredResultEntry, ConfidenceAssessmentEntry };
+export type {
+  ToolCallEntry,
+  ToolCallTiming,
+  RawSearchResultEntry,
+  FilteredResultEntry,
+  ConfidenceAssessmentEntry,
+};
 
 // ─── No-op implementation (production / logging disabled) ────────────────────
 
@@ -50,7 +56,11 @@ class NoOpTurnLogger implements TurnLogger {
   setUserMessage(_text: string): void {}
   setSensitiveContent(_detected: boolean, _categories: string[]): void {}
   logToolCall(_entry: ToolCallEntry): void {}
-  setResponse(_text: string, _totalTokens?: number, _finishReason?: string): void {}
+  setResponse(
+    _text: string,
+    _totalTokens?: number,
+    _finishReason?: string
+  ): void {}
   computeQualitySignals(): void {}
   async flush(): Promise<void> {}
 }
@@ -132,10 +142,7 @@ class ActiveTurnLogger implements TurnLogger {
     // Tool calls that returned low confidence = potential KB gaps
     const contentGaps = this.toolCalls
       .filter((tc) => tc.confidenceAssessment.tier === "low")
-      .map(
-        (tc) =>
-          `${tc.toolName}(${JSON.stringify(tc.input).slice(0, 120)})`
-      );
+      .map((tc) => `${tc.toolName}(${JSON.stringify(tc.input).slice(0, 120)})`);
 
     this.qualitySignals = {
       groundingIndicators: {

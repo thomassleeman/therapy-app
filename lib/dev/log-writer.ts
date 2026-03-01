@@ -10,7 +10,7 @@
  * and never imports Next.js or Supabase modules.
  */
 
-import { mkdir, appendFile } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { TurnEntry } from "./types";
 

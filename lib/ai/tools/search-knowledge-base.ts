@@ -33,6 +33,14 @@ import { openai } from "@ai-sdk/openai";
 import { embed, tool } from "ai";
 import { z } from "zod";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
+import {
+  buildGracefulDeclineMessage,
+  GENERAL_KNOWLEDGE_DISCLAIMER,
+  routeByConfidence,
+} from "@/lib/ai/confidence-router";
+import { parallelSearchAndMerge } from "@/lib/ai/parallel-search";
+import { reformulateQuery } from "@/lib/ai/query-reformulation";
+import { rerankResults } from "@/lib/ai/rerank";
 import type { Session } from "@/lib/auth";
 import { devLogger } from "@/lib/dev/logger";
 import {
@@ -67,6 +75,12 @@ interface HybridSearchResult {
 // ---------------------------------------------------------------------------
 type SearchKnowledgeBaseProps = {
   session: Session;
+  /**
+   * Sensitive categories detected in the therapist's message by
+   * `detectSensitiveContent`. Passed to `routeByConfidence` to determine
+   * whether to use KB results, fall back to general knowledge, or decline.
+   */
+  sensitiveCategories?: string[];
 };
 
 // ---------------------------------------------------------------------------
@@ -74,6 +88,7 @@ type SearchKnowledgeBaseProps = {
 // ---------------------------------------------------------------------------
 export const searchKnowledgeBase = ({
   session: _session,
+  sensitiveCategories = [],
 }: SearchKnowledgeBaseProps) =>
   tool({
     description:
@@ -123,92 +138,229 @@ export const searchKnowledgeBase = ({
     }),
 
     execute: async ({ query, category, modality, jurisdiction }) => {
-      const toolInput = { query, category, modality, jurisdiction };
-      const turnStart = performance.now();
+      try {
+        const toolInput = { query, category, modality, jurisdiction };
+        const turnStart = performance.now();
 
-      // ----------------------------------------------------------------
-      // Step 1: Create the authenticated Supabase client
-      // This uses the SSR-aware client from utils/supabase/server.ts which
-      // reads the user's session from cookies. The RLS policies on
-      // knowledge_documents and knowledge_chunks grant SELECT only to the
-      // `authenticated` role, and EXECUTE on hybrid_search is likewise
-      // restricted — so an unauthenticated client would get empty results.
-      // ----------------------------------------------------------------
-      const supabase = await createClient();
+        const supabase = await createClient();
 
-      // ----------------------------------------------------------------
-      // Step 2: Generate query embedding
-      // Using text-embedding-3-small truncated to 512 dimensions via
-      // Matryoshka Representation Learning. This MUST match the dimensions
-      // used during ingestion — mismatched dimensions will silently
-      // produce garbage similarity scores.
-      // ----------------------------------------------------------------
-      const embedStart = performance.now();
-      const { embedding } = await embed({
-        model: openai.embedding("text-embedding-3-small"),
-        value: query,
-        providerOptions: {
-          openai: { dimensions: 512 },
-        },
-      });
-      const embeddingMs = performance.now() - embedStart;
+        // ── Step 1: Reformulate query into clinical variants ────────────────
+        // Cost when enabled: ~$0.0003 (one gpt-4o-mini call).
+        // When ENABLE_QUERY_REFORMULATION is not "true", returns [query].
+        const reformulationStart = performance.now();
+        const queries = await reformulateQuery(
+          query,
+          category ?? null,
+          modality ?? null
+        );
+        const reformulationMs = performance.now() - reformulationStart;
 
-      // ----------------------------------------------------------------
-      // Step 3: Call the hybrid_search RPC
-      // This function runs semantic search (pgvector cosine distance) and
-      // full-text search (tsvector + ts_rank_cd) in parallel CTEs, then
-      // merges results using Reciprocal Rank Fusion (RRF).
-      //
-      // The embedding must be passed as a string-encoded array because
-      // Supabase RPC doesn't natively handle vector types in parameters.
-      //
-      // The RPC now JOINs knowledge_documents to return document_title
-      // alongside chunk data — see the companion migration amendment.
-      // ----------------------------------------------------------------
-      const searchStart = performance.now();
-      const { data, error } = await supabase.rpc("hybrid_search", {
-        query_text: query,
-        query_embedding: `[${embedding.join(",")}]`,
-        match_count: 5,
-        filter_category: category ?? null,
-        filter_modality: modality ?? null,
-        filter_jurisdiction: jurisdiction ?? null,
-      });
-      const searchMs = performance.now() - searchStart;
-      const totalMs = performance.now() - turnStart;
+        if (queries.length > 1) {
+          console.log(`[RAG] multi-query: ${queries.length} variants`, queries);
+        }
 
-      if (error) {
-        console.error("[searchKnowledgeBase] hybrid_search RPC error:", error);
+        // ── Step 2: Parallel embed + search for each query variant ──────────
+        // Cost when reformulation enabled: 3 additional embedding calls
+        // (~$0.00001 each) and 3 additional RPC calls (parallel, so latency ≈
+        // slowest single call). Reranking filters the expanded pool back to topN.
+        //
+        // The embedding must be passed as a string-encoded array because
+        // Supabase RPC doesn't natively handle vector types in parameters.
+        const matchCount = 5;
+        const searchFn = async (q: string): Promise<HybridSearchResult[]> => {
+          const { embedding } = await embed({
+            model: openai.embedding("text-embedding-3-small"),
+            value: q,
+            providerOptions: { openai: { dimensions: 512 } },
+          });
+          const { data, error } = await supabase.rpc("hybrid_search", {
+            query_text: q,
+            query_embedding: `[${embedding.join(",")}]`,
+            match_count: matchCount,
+            filter_category: category ?? null,
+            filter_modality: modality ?? null,
+            filter_jurisdiction: jurisdiction ?? null,
+          });
+          if (error) {
+            throw error;
+          }
+          return data as HybridSearchResult[];
+        };
 
+        const searchStart = performance.now();
+        let rawData: HybridSearchResult[];
+
+        try {
+          rawData = await parallelSearchAndMerge(queries, searchFn, matchCount);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            "[searchKnowledgeBase] parallel search failed:",
+            message
+          );
+
+          const errorStrategy =
+            sensitiveCategories.length > 0
+              ? "graceful_decline"
+              : "general_knowledge";
+
+          devLogger.currentTurn()?.logToolCall({
+            toolName: "searchKnowledgeBase",
+            input: toolInput,
+            timing: {
+              embeddingMs: Math.round(reformulationMs),
+              searchMs: Math.round(performance.now() - searchStart),
+              totalMs: Math.round(performance.now() - turnStart),
+            },
+            rawResults: [],
+            confidenceAssessment: {
+              tier: "low",
+              note: message,
+              averageSimilarity: 0,
+              maxSimilarity: 0,
+              droppedCount: 0,
+            },
+            filteredResults: [],
+          });
+
+          return {
+            results: [],
+            result_count: 0,
+            error:
+              "Knowledge base search failed. Please try rephrasing your query.",
+            confidenceTier: "low" as const,
+            confidenceNote:
+              "Knowledge base search failed. Please try rephrasing your query.",
+            averageSimilarity: 0,
+            maxSimilarity: 0,
+            strategy: errorStrategy as "graceful_decline" | "general_knowledge",
+            ...(errorStrategy === "graceful_decline"
+              ? { message: buildGracefulDeclineMessage(sensitiveCategories) }
+              : { disclaimer: GENERAL_KNOWLEDGE_DISCLAIMER }),
+            query_used: query,
+            filters_applied: {
+              category: category ?? "all",
+              modality: modality ?? "all",
+              jurisdiction: jurisdiction ?? "all",
+            },
+          };
+        }
+
+        const searchMs = performance.now() - searchStart;
+        console.log(
+          `[RAG] parallel search merged ${rawData.length} results from ${queries.length} queries`
+        );
+
+        const mapped = rawData.map((chunk) => ({
+          content: chunk.content,
+          section_path: chunk.section_path,
+          document_title: chunk.document_title,
+          document_type: chunk.document_type,
+          modality: chunk.modality,
+          jurisdiction: chunk.jurisdiction,
+          similarity_score: chunk.similarity_score,
+          rrf_score: chunk.combined_rrf_score,
+          metadata: chunk.metadata,
+        }));
+
+        // ----------------------------------------------------------------
+        // Step 4: Rerank results using Cohere cross-encoder (if enabled).
+        // Reranking produces more accurate relevance scores than cosine
+        // similarity alone. The `wasReranked` flag selects the appropriate
+        // confidence threshold set downstream.
+        // ----------------------------------------------------------------
+        const { results: toAssess, wasReranked } = await rerankResults(
+          query,
+          mapped
+        );
+
+        // ----------------------------------------------------------------
+        // Step 5: Assess confidence and shape the response for the LLM
+        // The confidence threshold system filters out low-relevance results
+        // and assigns a tier (high/moderate/low) that the LLM uses to
+        // decide whether to cite results directly, add hedging, or refer
+        // the therapist to their supervisor.
+        // ----------------------------------------------------------------
+        const assessed = applyConfidenceThreshold(toAssess, wasReranked);
+        const route = routeByConfidence(assessed, sensitiveCategories);
+
+        // ── Dev logging ────────────────────────────────────────────────
         devLogger.currentTurn()?.logToolCall({
           toolName: "searchKnowledgeBase",
           input: toolInput,
           timing: {
-            embeddingMs: Math.round(embeddingMs),
+            embeddingMs: Math.round(reformulationMs),
             searchMs: Math.round(searchMs),
-            totalMs: Math.round(totalMs),
+            totalMs: Math.round(performance.now() - turnStart),
           },
-          rawResults: [],
+          rawResults: toAssess.map((r) => ({
+            documentTitle: r.document_title,
+            similarityScore: r.similarity_score,
+            rrfScore: r.rrf_score,
+            contentPreview: r.content.slice(0, 200),
+            modality: r.modality,
+            jurisdiction: r.jurisdiction,
+          })),
           confidenceAssessment: {
-            tier: "low",
-            note: error.message,
-            averageSimilarity: 0,
-            maxSimilarity: 0,
-            droppedCount: 0,
+            tier: assessed.confidenceTier,
+            note: assessed.confidenceNote,
+            averageSimilarity: assessed.averageSimilarity,
+            maxSimilarity: assessed.maxSimilarity,
+            droppedCount: assessed.droppedCount,
           },
-          filteredResults: [],
+          filteredResults: assessed.results.map((r) => ({
+            documentTitle: r.document_title,
+            similarityScore: r.similarity_score,
+            contentPreview: r.content.slice(0, 200),
+            modality: r.modality,
+            jurisdiction: r.jurisdiction,
+          })),
         });
 
+        const routedResults =
+          route.strategy === "grounded" ? route.results : [];
+        return {
+          results: routedResults,
+          result_count: routedResults.length,
+          confidenceTier: assessed.confidenceTier,
+          confidenceNote:
+            route.strategy === "grounded" ? route.confidenceNote : null,
+          averageSimilarity: assessed.averageSimilarity,
+          maxSimilarity: assessed.maxSimilarity,
+          strategy: route.strategy,
+          ...(route.strategy === "general_knowledge"
+            ? { disclaimer: route.disclaimer }
+            : {}),
+          ...(route.strategy === "graceful_decline"
+            ? { message: route.message }
+            : {}),
+          query_used: query,
+          filters_applied: {
+            category: category ?? "all",
+            modality: modality ?? "all",
+            jurisdiction: jurisdiction ?? "all",
+          },
+        };
+      } catch (error) {
+        console.error("[searchKnowledgeBase] Unexpected error:", error);
+        const errorStrategy =
+          sensitiveCategories.length > 0
+            ? "graceful_decline"
+            : "general_knowledge";
         return {
           results: [],
           result_count: 0,
           error:
-            "Knowledge base search failed. Please try rephrasing your query.",
+            error instanceof Error ? error.message : "Unexpected search error",
           confidenceTier: "low" as const,
           confidenceNote:
-            "Knowledge base search failed. Please try rephrasing your query.",
+            "Knowledge base search encountered an unexpected error. Please try again.",
           averageSimilarity: 0,
           maxSimilarity: 0,
+          strategy: errorStrategy as "graceful_decline" | "general_knowledge",
+          ...(errorStrategy === "graceful_decline"
+            ? { message: buildGracefulDeclineMessage(sensitiveCategories) }
+            : { disclaimer: GENERAL_KNOWLEDGE_DISCLAIMER }),
           query_used: query,
           filters_applied: {
             category: category ?? "all",
@@ -217,74 +369,5 @@ export const searchKnowledgeBase = ({
           },
         };
       }
-
-      const mapped = ((data as HybridSearchResult[]) ?? []).map((chunk) => ({
-        content: chunk.content,
-        section_path: chunk.section_path,
-        document_title: chunk.document_title,
-        document_type: chunk.document_type,
-        modality: chunk.modality,
-        jurisdiction: chunk.jurisdiction,
-        similarity_score: chunk.similarity_score,
-        rrf_score: chunk.combined_rrf_score,
-        metadata: chunk.metadata,
-      }));
-
-      // ----------------------------------------------------------------
-      // Step 4: Assess confidence and shape the response for the LLM
-      // The confidence threshold system filters out low-relevance results
-      // and assigns a tier (high/moderate/low) that the LLM uses to
-      // decide whether to cite results directly, add hedging, or refer
-      // the therapist to their supervisor.
-      // ----------------------------------------------------------------
-      const assessed = applyConfidenceThreshold(mapped);
-
-      // ── Dev logging ────────────────────────────────────────────────
-      devLogger.currentTurn()?.logToolCall({
-        toolName: "searchKnowledgeBase",
-        input: toolInput,
-        timing: {
-          embeddingMs: Math.round(embeddingMs),
-          searchMs: Math.round(searchMs),
-          totalMs: Math.round(totalMs),
-        },
-        rawResults: mapped.map((r) => ({
-          documentTitle: r.document_title,
-          similarityScore: r.similarity_score,
-          rrfScore: r.rrf_score,
-          contentPreview: r.content.slice(0, 200),
-          modality: r.modality,
-          jurisdiction: r.jurisdiction,
-        })),
-        confidenceAssessment: {
-          tier: assessed.confidenceTier,
-          note: assessed.confidenceNote,
-          averageSimilarity: assessed.averageSimilarity,
-          maxSimilarity: assessed.maxSimilarity,
-          droppedCount: assessed.droppedCount,
-        },
-        filteredResults: assessed.results.map((r) => ({
-          documentTitle: r.document_title,
-          similarityScore: r.similarity_score,
-          contentPreview: r.content.slice(0, 200),
-          modality: r.modality,
-          jurisdiction: r.jurisdiction,
-        })),
-      });
-
-      return {
-        results: assessed.results,
-        result_count: assessed.results.length,
-        confidenceTier: assessed.confidenceTier,
-        confidenceNote: assessed.confidenceNote,
-        averageSimilarity: assessed.averageSimilarity,
-        maxSimilarity: assessed.maxSimilarity,
-        query_used: query,
-        filters_applied: {
-          category: category ?? "all",
-          modality: modality ?? "all",
-          jurisdiction: jurisdiction ?? "all",
-        },
-      };
     },
   });

@@ -51,6 +51,25 @@ export const HIGH_CONFIDENCE_THRESHOLD = 0.8;
  */
 export const LOW_CONFIDENCE_THRESHOLD = 0.55;
 
+// ─── Reranker-specific thresholds ───────────────────────────────────────────
+// Cohere rerank-v3.5 relevance scores occupy a different distribution than
+// cosine similarity (also 0–1, but typically compressed toward lower values
+// even for highly relevant documents). These starting values will be tuned
+// during the parameter tuning session (Task 5.5) once real query data is
+// available. They are intentionally lower than the cosine thresholds above.
+
+/**
+ * Minimum Cohere relevance score for a reranked result to be high confidence.
+ * Starting value — to be tuned against real retrieval data.
+ */
+export const HIGH_CONFIDENCE_THRESHOLD_RERANKED = 0.7;
+
+/**
+ * Minimum Cohere relevance score for a reranked result to be included at all.
+ * Starting value — to be tuned against real retrieval data.
+ */
+export const LOW_CONFIDENCE_THRESHOLD_RERANKED = 0.4;
+
 /**
  * Maximum number of chunks to include in a confident response.
  * Limiting to 5 avoids diluting relevance with marginally related
@@ -149,8 +168,16 @@ function extractSimilarityScore(result: ScoredResult): number {
  * ```
  */
 export function applyConfidenceThreshold<T extends ScoredResult>(
-  results: T[]
+  results: T[],
+  isReranked = false
 ): ConfidenceAssessment<T> {
+  const highThreshold = isReranked
+    ? HIGH_CONFIDENCE_THRESHOLD_RERANKED
+    : HIGH_CONFIDENCE_THRESHOLD;
+  const lowThreshold = isReranked
+    ? LOW_CONFIDENCE_THRESHOLD_RERANKED
+    : LOW_CONFIDENCE_THRESHOLD;
+
   // Handle empty results — this is a low confidence case by definition
   if (results.length === 0) {
     return {
@@ -174,22 +201,22 @@ export function applyConfidenceThreshold<T extends ScoredResult>(
   // Middle" attention pattern — the LLM pays most attention to the first
   // and last items in a sequence.
   const filteredResults = results
-    .filter((r) => extractSimilarityScore(r) >= LOW_CONFIDENCE_THRESHOLD)
+    .filter((r) => extractSimilarityScore(r) >= lowThreshold)
     .sort((a, b) => extractSimilarityScore(b) - extractSimilarityScore(a))
     .slice(0, MAX_CONFIDENT_RESULTS);
 
   const droppedCount = results.length - filteredResults.length;
 
   // Determine the tier based on the maximum score.
-  // Even if we have some results above 0.65, if the *best* result is
-  // below 0.65, nothing in the knowledge base is a good match.
+  // Even if we have some results above the low threshold, if the *best*
+  // result is below it, nothing in the knowledge base is a good match.
   let confidenceTier: ConfidenceTier;
   let confidenceNote: string | null;
 
-  if (maxSimilarity >= HIGH_CONFIDENCE_THRESHOLD) {
+  if (maxSimilarity >= highThreshold) {
     confidenceTier = "high";
     confidenceNote = null;
-  } else if (maxSimilarity >= LOW_CONFIDENCE_THRESHOLD) {
+  } else if (maxSimilarity >= lowThreshold) {
     confidenceTier = "moderate";
     confidenceNote = MODERATE_CONFIDENCE_NOTE;
   } else {
