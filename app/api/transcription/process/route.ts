@@ -47,8 +47,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const isSummary = therapySession.recordingType === "therapist_summary";
+
     // Defence in depth: check consents again
-    const consented = await hasRequiredConsents({ sessionId });
+    const consented = await hasRequiredConsents({
+      sessionId,
+      recordingType: therapySession.recordingType,
+    });
     if (!consented) {
       return NextResponse.json(
         { error: "Required consents not recorded" },
@@ -89,7 +94,8 @@ export async function POST(request: Request) {
 
     // Run transcription + diarization pipeline
     const diarisedTranscript = await transcribeAndDiarize(audioBuffer, {
-      diarize: { expectedSpeakers },
+      diarize: isSummary ? undefined : { expectedSpeakers },
+      skipDiarization: isSummary,
     });
 
     // Map segments to DB insert format

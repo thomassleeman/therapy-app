@@ -17,6 +17,7 @@ import type {
   HybridSearchResult,
   NoteContent,
   NoteStatus,
+  RecordingType,
   SessionConsent,
   SessionConsentInsert,
   SessionSegment,
@@ -1478,6 +1479,7 @@ function mapRowToTherapySession(row: any): TherapySession {
     transcriptionProvider: row.transcription_provider ?? null,
     notesStatus: row.notes_status,
     deliveryMethod: row.delivery_method ?? null,
+    recordingType: row.recording_type ?? "full_session",
     errorMessage: row.error_message ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1541,6 +1543,7 @@ export async function createTherapySession(
         chat_id: session.chatId ?? null,
         session_date: session.sessionDate,
         delivery_method: session.deliveryMethod ?? null,
+        ...(session.recordingType ? { recording_type: session.recordingType } : {}),
       })
       .select()
       .single();
@@ -1663,6 +1666,7 @@ export async function updateTherapySession({
       ],
       ["notesStatus", "notes_status", fields.notesStatus],
       ["deliveryMethod", "delivery_method", fields.deliveryMethod],
+      ["recordingType", "recording_type", fields.recordingType],
       ["errorMessage", "error_message", fields.errorMessage],
     ];
 
@@ -1795,10 +1799,15 @@ function titleCase(str: string): string {
 
 export async function getSessionTranscriptText({
   sessionId,
+  recordingType,
 }: {
   sessionId: string;
+  recordingType?: RecordingType;
 }): Promise<string> {
   const segments = await getSessionSegments({ sessionId });
+  if (recordingType === "therapist_summary") {
+    return segments.map((s) => s.content).join("\n\n");
+  }
   return segments
     .map((s) => `${titleCase(s.speaker)}: ${s.content}`)
     .join("\n\n");
@@ -1996,18 +2005,28 @@ export async function getSessionConsents({
 
 export async function hasRequiredConsents({
   sessionId,
+  recordingType,
 }: {
   sessionId: string;
+  recordingType?: RecordingType;
 }): Promise<boolean> {
   try {
     const consents = await getSessionConsents({ sessionId });
 
-    const requiredPairs: [ConsentType, ConsentingParty][] = [
-      ["recording", "therapist"],
-      ["recording", "client"],
-      ["ai_transcription", "therapist"],
-      ["ai_transcription", "client"],
-    ];
+    const requiredPairs: [ConsentType, ConsentingParty][] =
+      recordingType === "therapist_summary"
+        ? [
+            ["recording", "therapist"],
+            ["ai_transcription", "therapist"],
+            ["ai_note_generation", "therapist"],
+            ["data_storage", "therapist"],
+          ]
+        : [
+            ["recording", "therapist"],
+            ["recording", "client"],
+            ["ai_transcription", "therapist"],
+            ["ai_transcription", "client"],
+          ];
 
     return requiredPairs.every(([type, party]) =>
       consents.some(

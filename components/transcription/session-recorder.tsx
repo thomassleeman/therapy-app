@@ -15,7 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDuration, useAudioRecorder } from "@/hooks/use-audio-recorder";
-import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
+import {
+  formatRemainingTime,
+  useTranscriptionProgress,
+} from "@/hooks/use-transcription-progress";
 
 type RecorderPhase =
   | "ready"
@@ -46,17 +49,19 @@ export function SessionRecorder({
     cancelRecording,
   } = useAudioRecorder();
 
-  const {
-    status: transcriptionStatus,
-    error: transcriptionError,
-    startPolling,
-    reset: resetTranscription,
-  } = useTranscriptionStatus(sessionId);
-
   const [phase, setPhase] = useState<RecorderPhase>("ready");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
+
+  const {
+    progress: transcriptionProgress,
+    status: transcriptionStatus,
+    error: transcriptionError,
+    estimatedRemainingSeconds,
+    startPolling,
+    reset: resetTranscription,
+  } = useTranscriptionProgress(sessionId, recordedDuration || null);
 
   const handleStart = useCallback(async () => {
     setErrorMessage(null);
@@ -195,9 +200,12 @@ export function SessionRecorder({
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8">
-          <div className="flex items-center gap-2 text-green-600">
-            <Check className="size-5" />
-            <p className="text-sm font-medium">Transcription complete!</p>
+          <div className="w-full max-w-xs space-y-3">
+            <Progress value={100} />
+            <div className="flex items-center justify-center gap-2 text-green-600">
+              <Check className="size-4" />
+              <p className="text-sm font-medium">Transcription complete!</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -205,20 +213,27 @@ export function SessionRecorder({
   }
 
   if (currentPhase === "processing") {
-    const estimatedMinutes = Math.max(
-      1,
-      Math.round((recordedDuration / 3000) * 60)
-    );
+    const isCapped = transcriptionProgress >= 90;
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <div className="text-center space-y-1">
-            <p className="text-sm font-medium">Transcribing session...</p>
-            <p className="text-xs text-muted-foreground">
-              This usually takes {estimatedMinutes}-{estimatedMinutes + 2}{" "}
-              minutes for a {formatDuration(recordedDuration)} session.
+          <div className="w-full max-w-xs space-y-3">
+            <p className="text-sm font-medium text-center">
+              Transcribing session...
             </p>
+            <Progress value={transcriptionProgress} />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {Math.round(transcriptionProgress)}%
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isCapped
+                  ? "Finishing up..."
+                  : estimatedRemainingSeconds !== null
+                    ? formatRemainingTime(estimatedRemainingSeconds)
+                    : null}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

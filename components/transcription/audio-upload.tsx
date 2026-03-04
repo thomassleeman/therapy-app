@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDuration } from "@/hooks/use-audio-recorder";
-import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
+import {
+  formatRemainingTime,
+  useTranscriptionProgress,
+} from "@/hooks/use-transcription-progress";
 
 const ACCEPTED_TYPES = [".wav", ".mp3", ".m4a", ".webm", ".ogg"];
 const ACCEPTED_MIME_TYPES = [
@@ -47,15 +50,18 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function getAudioDuration(file: File): Promise<string> {
+async function getAudioDuration(
+  file: File,
+): Promise<{ formatted: string; seconds: number | null }> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const audioContext = new AudioContext();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     await audioContext.close();
-    return formatDuration(Math.round(audioBuffer.duration));
+    const seconds = Math.round(audioBuffer.duration);
+    return { formatted: formatDuration(seconds), seconds };
   } catch {
-    return "Calculated after upload";
+    return { formatted: "Calculated after upload", seconds: null };
   }
 }
 
@@ -65,14 +71,19 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [audioDurationSeconds, setAudioDurationSeconds] = useState<
+    number | null
+  >(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
+    progress: transcriptionProgress,
     status: transcriptionStatus,
     error: transcriptionError,
+    estimatedRemainingSeconds,
     startPolling,
     reset: resetTranscription,
-  } = useTranscriptionStatus(sessionId);
+  } = useTranscriptionProgress(sessionId, audioDurationSeconds);
 
   const handleFileSelect = useCallback(async (file: File) => {
     setErrorMessage(null);
@@ -91,13 +102,14 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
       return;
     }
 
-    const duration = await getAudioDuration(file);
+    const { formatted, seconds } = await getAudioDuration(file);
+    setAudioDurationSeconds(seconds);
 
     setSelectedFile({
       file,
       name: file.name,
       sizeFormatted: formatFileSize(file.size),
-      duration,
+      duration: formatted,
     });
     setPhase("selected");
   }, []);
@@ -214,6 +226,7 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
     setErrorMessage(null);
     setUploadProgress(0);
     setIsDragOver(false);
+    setAudioDurationSeconds(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -259,9 +272,12 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8">
-          <div className="flex items-center gap-2 text-green-600">
-            <Check className="size-5" />
-            <p className="text-sm font-medium">Transcription complete!</p>
+          <div className="w-full max-w-xs space-y-3">
+            <Progress value={100} />
+            <div className="flex items-center justify-center gap-2 text-green-600">
+              <Check className="size-4" />
+              <p className="text-sm font-medium">Transcription complete!</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -269,15 +285,27 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
   }
 
   if (currentPhase === "processing") {
+    const isCapped = transcriptionProgress >= 90;
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <div className="text-center space-y-1">
-            <p className="text-sm font-medium">Transcribing session...</p>
-            <p className="text-xs text-muted-foreground">
-              This usually takes 2-4 minutes for a 50-minute session.
+          <div className="w-full max-w-xs space-y-3">
+            <p className="text-sm font-medium text-center">
+              Transcribing session...
             </p>
+            <Progress value={transcriptionProgress} />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {Math.round(transcriptionProgress)}%
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isCapped
+                  ? "Finishing up..."
+                  : estimatedRemainingSeconds !== null
+                    ? formatRemainingTime(estimatedRemainingSeconds)
+                    : null}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

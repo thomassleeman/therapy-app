@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   Loader2,
+  MessageSquare,
   Mic,
   Upload,
 } from "lucide-react";
@@ -99,7 +100,13 @@ function createEmptyConsents(): ConsentState {
   };
 }
 
-function allConsented(consents: ConsentState): boolean {
+function allConsented(
+  consents: ConsentState,
+  recordingType: "full_session" | "therapist_summary"
+): boolean {
+  if (recordingType === "therapist_summary") {
+    return Object.values(consents.therapist).every(Boolean);
+  }
   return (
     Object.values(consents.therapist).every(Boolean) &&
     Object.values(consents.client).every(Boolean)
@@ -123,6 +130,9 @@ export default function NewSessionPage() {
   const [deliveryMethod, setDeliveryMethod] = useState("in-person");
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
+  const [recordingType, setRecordingType] = useState<
+    "full_session" | "therapist_summary"
+  >("full_session");
   const [creatingSession, setCreatingSession] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -165,6 +175,7 @@ export default function NewSessionPage() {
           sessionDate,
           clientId: clientId || undefined,
           deliveryMethod,
+          recordingType,
         }),
       });
 
@@ -181,7 +192,7 @@ export default function NewSessionPage() {
     } finally {
       setCreatingSession(false);
     }
-  }, [sessionDate, clientId, deliveryMethod]);
+  }, [sessionDate, clientId, deliveryMethod, recordingType]);
 
   // Step 2: Save consents
   const handleSaveConsents = useCallback(async () => {
@@ -204,17 +215,19 @@ export default function NewSessionPage() {
             }),
           })
         );
-        consentPromises.push(
-          fetch(`/api/sessions/${sessionId}/consents`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              consentType: block.key,
-              consentingParty: "client",
-              consented: true,
-            }),
-          })
-        );
+        if (recordingType === "full_session") {
+          consentPromises.push(
+            fetch(`/api/sessions/${sessionId}/consents`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                consentType: block.key,
+                consentingParty: "client",
+                consented: true,
+              }),
+            })
+          );
+        }
       }
 
       const results = await Promise.all(consentPromises);
@@ -230,7 +243,7 @@ export default function NewSessionPage() {
     } finally {
       setSavingConsents(false);
     }
-  }, [sessionId]);
+  }, [sessionId, recordingType]);
 
   // Step 3: Complete
   const handleComplete = useCallback(() => {
@@ -385,6 +398,52 @@ export default function NewSessionPage() {
               </div>
             </div>
 
+            <Separator />
+
+            <div className="space-y-3">
+              <Label>How will you capture this session?</Label>
+              <div className="flex flex-col gap-3">
+                <button
+                  className={`flex items-start gap-4 rounded-lg border px-4 py-4 text-left transition-colors ${
+                    recordingType === "full_session"
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted"
+                  }`}
+                  onClick={() => setRecordingType("full_session")}
+                  type="button"
+                >
+                  <Mic className="size-5 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium">
+                      Record the full session
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Record or upload the session audio. Both you and your
+                      client must consent.
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className={`flex items-start gap-4 rounded-lg border px-4 py-4 text-left transition-colors ${
+                    recordingType === "therapist_summary"
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted"
+                  }`}
+                  onClick={() => setRecordingType("therapist_summary")}
+                  type="button"
+                >
+                  <MessageSquare className="size-5 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium">Record a summary</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Record yourself summarising the session afterwards. Only
+                      your consent is needed.
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             <Button
               className="w-full min-h-12"
               disabled={creatingSession || !sessionDate}
@@ -412,66 +471,87 @@ export default function NewSessionPage() {
         <div className="space-y-6">
           <div className="space-y-2">
             <h2 className="text-xl font-semibold">
-              Recording &amp; AI Processing Consent
+              {recordingType === "therapist_summary"
+                ? "AI Processing Consent"
+                : "Recording & AI Processing Consent"}
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
-              Before recording, please confirm the following consents. Both you
-              and your client must consent to each item for the session to be
-              recorded and processed.
+              {recordingType === "therapist_summary"
+                ? "Before recording your session summary, please confirm the following consents."
+                : "Before recording, please confirm the following consents. Both you and your client must consent to each item for the session to be recorded and processed."}
             </p>
           </div>
 
           <div className="space-y-5">
-            {CONSENT_BLOCKS.map((block) => (
-              <Card key={block.key}>
-                <CardContent className="py-6 space-y-5">
-                  <div>
-                    <h3 className="text-base font-semibold">{block.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                      {block.description}
-                    </p>
-                  </div>
+            {CONSENT_BLOCKS.map((block) => {
+              const title =
+                recordingType === "therapist_summary" &&
+                block.key === "recording"
+                  ? "Summary Recording"
+                  : block.title;
+              const description =
+                recordingType === "therapist_summary" &&
+                block.key === "recording"
+                  ? "Your spoken session summary will be audio recorded."
+                  : block.description;
 
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3 cursor-pointer">
-                      <Checkbox
-                        checked={consents.therapist[block.key]}
-                        className="mt-0.5"
-                        onCheckedChange={(checked) =>
-                          updateConsent(
-                            "therapist",
-                            block.key,
-                            checked === true
-                          )
-                        }
-                      />
-                      <span className="text-sm leading-relaxed">
-                        {block.therapistLabel}
-                      </span>
+              return (
+                <Card key={block.key}>
+                  <CardContent className="py-6 space-y-5">
+                    <div>
+                      <h3 className="text-base font-semibold">{title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                        {description}
+                      </p>
                     </div>
 
-                    <div className="flex items-start gap-3 cursor-pointer">
-                      <Checkbox
-                        checked={consents.client[block.key]}
-                        className="mt-0.5"
-                        onCheckedChange={(checked) =>
-                          updateConsent("client", block.key, checked === true)
-                        }
-                      />
-                      <span className="text-sm leading-relaxed">
-                        {block.clientLabel}
-                      </span>
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={consents.therapist[block.key]}
+                          className="mt-0.5"
+                          onCheckedChange={(checked) =>
+                            updateConsent(
+                              "therapist",
+                              block.key,
+                              checked === true
+                            )
+                          }
+                        />
+                        <span className="text-sm leading-relaxed">
+                          {block.therapistLabel}
+                        </span>
+                      </div>
+
+                      {recordingType === "full_session" && (
+                        <div className="flex items-start gap-3 cursor-pointer">
+                          <Checkbox
+                            checked={consents.client[block.key]}
+                            className="mt-0.5"
+                            onCheckedChange={(checked) =>
+                              updateConsent(
+                                "client",
+                                block.key,
+                                checked === true
+                              )
+                            }
+                          />
+                          <span className="text-sm leading-relaxed">
+                            {block.clientLabel}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-            Client consent should be obtained verbally or in writing before the
-            session begins. By ticking the client consent boxes, you are
-            confirming that explicit consent was obtained.
+            {recordingType === "therapist_summary"
+              ? "As with all clinical documentation, ensure your record-keeping practices comply with your professional body\u2019s ethical framework and applicable data protection legislation."
+              : "Client consent should be obtained verbally or in writing before the session begins. By ticking the client consent boxes, you are confirming that explicit consent was obtained."}
           </p>
 
           <div className="flex items-center gap-3 pt-2">
@@ -486,7 +566,9 @@ export default function NewSessionPage() {
             </Button>
             <Button
               className="min-h-12 flex-1 sm:flex-none sm:min-w-[220px]"
-              disabled={!allConsented(consents) || savingConsents}
+              disabled={
+                !allConsented(consents, recordingType) || savingConsents
+              }
               onClick={handleSaveConsents}
               size="lg"
             >
@@ -511,10 +593,14 @@ export default function NewSessionPage() {
         <div className="space-y-6">
           <div className="space-y-2">
             <h2 className="text-xl font-semibold">
-              Record or Upload Session Audio
+              {recordingType === "therapist_summary"
+                ? "Record or Upload Your Session Summary"
+                : "Record or Upload Session Audio"}
             </h2>
             <p className="text-sm text-muted-foreground">
-              Choose whether to record live or upload a pre-recorded session.
+              {recordingType === "therapist_summary"
+                ? "Choose whether to record now or upload a pre-recorded summary."
+                : "Choose whether to record live or upload a pre-recorded session."}
             </p>
           </div>
 
@@ -522,11 +608,15 @@ export default function NewSessionPage() {
             <TabsList className="mb-4">
               <TabsTrigger className="gap-2" value="record">
                 <Mic className="size-4" />
-                Record Session
+                {recordingType === "therapist_summary"
+                  ? "Record Summary"
+                  : "Record Session"}
               </TabsTrigger>
               <TabsTrigger className="gap-2" value="upload">
                 <Upload className="size-4" />
-                Upload Recording
+                {recordingType === "therapist_summary"
+                  ? "Upload Summary"
+                  : "Upload Recording"}
               </TabsTrigger>
             </TabsList>
 

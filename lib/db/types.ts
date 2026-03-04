@@ -379,6 +379,9 @@ export type ConsentType = (typeof CONSENT_TYPES)[number];
 export const CONSENTING_PARTIES = ["therapist", "client"] as const;
 export type ConsentingParty = (typeof CONSENTING_PARTIES)[number];
 
+export const RECORDING_TYPES = ["full_session", "therapist_summary"] as const;
+export type RecordingType = (typeof RECORDING_TYPES)[number];
+
 export interface TherapySession {
   id: string;
   therapistId: string;
@@ -391,6 +394,7 @@ export interface TherapySession {
   transcriptionProvider: string | null;
   notesStatus: string;
   deliveryMethod: string | null;
+  recordingType: RecordingType;
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
@@ -464,6 +468,7 @@ export interface TherapySessionInsert {
   chatId?: string | null;
   sessionDate: string;
   deliveryMethod?: string | null;
+  recordingType?: RecordingType;
 }
 
 export interface SessionSegmentInsert {

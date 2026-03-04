@@ -16,6 +16,7 @@ import type {
   FreeformNoteContent,
   NoteContent,
   NoteFormat,
+  RecordingType,
   SoapNoteContent,
 } from "@/lib/db/types";
 
@@ -56,6 +57,39 @@ Next steps — between-session tasks, next session focus, referrals, risk manage
     "Generate a narrative progress note in flowing prose paragraphs (not bullet points). Cover: session themes, interventions used and client response, emotional presentation, progress toward treatment goals, risk factors if any, and plan for next session.",
 };
 
+const SUMMARY_FORMAT_INSTRUCTIONS: Record<NoteFormat, string> = {
+  soap: `Generate the note with four clearly labelled sections using markdown headers:
+
+## Subjective
+What the therapist reported the client shared — their experiences, feelings, and perceptions as recalled by the therapist. Use reported speech rather than direct quotes (e.g. "The therapist noted that the client described feeling overwhelmed at work").
+
+## Objective
+Therapeutic interventions used and the therapist's recalled observations of the client's presentation. Engagement level, affect, and non-verbal cues as reported by the therapist in their summary. Note that these are recalled observations, not directly observed from a recording.
+
+## Assessment
+Clinical formulation — how the session content relates to treatment goals and presenting issues. Note patterns, progress, setbacks, or emerging themes. Reference relevant clinical frameworks if applicable.
+
+## Plan
+Next steps — between-session tasks, focus for next session, referrals needed, risk management actions, and next session date if mentioned.`,
+
+  dap: `Generate the note with three clearly labelled sections using markdown headers:
+
+## Data
+What the therapist reported was discussed and observed — combine the therapist's account of client disclosures, their own recalled observations, and interventions used. Use reported speech for any paraphrased client statements.
+
+## Assessment
+Clinical interpretation. How does this session relate to treatment goals? Progress, setbacks, changes in risk level, emerging patterns.
+
+## Plan
+Next steps — between-session tasks, next session focus, referrals, risk management.`,
+
+  progress:
+    "Generate a narrative progress note in flowing prose paragraphs (not bullet points). Cover: session themes as reported by the therapist, interventions used and the therapist's recollection of client response, emotional presentation as recalled, progress toward treatment goals, risk factors if any, and plan for next session. Frame all observations as the therapist's account.",
+
+  freeform:
+    "Generate a narrative progress note in flowing prose paragraphs (not bullet points). Cover: session themes as reported by the therapist, interventions used and the therapist's recollection of client response, emotional presentation as recalled, progress toward treatment goals, risk factors if any, and plan for next session. Frame all observations as the therapist's account.",
+};
+
 function buildSystemPrompt({
   noteFormat,
   transcript,
@@ -63,6 +97,7 @@ function buildSystemPrompt({
   modality,
   jurisdiction,
   additionalContext,
+  recordingType,
 }: {
   noteFormat: NoteFormat;
   transcript: string;
@@ -70,7 +105,26 @@ function buildSystemPrompt({
   modality: string;
   jurisdiction: string;
   additionalContext?: string;
+  recordingType?: RecordingType;
 }): string {
+  const isSummary = recordingType === "therapist_summary";
+  const formatInstructions = isSummary
+    ? SUMMARY_FORMAT_INSTRUCTIONS[noteFormat]
+    : FORMAT_INSTRUCTIONS[noteFormat];
+
+  const transcriptSourcePreamble = isSummary
+    ? `TRANSCRIPT SOURCE:
+This transcript is a therapist's spoken summary of a therapy session, recorded after the session ended. It is a single-speaker account — the therapist describing what happened during the session from their own perspective and recollection. There is no verbatim client dialogue.
+
+When generating notes from this summary:
+- Attribute observations to the therapist's account: use "The therapist reported that the client..." rather than "The client stated..."
+- Where the therapist quotes or paraphrases the client, note it as reported speech
+- Recognise that this is a recollection, not a verbatim record. Use language like "the therapist noted...", "the therapist recalled..."
+- Do not fabricate direct client quotes
+
+`
+    : "";
+
   const parts = [
     `You are a clinical documentation assistant for qualified therapists in the UK and Ireland. You generate draft session notes from therapy session transcripts. The therapist will review and edit these notes before finalising them.
 
@@ -83,7 +137,7 @@ RULES:
 - Keep notes concise but clinically comprehensive: 300-600 words total.
 - Base the notes ONLY on what is in the transcript. Do not infer or add clinical observations that aren't supported by the conversation.
 
-${FORMAT_INSTRUCTIONS[noteFormat]}
+${transcriptSourcePreamble}${formatInstructions}
 
 SESSION TRANSCRIPT:
 ---
@@ -242,7 +296,10 @@ export async function POST(request: Request) {
     }
 
     // Fetch transcript
-    const transcript = await getSessionTranscriptText({ sessionId });
+    const transcript = await getSessionTranscriptText({
+      sessionId,
+      recordingType: therapySession.recordingType,
+    });
 
     if (!transcript) {
       return NextResponse.json(
@@ -281,6 +338,7 @@ export async function POST(request: Request) {
         modality,
         jurisdiction,
         additionalContext,
+        recordingType: therapySession.recordingType,
       });
 
       const result = await generateText({

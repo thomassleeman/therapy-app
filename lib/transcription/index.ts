@@ -39,10 +39,10 @@ export async function transcribeAndDiarize(
   options?: {
     transcribe?: TranscribeOptions;
     diarize?: DiarizeOptions;
+    skipDiarization?: boolean;
   }
 ): Promise<DiarisedTranscript> {
   const transcriber = getTranscriptionProvider();
-  const diarizer = getDiarizationProvider();
 
   console.log("[transcription] Starting transcription...");
   const rawTranscript = await transcriber.transcribe(
@@ -52,6 +52,25 @@ export async function transcribeAndDiarize(
   console.log(
     `[transcription] Raw transcript: ${rawTranscript.segments.length} segments, ${Math.round(rawTranscript.durationMs / 1000)}s`
   );
+
+  if (options?.skipDiarization) {
+    console.log(
+      "[transcription] Skipping diarization (single-speaker summary recording)"
+    );
+    return {
+      segments: rawTranscript.segments.map((seg) => ({
+        speaker: "therapist",
+        content: seg.text,
+        startTimeMs: seg.startTimeMs,
+        endTimeMs: seg.endTimeMs,
+        confidence: seg.confidence,
+      })),
+      speakers: ["therapist"],
+      durationMs: rawTranscript.durationMs,
+    };
+  }
+
+  const diarizer = getDiarizationProvider();
 
   console.log("[transcription] Starting speaker labelling...");
   const diarisedTranscript = await diarizer.diarize(

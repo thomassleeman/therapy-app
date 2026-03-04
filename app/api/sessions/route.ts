@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { createTherapySession, getTherapySessions } from "@/lib/db/queries";
+import type { RecordingType } from "@/lib/db/types";
+import { RECORDING_TYPES } from "@/lib/db/types";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -35,10 +37,11 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { sessionDate, clientId, deliveryMethod } = body as {
+  const { sessionDate, clientId, deliveryMethod, recordingType } = body as {
     sessionDate: string;
     clientId?: string;
     deliveryMethod?: string;
+    recordingType?: string;
   };
 
   if (!sessionDate) {
@@ -48,11 +51,22 @@ export async function POST(request: Request) {
     );
   }
 
+  if (
+    recordingType &&
+    !RECORDING_TYPES.includes(recordingType as RecordingType)
+  ) {
+    return NextResponse.json(
+      { error: "recordingType must be 'full_session' or 'therapist_summary'" },
+      { status: 400 }
+    );
+  }
+
   const therapySession = await createTherapySession({
     therapistId: session.user.id,
     sessionDate,
     clientId: clientId || null,
     deliveryMethod: deliveryMethod || null,
+    ...(recordingType ? { recordingType: recordingType as RecordingType } : {}),
   });
 
   return NextResponse.json(therapySession, { status: 201 });
