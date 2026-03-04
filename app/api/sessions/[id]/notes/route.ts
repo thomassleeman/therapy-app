@@ -5,6 +5,7 @@ import {
   getClinicalNotes,
   getTherapySession,
   updateClinicalNote,
+  updateTherapySession,
 } from "@/lib/db/queries";
 import type { NoteContent, NoteStatus } from "@/lib/db/types";
 
@@ -69,6 +70,11 @@ export async function PATCH(
     status,
     reviewedAt,
   });
+
+  // Keep therapy_sessions.notes_status in sync with clinical note status
+  if (status === "finalised") {
+    await updateTherapySession({ id, notesStatus: "finalised" });
+  }
 
   return NextResponse.json(updatedNote);
 }

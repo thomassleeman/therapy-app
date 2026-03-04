@@ -23,12 +23,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    sessionId = body.sessionId;
+    const rawSessionId: string | undefined = body.sessionId;
     const expectedSpeakers: number | undefined = body.expectedSpeakers;
 
-    if (!sessionId) {
+    if (!rawSessionId) {
       return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
     }
+
+    sessionId = rawSessionId;
 
     // Validate session exists, belongs to therapist, has audio
     const therapySession = await getTherapySession({ id: sessionId });
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
     // Map segments to DB insert format
     const segmentInserts: SessionSegmentInsert[] =
       diarisedTranscript.segments.map((seg, index) => ({
-        sessionId,
+        sessionId: sessionId as string,
         segmentIndex: index,
         speaker: seg.speaker,
         content: seg.content,

@@ -69,3 +69,15 @@
 - Changed `data.transcriptionStatus` → `data.session?.transcriptionStatus` to read from the correct nested path.
 - Changed `data.transcriptionError` → `data.session?.errorMessage` to match the `TherapySession` type.
 - Added a `useEffect` that auto-starts polling whenever a `sessionId` is provided, removing the need for the component to explicitly call `startPolling()`.
+
+---
+
+## Notes Status Stuck on "Draft" After Finalising
+
+**File:** `app/api/sessions/[id]/notes/route.ts` (PATCH handler, line 74)
+
+**Symptom:** After a therapist finalises clinical notes via the session detail page, the sessions list table continues to show the notes status as "Draft" instead of "Finalised".
+
+**Cause:** The system tracks note status in two places: `clinical_notes.status` (per-note) and `therapy_sessions.notes_status` (per-session, used by the sessions list table). The PATCH endpoint called `updateClinicalNote()` to set `clinical_notes.status = "finalised"`, but never updated the corresponding `therapy_sessions.notes_status` field. Since the sessions table reads from `therapy_sessions.notes_status`, it remained as `"draft"` indefinitely.
+
+**Fix:** After updating the clinical note, the PATCH handler now also calls `updateTherapySession({ id, notesStatus: "finalised" })` when the status is `"finalised"`, keeping both records in sync.

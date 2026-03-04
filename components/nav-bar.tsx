@@ -47,7 +47,7 @@ export function NavBar({ user }: { user: User }) {
         <div className="hidden items-center gap-1 sm:flex">
           <Link
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            href="/dashboard"
+            href="/"
           >
             Dashboard
           </Link>
@@ -59,7 +59,7 @@ export function NavBar({ user }: { user: User }) {
           </Link>
           <Link
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            href="/dashboard/clients"
+            href="/clients"
           >
             Clients
           </Link>
