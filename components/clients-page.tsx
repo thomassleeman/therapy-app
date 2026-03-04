@@ -312,7 +312,7 @@ export function ClientsPage() {
 
   return (
     <div className="flex flex-1 flex-col bg-background overflow-y-auto">
-      <header className="sticky top-0 flex items-center gap-2 bg-background px-4 py-1.5">
+      <header className="flex items-center gap-2 bg-background px-4 py-1.5">
         <h1 className="text-lg font-semibold">
           Clients{!isLoadingClients && ` (${filteredClients.length})`}
         </h1>

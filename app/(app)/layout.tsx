@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { Suspense } from "react";
+import { AppHeader } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { auth } from "@/lib/auth";
@@ -19,7 +20,10 @@ async function SidebarWrapper({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen={!isCollapsed}>
       <AppSidebar user={session?.user} />
-      <SidebarInset>{children}</SidebarInset>
+      <SidebarInset>
+        <AppHeader />
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }

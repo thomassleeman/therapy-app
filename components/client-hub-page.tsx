@@ -89,7 +89,7 @@ export function ClientHubPage({ client, chats, sessions }: ClientHubPageProps) {
   return (
     <div className="flex flex-1 flex-col bg-background overflow-y-auto">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background border-b px-4 py-4 md:px-6">
+      <header className="bg-background border-b px-4 py-4 md:px-6">
         <div className="mb-3">
           <Link
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
