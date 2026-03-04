@@ -48,7 +48,7 @@ interface UseTranscriptionProgressReturn {
 
 export function useTranscriptionProgress(
   sessionId: string | null,
-  audioDurationSeconds: number | null,
+  audioDurationSeconds: number | null
 ): UseTranscriptionProgressReturn {
   const {
     status,
@@ -64,9 +64,7 @@ export function useTranscriptionProgress(
   >(null);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const estimatedTotalRef = useRef(
-    estimateTotalSeconds(audioDurationSeconds),
-  );
+  const estimatedTotalRef = useRef(estimateTotalSeconds(audioDurationSeconds));
 
   // Update estimate when audioDurationSeconds changes
   useEffect(() => {

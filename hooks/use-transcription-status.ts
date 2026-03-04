@@ -47,8 +47,7 @@ export function useTranscriptionStatus(
       }
 
       const data = await response.json();
-      const transcriptionStatus = data.session
-        ?.transcriptionStatus as string;
+      const transcriptionStatus = data.session?.transcriptionStatus as string;
 
       if (transcriptionStatus === "completed") {
         setStatus("completed");

@@ -37,11 +37,13 @@ export default async function SessionDetailPage({
   ]);
 
   return (
-    <SessionDetailClient
-      consents={consents}
-      notes={notes}
-      segments={segments}
-      session={therapySession}
-    />
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <SessionDetailClient
+        consents={consents}
+        notes={notes}
+        segments={segments}
+        session={therapySession}
+      />
+    </div>
   );
 }

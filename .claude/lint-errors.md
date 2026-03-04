@@ -9,7 +9,7 @@ Summary of all changes made to resolve 121 Biome lint errors.
 The following were fixed automatically and required no manual intervention:
 
 - **Formatting** (`format` errors): Line-length wrapping in `app/(chat)/api/chat/route.ts`, `components/dashboard-page.tsx`, `components/message-actions.tsx`
-- **Import organisation** (`organizeImports`): `app/(dashboard)/page.tsx`, `components/chat-header.tsx`, `components/nav-bar.tsx`
+- **Import organisation** (`organizeImports`): `components/chat-header.tsx`
 - **Block statements** (`useBlockStatements`): All single-line `if` bodies wrapped in braces across `lib/db/queries.ts`, `lib/ai/modality.ts`, `components/dashboard-page.tsx`, `components/search-tool-status.tsx`
 - **Template literals** (`useTemplate`): String concatenation replaced with template literals in `lib/ai/contextual-response.ts` and `lib/ai/__tests__/sensitive-content.test.ts`
 - **Collapsed `if`** (`useCollapsedIf`): Nested `if` inside `else if` merged into a single condition in `scripts/ingest-knowledge.ts`
@@ -81,6 +81,4 @@ The following were fixed automatically and required no manual intervention:
 ### `lib/hooks/useSupabaseAuth.ts` — filename convention
 - **Rule:** `lint/style/useFilenamingConvention`
 - **Change:** Renamed the file from `useSupabaseAuth.ts` to `use-supabase-auth.ts` to match the kebab-case convention used by all other hook files in the project (`use-artifact.ts`, `use-auto-resume.ts`, etc.).
-- **Import updates:** Updated the import path in two components:
-  - `components/nav-bar.tsx`
-  - `components/sidebar-user-nav.tsx`
+- **Import updates:** Updated the import path in `components/sidebar-user-nav.tsx`

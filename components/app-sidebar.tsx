@@ -1,9 +1,10 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
+import { Mic } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -15,6 +16,7 @@ import {
 } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +25,7 @@ import {
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -41,9 +44,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
   const { mutate } = useSWRConfig();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+
+  const navItems = [
+    { label: "Dashboard", href: "/", icon: () => <HomeIcon size={16} /> },
+    { label: "Clients", href: "/clients", icon: UserIcon },
+    { label: "Sessions", href: "/sessions", icon: Mic },
+  ];
 
   const handleDeleteAll = () => {
     const deletePromise = fetch("/api/history", {
@@ -131,40 +141,30 @@ export function AppSidebar({ user }: { user: User | undefined }) {
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <SidebarMenuItem>
-                    <div className="flex gap-2">
-                      <Link
-                        className="flex-1"
-                        href="/clients"
-                        onClick={() => setOpenMobile(false)}
-                      >
-                        <button
-                          className="border bg-white gap-x-2 items-center flex w-full border-gray-200 rounded-lg px-3 py-2 font-bold hover:bg-gray-100 cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
-                          type="button"
-                        >
-                          <UserIcon />
-                          <span>Clients</span>
-                        </button>
-                      </Link>
-                      <Link
-                        className="flex-1"
-                        href="/"
-                        onClick={() => setOpenMobile(false)}
-                      >
-                        <button
-                          className="border bg-white gap-x-2 items-center flex w-full border-gray-200 rounded-lg px-3 py-2 font-bold hover:bg-gray-100 cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
-                          type="button"
-                        >
-                          <HomeIcon size={16} />
-                          <span>Dashboard</span>
-                        </button>
-                      </Link>
-                    </div>
-                  </SidebarMenuItem>
+                  {navItems.map((item) => {
+                    const isActive =
+                      item.href === "/"
+                        ? pathname === "/"
+                        : pathname.startsWith(item.href);
+                    return (
+                      <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton asChild isActive={isActive}>
+                          <Link
+                            href={item.href}
+                            onClick={() => setOpenMobile(false)}
+                          >
+                            <item.icon />
+                            <span>{item.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           )}
+          <Separator className="mx-auto w-[calc(100%-1rem)]" />
           <SidebarHistory user={user} />
         </SidebarContent>
         <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>

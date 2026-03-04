@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { Chat, Client, Document } from "@/lib/db/types";
 import { formatDate } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
+import { FabNewChat } from "./fab-new-chat";
 import { FileIcon, MessageIcon, PlusIcon, UserIcon } from "./icons";
 
 type ChatCount = { clientId: string | null; count: number };
@@ -179,6 +180,8 @@ export function DashboardPage({
         onOpenChange={setShowClientDialog}
         open={showClientDialog}
       />
+
+      <FabNewChat />
     </div>
   );
 }

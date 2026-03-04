@@ -51,7 +51,7 @@ function formatFileSize(bytes: number): string {
 }
 
 async function getAudioDuration(
-  file: File,
+  file: File
 ): Promise<{ formatted: string; seconds: number | null }> {
   try {
     const arrayBuffer = await file.arrayBuffer();

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
 import {
@@ -22,11 +22,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import { useClients } from "@/hooks/use-clients";
 import type { Chat, Client, ClientStatus } from "@/lib/db/types";
-import { CLIENT_STATUS_LABELS } from "@/lib/db/types";
+import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from "@/lib/db/types";
 import { fetcher, formatDate } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
+import { FabNewChat } from "./fab-new-chat";
 import {
   ChevronDownIcon,
   MessageIcon,
@@ -87,7 +89,12 @@ function ClientCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium">{client.name}</span>
+            <Link
+              className="font-medium hover:underline"
+              href={`/clients/${client.id}`}
+            >
+              {client.name}
+            </Link>
             <StatusBadge status={client.status} />
           </div>
           {modalities.length > 0 && (
@@ -247,6 +254,36 @@ export function ClientsPage() {
   const [showClientDialog, setShowClientDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deleteClient, setDeleteClient] = useState<Client | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ClientStatus | "all">("all");
+
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      if (statusFilter !== "all" && client.status !== statusFilter) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const searchableFields = [
+          client.name,
+          client.background,
+          client.presentingIssues,
+          ...(client.therapeuticModalities ?? []),
+        ];
+        return searchableFields.some((field) =>
+          field?.toLowerCase().includes(query)
+        );
+      }
+      return true;
+    });
+  }, [clients, searchQuery, statusFilter]);
+
+  const showGeneralSection =
+    statusFilter === "all" &&
+    (!searchQuery.trim() ||
+      "general".includes(searchQuery.trim().toLowerCase()));
+
+  const hasActiveFilters = searchQuery.trim() !== "" || statusFilter !== "all";
 
   const getCountForClient = (clientId: string | null) => {
     return countsData?.counts?.find((c) => c.clientId === clientId)?.count ?? 0;
@@ -274,9 +311,11 @@ export function ClientsPage() {
   };
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="flex flex-1 flex-col bg-background overflow-y-auto">
       <header className="sticky top-0 flex items-center gap-2 bg-background px-4 py-1.5">
-        <h1 className="text-lg font-semibold">Clients</h1>
+        <h1 className="text-lg font-semibold">
+          Clients{!isLoadingClients && ` (${filteredClients.length})`}
+        </h1>
         <div className="ml-auto">
           <Button
             onClick={() => {
@@ -292,7 +331,37 @@ export function ClientsPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8">
-        <div className="pt-4">
+        <div className="pt-4 space-y-3">
+          {!isLoadingClients && clients.length > 0 && (
+            <>
+              <Input
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search clients by name, background, issues, or modalities..."
+                type="search"
+                value={searchQuery}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setStatusFilter("all")}
+                  size="sm"
+                  variant={statusFilter === "all" ? "default" : "outline"}
+                >
+                  All
+                </Button>
+                {CLIENT_STATUSES.map((status) => (
+                  <Button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    size="sm"
+                    variant={statusFilter === status ? "default" : "outline"}
+                  >
+                    {CLIENT_STATUS_LABELS[status]}
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
+
           {isLoadingClients ? (
             <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {[1, 2, 3, 4].map((i) => (
@@ -330,8 +399,21 @@ export function ClientsPage() {
                 </div>
               )}
 
+              {clients.length > 0 &&
+                filteredClients.length === 0 &&
+                hasActiveFilters && (
+                  <div className="rounded-lg border border-dashed p-8 text-center">
+                    <h3 className="font-medium">
+                      No clients match your search
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Try adjusting your search term or status filter.
+                    </p>
+                  </div>
+                )}
+
               <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {clients.map((client) => (
+                {filteredClients.map((client) => (
                   <ClientCard
                     chatCount={getCountForClient(client.id)}
                     client={client}
@@ -347,12 +429,16 @@ export function ClientsPage() {
                   />
                 ))}
 
-                <GeneralSection chatCount={getCountForClient(null)} />
+                {showGeneralSection && (
+                  <GeneralSection chatCount={getCountForClient(null)} />
+                )}
               </div>
             </>
           )}
         </div>
       </div>
+
+      <FabNewChat />
 
       <ClientDialog
         client={editingClient}

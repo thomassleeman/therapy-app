@@ -3,12 +3,14 @@
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Check,
   FileText,
   Loader2,
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
@@ -869,6 +871,18 @@ export function SessionDetailClient({
           </p>
         </div>
       </div>
+
+      <Link
+        className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 md:w-auto md:justify-start md:gap-2 mb-6"
+        href={
+          session.chatId
+            ? `/chat/${session.chatId}`
+            : `/chat/new?clientId=${session.clientId ?? "general"}`
+        }
+      >
+        <span>💬 Chat About This Session</span>
+        <ArrowRight className="size-4" />
+      </Link>
 
       <Tabs defaultValue="transcript">
         <TabsList className="mb-6">

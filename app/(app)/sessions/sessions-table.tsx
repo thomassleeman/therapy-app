@@ -126,9 +126,7 @@ export function SessionsTable({ sessions }: { sessions: TherapySession[] }) {
       router.refresh();
     } catch (err) {
       console.error("Delete session failed:", err);
-      alert(
-        err instanceof Error ? err.message : "Failed to delete session",
-      );
+      alert(err instanceof Error ? err.message : "Failed to delete session");
     } finally {
       setDeletingId(null);
     }
@@ -169,10 +167,10 @@ export function SessionsTable({ sessions }: { sessions: TherapySession[] }) {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
-                        size="sm"
-                        variant="ghost"
                         className="text-muted-foreground hover:text-destructive"
                         disabled={deletingId === s.id}
+                        size="sm"
+                        variant="ghost"
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -189,8 +187,8 @@ export function SessionsTable({ sessions }: { sessions: TherapySession[] }) {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => handleDelete(s.id)}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => handleDelete(s.id)}
                         >
                           {deletingId === s.id ? "Deleting\u2026" : "Delete"}
                         </AlertDialogAction>

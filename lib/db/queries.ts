@@ -1543,7 +1543,9 @@ export async function createTherapySession(
         chat_id: session.chatId ?? null,
         session_date: session.sessionDate,
         delivery_method: session.deliveryMethod ?? null,
-        ...(session.recordingType ? { recording_type: session.recordingType } : {}),
+        ...(session.recordingType
+          ? { recording_type: session.recordingType }
+          : {}),
       })
       .select()
       .single();
