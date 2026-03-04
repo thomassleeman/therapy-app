@@ -8,12 +8,24 @@ import type {
   Client,
   ClientInsert,
   ClientTag,
+  ClinicalNote,
+  ClinicalNoteInsert,
+  ConsentingParty,
+  ConsentType,
   DBMessage,
   Document,
   HybridSearchResult,
+  NoteContent,
+  NoteStatus,
+  SessionConsent,
+  SessionConsentInsert,
+  SessionSegment,
+  SessionSegmentInsert,
   Suggestion,
   TherapistProfile,
   TherapistProfileInsert,
+  TherapySession,
+  TherapySessionInsert,
   Vote,
 } from "./types";
 
@@ -22,12 +34,20 @@ export type {
   Chat,
   Client,
   ClientTag,
+  ClinicalNote,
+  ClinicalNoteInsert,
   DBMessage,
   Document,
   HybridSearchResult,
+  SessionConsent,
+  SessionConsentInsert,
+  SessionSegment,
+  SessionSegmentInsert,
   Suggestion,
   TherapistProfile,
   TherapistProfileInsert,
+  TherapySession,
+  TherapySessionInsert,
   Vote,
 } from "./types";
 
@@ -1439,4 +1459,604 @@ export async function upsertTherapistProfile(profile: TherapistProfileInsert) {
     handleSupabaseError(error, "upsert therapist profile");
   }
   return data;
+}
+
+// ============================================================
+// Therapy session CRUD
+// ============================================================
+
+function mapRowToTherapySession(row: any): TherapySession {
+  return {
+    id: row.id,
+    therapistId: row.therapist_id,
+    clientId: row.client_id ?? null,
+    chatId: row.chat_id ?? null,
+    sessionDate: row.session_date,
+    durationMinutes: row.duration_minutes ?? null,
+    audioStoragePath: row.audio_storage_path ?? null,
+    transcriptionStatus: row.transcription_status,
+    transcriptionProvider: row.transcription_provider ?? null,
+    notesStatus: row.notes_status,
+    deliveryMethod: row.delivery_method ?? null,
+    errorMessage: row.error_message ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapRowToSessionSegment(row: any): SessionSegment {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    segmentIndex: row.segment_index,
+    speaker: row.speaker,
+    content: row.content,
+    startTimeMs: row.start_time_ms,
+    endTimeMs: row.end_time_ms,
+    confidence: row.confidence ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+function mapRowToClinicalNote(row: any): ClinicalNote {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    therapistId: row.therapist_id,
+    noteFormat: row.note_format,
+    content: row.content,
+    status: row.status,
+    generatedBy: row.generated_by,
+    modelUsed: row.model_used ?? null,
+    reviewedAt: row.reviewed_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapRowToSessionConsent(row: any): SessionConsent {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    consentType: row.consent_type,
+    consentingParty: row.consenting_party,
+    consented: row.consented,
+    consentedAt: row.consented_at,
+    withdrawnAt: row.withdrawn_at ?? null,
+    consentMethod: row.consent_method,
+    createdAt: row.created_at,
+  };
+}
+
+export async function createTherapySession(
+  session: TherapySessionInsert
+): Promise<TherapySession> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("therapy_sessions")
+      .insert({
+        therapist_id: session.therapistId,
+        client_id: session.clientId ?? null,
+        chat_id: session.chatId ?? null,
+        session_date: session.sessionDate,
+        delivery_method: session.deliveryMethod ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "create therapy session");
+    }
+
+    return mapRowToTherapySession(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create therapy session"
+    );
+  }
+}
+
+export async function getTherapySession({
+  id,
+}: {
+  id: string;
+}): Promise<TherapySession | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("therapy_sessions")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return null;
+      }
+      handleSupabaseError(error, "get therapy session");
+    }
+
+    return mapRowToTherapySession(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get therapy session"
+    );
+  }
+}
+
+export async function getTherapySessions({
+  therapistId,
+  clientId,
+  limit = 50,
+  offset = 0,
+}: {
+  therapistId: string;
+  clientId?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<TherapySession[]> {
+  try {
+    const supabase = await createClient();
+    let query = supabase
+      .from("therapy_sessions")
+      .select("*")
+      .eq("therapist_id", therapistId)
+      .order("session_date", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (clientId) {
+      query = query.eq("client_id", clientId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      handleSupabaseError(error, "get therapy sessions");
+    }
+
+    return (data || []).map(mapRowToTherapySession);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get therapy sessions"
+    );
+  }
+}
+
+export async function updateTherapySession({
+  id,
+  ...fields
+}: { id: string } & Partial<
+  Omit<TherapySession, "id" | "createdAt" | "updatedAt">
+>): Promise<TherapySession> {
+  try {
+    const supabase = await createClient();
+
+    const fieldMap: [string, string, unknown][] = [
+      ["therapistId", "therapist_id", fields.therapistId],
+      ["clientId", "client_id", fields.clientId],
+      ["chatId", "chat_id", fields.chatId],
+      ["sessionDate", "session_date", fields.sessionDate],
+      ["durationMinutes", "duration_minutes", fields.durationMinutes],
+      ["audioStoragePath", "audio_storage_path", fields.audioStoragePath],
+      [
+        "transcriptionStatus",
+        "transcription_status",
+        fields.transcriptionStatus,
+      ],
+      [
+        "transcriptionProvider",
+        "transcription_provider",
+        fields.transcriptionProvider,
+      ],
+      ["notesStatus", "notes_status", fields.notesStatus],
+      ["deliveryMethod", "delivery_method", fields.deliveryMethod],
+      ["errorMessage", "error_message", fields.errorMessage],
+    ];
+
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    for (const [camelKey, snakeKey, value] of fieldMap) {
+      if ((fields as Record<string, unknown>)[camelKey] !== undefined) {
+        updatePayload[snakeKey] = value;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("therapy_sessions")
+      .update(updatePayload)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "update therapy session");
+    }
+
+    return mapRowToTherapySession(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update therapy session"
+    );
+  }
+}
+
+export async function deleteTherapySession({
+  id,
+}: {
+  id: string;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("therapy_sessions")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      handleSupabaseError(error, "delete therapy session");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete therapy session"
+    );
+  }
+}
+
+// ============================================================
+// Transcript segments
+// ============================================================
+
+export async function insertSessionSegments(
+  segments: SessionSegmentInsert[]
+): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("session_segments").insert(
+      segments.map((s) => ({
+        session_id: s.sessionId,
+        segment_index: s.segmentIndex,
+        speaker: s.speaker,
+        content: s.content,
+        start_time_ms: s.startTimeMs,
+        end_time_ms: s.endTimeMs,
+        confidence: s.confidence ?? null,
+      }))
+    );
+
+    if (error) {
+      handleSupabaseError(error, "insert session segments");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to insert session segments"
+    );
+  }
+}
+
+export async function getSessionSegments({
+  sessionId,
+}: {
+  sessionId: string;
+}): Promise<SessionSegment[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("session_segments")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("segment_index", { ascending: true });
+
+    if (error) {
+      handleSupabaseError(error, "get session segments");
+    }
+
+    return (data || []).map(mapRowToSessionSegment);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get session segments"
+    );
+  }
+}
+
+function titleCase(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+export async function getSessionTranscriptText({
+  sessionId,
+}: {
+  sessionId: string;
+}): Promise<string> {
+  const segments = await getSessionSegments({ sessionId });
+  return segments
+    .map((s) => `${titleCase(s.speaker)}: ${s.content}`)
+    .join("\n\n");
+}
+
+// ============================================================
+// Clinical notes
+// ============================================================
+
+export async function createClinicalNote(
+  note: ClinicalNoteInsert
+): Promise<ClinicalNote> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .insert({
+        session_id: note.sessionId,
+        therapist_id: note.therapistId,
+        note_format: note.noteFormat,
+        content: note.content,
+        generated_by: note.generatedBy ?? "ai",
+        model_used: note.modelUsed ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "create clinical note");
+    }
+
+    return mapRowToClinicalNote(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create clinical note"
+    );
+  }
+}
+
+export async function getClinicalNotes({
+  sessionId,
+}: {
+  sessionId: string;
+}): Promise<ClinicalNote[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      handleSupabaseError(error, "get clinical notes");
+    }
+
+    return (data || []).map(mapRowToClinicalNote);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get clinical notes"
+    );
+  }
+}
+
+export async function updateClinicalNote({
+  id,
+  content,
+  status,
+  reviewedAt,
+}: {
+  id: string;
+  content?: NoteContent;
+  status?: NoteStatus;
+  reviewedAt?: string;
+}): Promise<ClinicalNote> {
+  try {
+    const supabase = await createClient();
+
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (content !== undefined) {
+      updatePayload.content = content;
+    }
+    if (status !== undefined) {
+      updatePayload.status = status;
+    }
+    if (reviewedAt !== undefined) {
+      updatePayload.reviewed_at = reviewedAt;
+    }
+
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .update(updatePayload)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "update clinical note");
+    }
+
+    return mapRowToClinicalNote(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update clinical note"
+    );
+  }
+}
+
+// ============================================================
+// Consent records
+// ============================================================
+
+export async function recordSessionConsent(
+  consent: SessionConsentInsert
+): Promise<SessionConsent> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("session_consents")
+      .upsert(
+        {
+          session_id: consent.sessionId,
+          consent_type: consent.consentType,
+          consenting_party: consent.consentingParty,
+          consented: consent.consented,
+          consented_at: new Date().toISOString(),
+          consent_method: consent.consentMethod,
+          ip_address: consent.ipAddress ?? null,
+        },
+        {
+          onConflict: "session_id,consent_type,consenting_party",
+        }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "record session consent");
+    }
+
+    return mapRowToSessionConsent(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to record session consent"
+    );
+  }
+}
+
+export async function getSessionConsents({
+  sessionId,
+}: {
+  sessionId: string;
+}): Promise<SessionConsent[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("session_consents")
+      .select("*")
+      .eq("session_id", sessionId);
+
+    if (error) {
+      handleSupabaseError(error, "get session consents");
+    }
+
+    return (data || []).map(mapRowToSessionConsent);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get session consents"
+    );
+  }
+}
+
+export async function hasRequiredConsents({
+  sessionId,
+}: {
+  sessionId: string;
+}): Promise<boolean> {
+  try {
+    const consents = await getSessionConsents({ sessionId });
+
+    const requiredPairs: [ConsentType, ConsentingParty][] = [
+      ["recording", "therapist"],
+      ["recording", "client"],
+      ["ai_transcription", "therapist"],
+      ["ai_transcription", "client"],
+    ];
+
+    return requiredPairs.every(([type, party]) =>
+      consents.some(
+        (c) =>
+          c.consentType === type &&
+          c.consentingParty === party &&
+          c.consented &&
+          c.withdrawnAt === null
+      )
+    );
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to check required consents"
+    );
+  }
+}
+
+export async function withdrawConsent({
+  sessionId,
+  consentType,
+  consentingParty,
+}: {
+  sessionId: string;
+  consentType: ConsentType;
+  consentingParty: ConsentingParty;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("session_consents")
+      .update({ withdrawn_at: new Date().toISOString() })
+      .eq("session_id", sessionId)
+      .eq("consent_type", consentType)
+      .eq("consenting_party", consentingParty);
+
+    if (error) {
+      handleSupabaseError(error, "withdraw consent");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to withdraw consent"
+    );
+  }
 }

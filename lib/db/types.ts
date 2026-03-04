@@ -348,3 +348,148 @@ export interface KnowledgeChunkInsert {
   parentChunkId?: string | null;
   createdAt?: string;
 }
+
+// ── Session transcription types ──────────────────────────────────────────
+
+export const SESSION_TRANSCRIPTION_STATUSES = [
+  "pending",
+  "uploading",
+  "transcribing",
+  "labelling",
+  "completed",
+  "failed",
+] as const;
+export type TranscriptionStatus =
+  (typeof SESSION_TRANSCRIPTION_STATUSES)[number];
+
+export const NOTE_FORMATS = ["soap", "dap", "progress", "freeform"] as const;
+export type NoteFormat = (typeof NOTE_FORMATS)[number];
+
+export const NOTE_STATUSES = ["draft", "reviewed", "finalised"] as const;
+export type NoteStatus = (typeof NOTE_STATUSES)[number];
+
+export const CONSENT_TYPES = [
+  "recording",
+  "ai_transcription",
+  "ai_note_generation",
+  "data_storage",
+] as const;
+export type ConsentType = (typeof CONSENT_TYPES)[number];
+
+export const CONSENTING_PARTIES = ["therapist", "client"] as const;
+export type ConsentingParty = (typeof CONSENTING_PARTIES)[number];
+
+export interface TherapySession {
+  id: string;
+  therapistId: string;
+  clientId: string | null;
+  chatId: string | null;
+  sessionDate: string;
+  durationMinutes: number | null;
+  audioStoragePath: string | null;
+  transcriptionStatus: TranscriptionStatus;
+  transcriptionProvider: string | null;
+  notesStatus: string;
+  deliveryMethod: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionSegment {
+  id: string;
+  sessionId: string;
+  segmentIndex: number;
+  speaker: string;
+  content: string;
+  startTimeMs: number;
+  endTimeMs: number;
+  confidence: number | null;
+  createdAt: string;
+}
+
+export interface SoapNoteContent {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+}
+
+export interface DapNoteContent {
+  data: string;
+  assessment: string;
+  plan: string;
+}
+
+export interface FreeformNoteContent {
+  body: string;
+}
+
+export type NoteContent =
+  | SoapNoteContent
+  | DapNoteContent
+  | FreeformNoteContent;
+
+export interface ClinicalNote {
+  id: string;
+  sessionId: string;
+  therapistId: string;
+  noteFormat: NoteFormat;
+  content: NoteContent;
+  status: NoteStatus;
+  generatedBy: string;
+  modelUsed: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionConsent {
+  id: string;
+  sessionId: string;
+  consentType: ConsentType;
+  consentingParty: ConsentingParty;
+  consented: boolean;
+  consentedAt: string;
+  withdrawnAt: string | null;
+  consentMethod: string;
+  createdAt: string;
+}
+
+// ── Session transcription insert types ───────────────────────────────────
+
+export interface TherapySessionInsert {
+  therapistId: string;
+  clientId?: string | null;
+  chatId?: string | null;
+  sessionDate: string;
+  deliveryMethod?: string | null;
+}
+
+export interface SessionSegmentInsert {
+  sessionId: string;
+  segmentIndex: number;
+  speaker: string;
+  content: string;
+  startTimeMs: number;
+  endTimeMs: number;
+  confidence?: number | null;
+}
+
+export interface ClinicalNoteInsert {
+  sessionId: string;
+  therapistId: string;
+  noteFormat: NoteFormat;
+  content: NoteContent;
+  generatedBy?: string;
+  modelUsed?: string | null;
+}
+
+export interface SessionConsentInsert {
+  sessionId: string;
+  consentType: ConsentType;
+  consentingParty: ConsentingParty;
+  consented: boolean;
+  consentMethod: string;
+  ipAddress?: string | null;
+}

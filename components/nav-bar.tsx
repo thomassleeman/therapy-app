@@ -35,14 +35,36 @@ export function NavBar({ user }: { user: User }) {
 
   return (
     <nav className="flex items-center justify-between border-b px-4 py-2">
-      <Link className="flex items-center gap-2" href="/">
-        <Image
-          alt="Therapy Reflection Agent Logo"
-          height={28}
-          src={Logo}
-          width={28}
-        />
-      </Link>
+      <div className="flex items-center gap-6">
+        <Link className="flex items-center gap-2" href="/">
+          <Image
+            alt="Therapy Reflection Agent Logo"
+            height={28}
+            src={Logo}
+            width={28}
+          />
+        </Link>
+        <div className="hidden items-center gap-1 sm:flex">
+          <Link
+            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            href="/dashboard"
+          >
+            Dashboard
+          </Link>
+          <Link
+            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            href="/sessions"
+          >
+            Sessions
+          </Link>
+          <Link
+            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            href="/dashboard/clients"
+          >
+            Clients
+          </Link>
+        </div>
+      </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
