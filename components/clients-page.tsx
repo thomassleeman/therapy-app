@@ -17,35 +17,37 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
 import { useClients } from "@/hooks/use-clients";
-import type { Chat, Client, ClientStatus } from "@/lib/db/types";
+import type { Client, ClientStatus } from "@/lib/db/types";
 import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from "@/lib/db/types";
-import { fetcher, formatDate } from "@/lib/utils";
+import { fetcher } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
 import { FabNewChat } from "./fab-new-chat";
+import { PencilEditIcon, PlusIcon, TrashIcon, UserIcon } from "./icons";
 import {
-  ChevronDownIcon,
-  MessageIcon,
-  PencilEditIcon,
-  PlusIcon,
-  TrashIcon,
-  UserIcon,
-} from "./icons";
+  ListPageEmpty,
+  ListPageFilters,
+  ListPageSearch,
+  ListPageShell,
+  ListPageSkeleton,
+} from "./list-page";
 
 type ChatCounts = { clientId: string | null; count: number }[];
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
-  active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  paused: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-  waitlisted: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  active:
+    "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300",
+  paused:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
+  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  waitlisted:
+    "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300",
 };
+
+const CLIENT_FILTER_OPTIONS = CLIENT_STATUSES.map((status) => ({
+  value: status,
+  label: CLIENT_STATUS_LABELS[status],
+}));
 
 function StatusBadge({ status }: { status: ClientStatus }) {
   return (
@@ -54,193 +56,6 @@ function StatusBadge({ status }: { status: ClientStatus }) {
     >
       {CLIENT_STATUS_LABELS[status]}
     </span>
-  );
-}
-
-function ClientCard({
-  client,
-  chatCount,
-  onEdit,
-  onDelete,
-  onNewChat,
-}: {
-  client: Client;
-  chatCount: number;
-  onEdit: () => void;
-  onDelete: () => void;
-  onNewChat: () => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { data: chatsData } = useSWR<{ chats: Chat[] }>(
-    isOpen ? `/api/clients/chats?clientId=${client.id}` : null,
-    fetcher
-  );
-
-  const modalities = client.therapeuticModalities ?? [];
-  const tags = client.tags ?? [];
-  const showOverflow = modalities.length > 3;
-  const displayModalities = showOverflow ? modalities.slice(0, 3) : modalities;
-
-  return (
-    <div className="rounded-lg border bg-card">
-      <div className="flex items-center gap-3 p-4">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-          <UserIcon />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Link
-              className="font-medium hover:underline"
-              href={`/clients/${client.id}`}
-            >
-              {client.name}
-            </Link>
-            <StatusBadge status={client.status} />
-          </div>
-          {modalities.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {displayModalities.map((m) => (
-                <Badge
-                  className="px-1.5 py-0 text-[10px]"
-                  key={m}
-                  variant="outline"
-                >
-                  {m}
-                </Badge>
-              ))}
-              {showOverflow && (
-                <span className="text-[10px] text-muted-foreground">
-                  +{modalities.length - 3} more
-                </span>
-              )}
-            </div>
-          )}
-          {tags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {tags.map((t) => (
-                <Badge
-                  className="px-1.5 py-0 text-[10px]"
-                  key={t}
-                  variant="secondary"
-                >
-                  {t}
-                </Badge>
-              ))}
-            </div>
-          )}
-          {client.background && (
-            <div className="mt-1 truncate text-sm text-muted-foreground">
-              {client.background}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="mr-2 text-sm text-muted-foreground">
-            {chatCount} {chatCount === 1 ? "chat" : "chats"}
-          </span>
-          <Button onClick={onNewChat} size="icon" variant="ghost">
-            <PlusIcon />
-          </Button>
-          <Button onClick={onEdit} size="icon" variant="ghost">
-            <PencilEditIcon />
-          </Button>
-          <Button
-            className="text-destructive hover:text-destructive"
-            onClick={onDelete}
-            size="icon"
-            variant="ghost"
-          >
-            <TrashIcon />
-          </Button>
-        </div>
-      </div>
-
-      {chatCount > 0 && (
-        <Collapsible onOpenChange={setIsOpen} open={isOpen}>
-          <CollapsibleTrigger className="flex w-full items-center gap-2 border-t px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronDownIcon />
-            <span>{isOpen ? "Hide chats" : "Show chats"}</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="border-t">
-              {chatsData?.chats?.map((chat) => (
-                <Link
-                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-accent transition-colors"
-                  href={`/chat/${chat.id}`}
-                  key={chat.id}
-                >
-                  <MessageIcon size={14} />
-                  <span className="truncate flex-1">{chat.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDate(chat.createdAt)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-    </div>
-  );
-}
-
-function GeneralSection({ chatCount }: { chatCount: number }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { data: chatsData } = useSWR<{ chats: Chat[] }>(
-    isOpen ? "/api/clients/chats?clientId=general" : null,
-    fetcher
-  );
-
-  return (
-    <div className="rounded-lg border bg-card">
-      <div className="flex items-center gap-3 p-4">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-          <MessageIcon size={18} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-medium">General</div>
-          <div className="text-sm text-muted-foreground">
-            Chats without a specific client
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="mr-2 text-sm text-muted-foreground">
-            {chatCount} {chatCount === 1 ? "chat" : "chats"}
-          </span>
-          <Link href="/chat/new?clientId=general">
-            <Button size="icon" variant="ghost">
-              <PlusIcon />
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {chatCount > 0 && (
-        <Collapsible onOpenChange={setIsOpen} open={isOpen}>
-          <CollapsibleTrigger className="flex w-full items-center gap-2 border-t px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronDownIcon />
-            <span>{isOpen ? "Hide chats" : "Show chats"}</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="border-t">
-              {chatsData?.chats?.map((chat) => (
-                <Link
-                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-accent transition-colors"
-                  href={`/chat/${chat.id}`}
-                  key={chat.id}
-                >
-                  <MessageIcon size={14} />
-                  <span className="truncate flex-1">{chat.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDate(chat.createdAt)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-    </div>
   );
 }
 
@@ -278,11 +93,6 @@ export function ClientsPage() {
     });
   }, [clients, searchQuery, statusFilter]);
 
-  const showGeneralSection =
-    statusFilter === "all" &&
-    (!searchQuery.trim() ||
-      "general".includes(searchQuery.trim().toLowerCase()));
-
   const hasActiveFilters = searchQuery.trim() !== "" || statusFilter !== "all";
 
   const getCountForClient = (clientId: string | null) => {
@@ -311,132 +121,263 @@ export function ClientsPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col bg-background overflow-y-auto">
-      <header className="flex items-center gap-2 bg-background px-4 py-1.5">
-        <h1 className="text-lg font-semibold">
-          Clients{!isLoadingClients && ` (${filteredClients.length})`}
-        </h1>
-        <div className="ml-auto">
-          <Button
-            onClick={() => {
-              setEditingClient(null);
-              setShowClientDialog(true);
-            }}
-            size="sm"
-          >
-            <PlusIcon />
-            <span>Add Client</span>
-          </Button>
-        </div>
-      </header>
+    <ListPageShell
+      count={filteredClients.length}
+      headerAction={
+        <Button
+          onClick={() => {
+            setEditingClient(null);
+            setShowClientDialog(true);
+          }}
+          size="sm"
+        >
+          <PlusIcon />
+          <span>Add Client</span>
+        </Button>
+      }
+      isLoading={isLoadingClients}
+      title="Clients"
+    >
+      {!isLoadingClients && clients.length > 0 && (
+        <>
+          <ListPageSearch
+            onChange={setSearchQuery}
+            placeholder="Search clients by name, background, issues, or modalities..."
+            value={searchQuery}
+          />
+          <ListPageFilters
+            onChange={setStatusFilter}
+            options={CLIENT_FILTER_OPTIONS}
+            value={statusFilter}
+          />
+        </>
+      )}
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8">
-        <div className="pt-4 space-y-3">
-          {!isLoadingClients && clients.length > 0 && (
-            <>
-              <Input
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search clients by name, background, issues, or modalities..."
-                type="search"
-                value={searchQuery}
-              />
-              <div className="flex flex-wrap gap-2">
+      {isLoadingClients ? (
+        <ListPageSkeleton />
+      ) : (
+        <>
+          {clients.length === 0 && (
+            <ListPageEmpty
+              action={
                 <Button
-                  onClick={() => setStatusFilter("all")}
-                  size="sm"
-                  variant={statusFilter === "all" ? "default" : "outline"}
+                  onClick={() => {
+                    setEditingClient(null);
+                    setShowClientDialog(true);
+                  }}
+                  variant="outline"
                 >
-                  All
+                  <PlusIcon />
+                  <span>Add Client</span>
                 </Button>
-                {CLIENT_STATUSES.map((status) => (
-                  <Button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    size="sm"
-                    variant={statusFilter === status ? "default" : "outline"}
-                  >
-                    {CLIENT_STATUS_LABELS[status]}
-                  </Button>
-                ))}
-              </div>
-            </>
+              }
+              description="Add your first client to start organising your reflections."
+              icon={<UserIcon />}
+              title="No clients yet"
+            />
           )}
 
-          {isLoadingClients ? (
-            <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div className="rounded-lg border p-4" key={i}>
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 animate-pulse rounded-full bg-muted" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-                      <div className="h-3 w-48 animate-pulse rounded bg-muted" />
-                    </div>
-                  </div>
+          {clients.length > 0 &&
+            filteredClients.length === 0 &&
+            hasActiveFilters && (
+              <ListPageEmpty
+                description="Try adjusting your search term or status filter."
+                title="No clients match your search"
+              />
+            )}
+
+          {filteredClients.length > 0 && (
+            <div className="mt-4 flow-root">
+              <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead>
+                      <tr>
+                        <th
+                          className="py-3 pr-3 pl-4 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase sm:pl-0"
+                          scope="col"
+                        >
+                          Client
+                        </th>
+                        <th
+                          className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase md:table-cell"
+                          scope="col"
+                        >
+                          Status
+                        </th>
+                        <th
+                          className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase lg:table-cell"
+                          scope="col"
+                        >
+                          Modalities
+                        </th>
+                        <th
+                          className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase sm:table-cell"
+                          scope="col"
+                        >
+                          Chats
+                        </th>
+                        <th
+                          className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase xl:table-cell"
+                          scope="col"
+                        >
+                          Tags
+                        </th>
+                        <th className="py-3 pr-4 pl-3 sm:pr-0" scope="col">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredClients.map((client) => {
+                        const modalities = client.therapeuticModalities ?? [];
+                        const tags = client.tags ?? [];
+                        const chatCount = getCountForClient(client.id);
+
+                        return (
+                          <tr
+                            className="hover:bg-muted/50 transition-colors"
+                            key={client.id}
+                          >
+                            <td className="py-4 pr-3 pl-4 sm:pl-0">
+                              <div className="flex items-center gap-3">
+                                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                                  <UserIcon />
+                                </div>
+                                <div className="min-w-0">
+                                  <Link
+                                    className="text-sm font-medium hover:underline"
+                                    href={`/clients/${client.id}`}
+                                  >
+                                    {client.name}
+                                  </Link>
+                                  <div className="mt-0.5 md:hidden">
+                                    <StatusBadge status={client.status} />
+                                  </div>
+                                  {client.background && (
+                                    <p className="mt-0.5 max-w-xs truncate text-xs text-muted-foreground">
+                                      {client.background}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="hidden px-3 py-4 md:table-cell">
+                              <StatusBadge status={client.status} />
+                            </td>
+
+                            <td className="hidden px-3 py-4 lg:table-cell">
+                              {modalities.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {modalities.slice(0, 2).map((m) => (
+                                    <Badge
+                                      className="px-1.5 py-0 text-[10px]"
+                                      key={m}
+                                      variant="outline"
+                                    >
+                                      {m}
+                                    </Badge>
+                                  ))}
+                                  {modalities.length > 2 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      +{modalities.length - 2}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="hidden px-3 py-4 sm:table-cell">
+                              <span className="text-sm text-muted-foreground">
+                                {chatCount}
+                              </span>
+                            </td>
+
+                            <td className="hidden px-3 py-4 xl:table-cell">
+                              {tags.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {tags.slice(0, 2).map((t) => (
+                                    <Badge
+                                      className="px-1.5 py-0 text-[10px]"
+                                      key={t}
+                                      variant="secondary"
+                                    >
+                                      {t}
+                                    </Badge>
+                                  ))}
+                                  {tags.length > 2 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      +{tags.length - 2}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-4 pr-4 pl-3 text-right whitespace-nowrap sm:pr-0">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  className="size-8"
+                                  onClick={() =>
+                                    router.push(
+                                      `/chat/new?clientId=${client.id}`
+                                    )
+                                  }
+                                  size="icon"
+                                  variant="ghost"
+                                >
+                                  <PlusIcon />
+                                  <span className="sr-only">
+                                    New chat for {client.name}
+                                  </span>
+                                </Button>
+                                <Button
+                                  className="size-8"
+                                  onClick={() => {
+                                    setEditingClient(client);
+                                    setShowClientDialog(true);
+                                  }}
+                                  size="icon"
+                                  variant="ghost"
+                                >
+                                  <PencilEditIcon />
+                                  <span className="sr-only">
+                                    Edit {client.name}
+                                  </span>
+                                </Button>
+                                <Button
+                                  className="size-8 text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteClient(client)}
+                                  size="icon"
+                                  variant="ghost"
+                                >
+                                  <TrashIcon />
+                                  <span className="sr-only">
+                                    Delete {client.name}
+                                  </span>
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              </div>
             </div>
-          ) : (
-            <>
-              {clients.length === 0 && (
-                <div className="rounded-lg border border-dashed p-8 text-center">
-                  <UserIcon />
-                  <h3 className="mt-2 font-medium">No clients yet</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Add your first client to start organizing your reflections.
-                  </p>
-                  <Button
-                    className="mt-4"
-                    onClick={() => {
-                      setEditingClient(null);
-                      setShowClientDialog(true);
-                    }}
-                    variant="outline"
-                  >
-                    <PlusIcon />
-                    <span>Add Client</span>
-                  </Button>
-                </div>
-              )}
-
-              {clients.length > 0 &&
-                filteredClients.length === 0 &&
-                hasActiveFilters && (
-                  <div className="rounded-lg border border-dashed p-8 text-center">
-                    <h3 className="font-medium">
-                      No clients match your search
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Try adjusting your search term or status filter.
-                    </p>
-                  </div>
-                )}
-
-              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {filteredClients.map((client) => (
-                  <ClientCard
-                    chatCount={getCountForClient(client.id)}
-                    client={client}
-                    key={client.id}
-                    onDelete={() => setDeleteClient(client)}
-                    onEdit={() => {
-                      setEditingClient(client);
-                      setShowClientDialog(true);
-                    }}
-                    onNewChat={() =>
-                      router.push(`/chat/new?clientId=${client.id}`)
-                    }
-                  />
-                ))}
-
-                {showGeneralSection && (
-                  <GeneralSection chatCount={getCountForClient(null)} />
-                )}
-              </div>
-            </>
           )}
-        </div>
-      </div>
+        </>
+      )}
 
       <FabNewChat />
 
@@ -478,6 +419,6 @@ export function ClientsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </ListPageShell>
   );
 }

@@ -228,15 +228,35 @@ function parseFrontmatter(
     );
   }
 
-  if (
-    data.modality !== undefined &&
-    data.modality !== null &&
-    !MODALITIES.includes(data.modality as Modality)
-  ) {
-    throw new Error(
-      `Invalid 'modality' in ${filePath}: "${data.modality}". ` +
-        `Must be one of: ${MODALITIES.join(", ")}, or null.`
-    );
+  // ── Modality: normalise to array or null ──────────────────────────────
+  let parsedModality: Modality[] | null = null;
+
+  if (data.modality !== undefined && data.modality !== null) {
+    // Accept: single string, comma-separated string, or YAML array
+    const raw = data.modality;
+    let values: string[];
+
+    if (Array.isArray(raw)) {
+      values = raw.map((v: unknown) => String(v).trim());
+    } else if (typeof raw === "string") {
+      values = raw.split(",").map((v) => v.trim()).filter(Boolean);
+    } else {
+      throw new Error(
+        `Invalid 'modality' type in ${filePath}: expected string, array, or null, got ${typeof raw}`
+      );
+    }
+
+    // Validate each value against the enum
+    for (const value of values) {
+      if (!MODALITIES.includes(value as Modality)) {
+        throw new Error(
+          `Invalid modality value "${value}" in ${filePath}. ` +
+          `Must be one of: ${MODALITIES.join(", ")}, or null.`
+        );
+      }
+    }
+
+    parsedModality = values.length > 0 ? (values as Modality[]) : null;
   }
 
   // ── Tags validation (warn on unrecognised keys, don't fail) ───────────
@@ -269,7 +289,7 @@ function parseFrontmatter(
     title: data.title,
     category: data.category as DocumentCategory,
     jurisdiction: (data.jurisdiction as Jurisdiction) ?? null,
-    modality: (data.modality as Modality) ?? null,
+    modality: parsedModality,
     source: data.source,
     version: data.version ?? undefined,
     source_url: data.source_url ?? undefined,
@@ -731,7 +751,7 @@ async function processFile(
   console.log(`  Title:        ${frontmatter.title}`);
   console.log(`  Category:     ${frontmatter.category}`);
   console.log(`  Jurisdiction: ${frontmatter.jurisdiction ?? "none"}`);
-  console.log(`  Modality:     ${frontmatter.modality ?? "none"}`);
+  console.log(`  Modality:     ${frontmatter.modality?.join(", ") ?? "none"}`);
   console.log(`  Content:      ${content.length} chars`);
 
   // Step 1: Chunk the document

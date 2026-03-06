@@ -239,7 +239,8 @@ export interface HybridSearchResult {
   content: string;
   documentId: string;
   sectionPath: string | null;
-  modality: string | null;
+  documentTitle: string;
+  modality: string[] | null;
   jurisdiction: string | null;
   documentType: DocumentCategory;
   metadata: Record<string, unknown>;
@@ -362,6 +363,16 @@ export const SESSION_TRANSCRIPTION_STATUSES = [
 export type TranscriptionStatus =
   (typeof SESSION_TRANSCRIPTION_STATUSES)[number];
 
+export const TRANSCRIPTION_STATUS_LABELS: Record<TranscriptionStatus, string> =
+  {
+    pending: "Pending",
+    uploading: "Uploading",
+    transcribing: "Transcribing",
+    labelling: "Labelling",
+    completed: "Completed",
+    failed: "Failed",
+  };
+
 export const NOTE_FORMATS = ["soap", "dap", "progress", "freeform"] as const;
 export type NoteFormat = (typeof NOTE_FORMATS)[number];
 
@@ -398,6 +409,10 @@ export interface TherapySession {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TherapySessionWithClient extends TherapySession {
+  clientName: string | null;
 }
 
 export interface SessionSegment {

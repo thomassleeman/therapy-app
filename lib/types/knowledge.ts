@@ -12,7 +12,13 @@ export const DOCUMENT_CATEGORIES = [
 
 export const JURISDICTIONS = ["UK", "EU"] as const;
 
-export const MODALITIES = ["cbt", "person_centred", "psychodynamic"] as const;
+export const MODALITIES = [
+  "cbt",
+  "person_centred",
+  "psychodynamic",
+  "mct",
+  "act",
+] as const;
 
 export const THERAPY_STAGES = [
   "assessment",
@@ -47,8 +53,8 @@ export interface DocumentFrontmatter {
   category: DocumentCategory;
   /** Legal jurisdiction. Required for legislation/guidelines, null for therapeutic content. */
   jurisdiction: Jurisdiction | null;
-  /** Therapeutic modality. Required for therapeutic_content, null for cross-modality docs. */
-  modality: Modality | null;
+  /** Therapeutic modality/modalities. Required for therapeutic_content, null for cross-modality docs. */
+  modality: Modality[] | null;
   /** Provenance — who authored or where it came from. */
   source: string;
   /** Semantic version string for tracking document revisions. */

@@ -17,8 +17,8 @@ Built on the Vercel Next.js AI Chatbot template, modified to use Supabase (repla
 | Styling | Tailwind CSS 4, shadcn/ui |
 | Auth | Supabase Auth (via `@supabase/ssr`) |
 | Database | Supabase (PostgreSQL) |
-| AI | Vercel AI SDK v6 (`ai`, `@ai-sdk/react`, `@ai-sdk/gateway`) |
-| LLM Models | Currently xAI via AI Gateway; swap target is OpenAI / Anthropic |
+| AI | Vercel AI SDK v6 (`ai`, `@ai-sdk/react`, `@ai-sdk/anthropic`) |
+| LLM Models | Anthropic Claude via `@ai-sdk/anthropic` (direct, GDPR-compliant) |
 | Linting | Biome (via `ultracite`) |
 | Package Manager | pnpm |
 | Testing | Playwright (E2E) |
@@ -98,10 +98,12 @@ No `.env` or `.env.example` is committed. Create `.env.local` with:
 NEXT_PUBLIC_SUPABASE_URL=<supabase project url>
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=<supabase anon key>
 SUPABASE_SERVICE_ROLE_KEY=<supabase service role key>
-AI_GATEWAY_API_KEY=<vercel AI gateway key>
+ANTHROPIC_API_KEY=<anthropic API key>
+AI_GATEWAY_API_KEY=<vercel AI gateway key — only needed for ingestion enrichment script>
+OPENAI_API_KEY=<openai key — used for embeddings in ingestion script>
 ```
 
-> For non-Vercel local dev, `AI_GATEWAY_API_KEY` is required. On Vercel, the AI Gateway is automatically wired.
+> `ANTHROPIC_API_KEY` is read automatically by `@ai-sdk/anthropic`. `AI_GATEWAY_API_KEY` is only needed for the offline knowledge base enrichment script (`scripts/lib/contextual-enrichment.ts`).
 
 ---
 
@@ -128,8 +130,8 @@ To add a table: write a new migration in `supabase/migrations/`, run `pnpm db:pu
 
 ### Current Setup
 - **AI SDK v6** drives all LLM interaction (`generateText`, `streamText`, `useChat`)
-- **AI Gateway** (`@ai-sdk/gateway`) routes requests — currently configured for xAI (grok models)
-- Models are registered in `lib/ai/models.ts`; swap providers in `lib/ai/providers.ts`
+- **Anthropic Claude API** via `@ai-sdk/anthropic` — direct provider connection for GDPR compliance (EU data residency)
+- Models are registered in `lib/ai/models.ts`; provider configuration in `lib/ai/providers.ts`
 - System prompts and title generation prompts are in `lib/ai/prompts.ts`
 
 ### RAG (Not Yet Implemented)
@@ -177,7 +179,7 @@ When adding any storage, logging, or caching: default to the most privacy-restri
 ### Done
 - Next.js + Supabase auth skeleton (sign-in, sign-up, password reset)
 - Chat UI with streaming responses, artifacts, document editing, suggestions, votes
-- AI SDK v6 integration with AI Gateway (xAI models)
+- AI SDK v6 integration with Anthropic Claude (direct provider)
 - Basic DB schema (chats, messages, documents, suggestions)
 - Middleware-based route protection
 - Playwright test infrastructure

@@ -44,7 +44,7 @@ interface HybridSearchResult {
   document_id: string;
   document_title: string;
   section_path: string | null;
-  modality: string | null;
+  modality: string[] | null;
   jurisdiction: string | null;
   document_type: string;
   metadata: Record<string, unknown>;

@@ -880,7 +880,7 @@ export function SessionDetailClient({
             : `/chat/new?clientId=${session.clientId ?? "general"}`
         }
       >
-        <span>💬 Chat About This Session</span>
+        <span>Chat About This Session</span>
         <ArrowRight className="size-4" />
       </Link>
 

@@ -27,6 +27,7 @@ import type {
   TherapistProfileInsert,
   TherapySession,
   TherapySessionInsert,
+  TherapySessionWithClient,
   Vote,
 } from "./types";
 
@@ -49,6 +50,7 @@ export type {
   TherapistProfileInsert,
   TherapySession,
   TherapySessionInsert,
+  TherapySessionWithClient,
   Vote,
 } from "./types";
 
@@ -1486,6 +1488,15 @@ function mapRowToTherapySession(row: any): TherapySession {
   };
 }
 
+function mapRowToTherapySessionWithClient(
+  row: any
+): TherapySessionWithClient {
+  return {
+    ...mapRowToTherapySession(row),
+    clientName: row.clients?.name ?? null,
+  };
+}
+
 function mapRowToSessionSegment(row: any): SessionSegment {
   return {
     id: row.id,
@@ -1608,12 +1619,12 @@ export async function getTherapySessions({
   clientId?: string;
   limit?: number;
   offset?: number;
-}): Promise<TherapySession[]> {
+}): Promise<TherapySessionWithClient[]> {
   try {
     const supabase = await createClient();
     let query = supabase
       .from("therapy_sessions")
-      .select("*")
+      .select("*, clients(name)")
       .eq("therapist_id", therapistId)
       .order("session_date", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -1628,7 +1639,7 @@ export async function getTherapySessions({
       handleSupabaseError(error, "get therapy sessions");
     }
 
-    return (data || []).map(mapRowToTherapySession);
+    return (data || []).map(mapRowToTherapySessionWithClient);
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
