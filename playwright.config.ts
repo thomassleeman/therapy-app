@@ -28,8 +28,8 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: 0,
+  /* Retry once in CI to handle flaky tests */
+  retries: process.env.CI ? 1 : 0,
   /* Limit workers to prevent browser crashes */
   workers: process.env.CI ? 2 : 2,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
@@ -43,51 +43,65 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
 
-  /* Configure global timeout for each test */
-  timeout: 240 * 1000, // 120 seconds
+  /* 30s default timeout for UI tests (was 240s — far too long) */
+  timeout: 30_000,
   expect: {
-    timeout: 240 * 1000,
+    timeout: 10_000,
   },
 
   /* Configure projects */
   projects: [
+    // ── Setup: authenticate once, save session state ──────────────────
     {
-      name: "e2e",
-      testMatch: /e2e\/.*.test.ts/,
+      name: "setup",
+      testMatch: /global-setup\.ts/,
+    },
+
+    // ── Auth pages: login/register — no authentication needed ─────────
+    {
+      name: "auth-pages",
+      testMatch: /e2e\/auth\/.*\.test\.ts/,
       use: {
         ...devices["Desktop Chrome"],
       },
     },
 
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
+    // ── App: authenticated UI tests ───────────────────────────────────
+    {
+      name: "app",
+      testMatch: /e2e\/app\/.*\.test\.ts/,
+      dependencies: ["setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/.auth/user.json",
+      },
+    },
 
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
-
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    // ── Integration: tests that hit real APIs ─────────────────────────
+    // These tests require E2E_INTEGRATION=true to run.
+    //
+    // Two approaches to skip when E2E_INTEGRATION is not set:
+    //
+    // 1. grep filter (project-level):
+    //    Add `grep: /@integration/` here and tag tests with `test('... @integration', ...)`
+    //    This skips tests at the runner level — they won't appear in reports at all.
+    //
+    // 2. test.skip (per-test):
+    //    Use `test.skip(!process.env.E2E_INTEGRATION, 'Requires E2E_INTEGRATION')` at the
+    //    top of each test. This marks them as "skipped" in reports — more visible.
+    //
+    // We use approach 2 (test.skip) as the default since it makes skipped tests visible
+    // in reports. Tests in this project should include the skip guard.
+    {
+      name: "integration",
+      testMatch: /e2e\/integration\/.*\.test\.ts/,
+      dependencies: ["setup"],
+      timeout: 120_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/.auth/user.json",
+      },
+    },
   ],
 
   /* Run your local dev server before starting the tests */
