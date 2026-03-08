@@ -5,7 +5,11 @@ import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { auth } from "@/lib/auth";
-import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
+import {
+  getChatById,
+  getMessagesByChatId,
+  getTherapySession,
+} from "@/lib/db/queries";
 import { convertToUIMessages } from "@/lib/utils";
 
 export default function Page(props: { params: Promise<{ id: string }> }) {
@@ -38,39 +42,28 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     return notFound();
   }
 
-  const messagesFromDb = await getMessagesByChatId({
-    id,
-  });
+  const [messagesFromDb, cookieStore, therapySession] = await Promise.all([
+    getMessagesByChatId({ id }),
+    cookies(),
+    chat.sessionId
+      ? getTherapySession({ id: chat.sessionId })
+      : Promise.resolve(null),
+  ]);
 
   const uiMessages = convertToUIMessages(messagesFromDb);
-
-  const cookieStore = await cookies();
   const chatModelFromCookie = cookieStore.get("chat-model");
-
-  if (!chatModelFromCookie) {
-    return (
-      <>
-        <Chat
-          autoResume={true}
-          id={chat.id}
-          initialChatModel={DEFAULT_CHAT_MODEL}
-          initialClientId={chat.clientId}
-          initialMessages={uiMessages}
-          isReadonly={session?.user?.id !== chat.userId}
-        />
-        <DataStreamHandler />
-      </>
-    );
-  }
+  const chatModel = chatModelFromCookie?.value ?? DEFAULT_CHAT_MODEL;
 
   return (
     <>
       <Chat
         autoResume={true}
         id={chat.id}
-        initialChatModel={chatModelFromCookie.value}
+        initialChatModel={chatModel}
         initialClientId={chat.clientId}
         initialMessages={uiMessages}
+        initialSessionDate={therapySession?.sessionDate ?? null}
+        initialSessionId={chat.sessionId}
         isReadonly={session?.user?.id !== chat.userId}
       />
       <DataStreamHandler />

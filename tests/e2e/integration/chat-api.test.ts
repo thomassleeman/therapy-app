@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.skip(
   !process.env.E2E_INTEGRATION,
-  "Skipped: set E2E_INTEGRATION=true to run",
+  "Skipped: set E2E_INTEGRATION=true to run"
 );
 
 const UUID_REGEX =
@@ -50,7 +50,7 @@ test.describe("Chat API Integration", () => {
     const input = page.getByTestId("multimodal-input");
     await expect(input).toBeVisible();
     await input.fill(
-      "Please provide a detailed reflection on how cognitive behavioural therapy techniques can be applied in a group setting with adolescents",
+      "Please provide a detailed reflection on how cognitive behavioural therapy techniques can be applied in a group setting with adolescents"
     );
     await page.getByTestId("send-button").click();
 
@@ -59,13 +59,11 @@ test.describe("Chat API Integration", () => {
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
 
     // Capture initial length
-    const initialLength =
-      (await assistantMessage.textContent())?.length ?? 0;
+    const initialLength = (await assistantMessage.textContent())?.length ?? 0;
 
     // Wait briefly and check the text has grown (streaming)
     await page.waitForTimeout(2000);
-    const laterLength =
-      (await assistantMessage.textContent())?.length ?? 0;
+    const laterLength = (await assistantMessage.textContent())?.length ?? 0;
 
     expect(laterLength).toBeGreaterThan(initialLength);
   });
@@ -76,7 +74,7 @@ test.describe("Chat API Integration", () => {
     const input = page.getByTestId("multimodal-input");
     await expect(input).toBeVisible();
     await input.fill(
-      "Write a very long and detailed essay about every major therapeutic framework, including CBT, DBT, psychodynamic therapy, person-centred therapy, and existential therapy. Cover history, key concepts, techniques, and evidence base for each.",
+      "Write a very long and detailed essay about every major therapeutic framework, including CBT, DBT, psychodynamic therapy, person-centred therapy, and existential therapy. Cover history, key concepts, techniques, and evidence base for each."
     );
     await page.getByTestId("send-button").click();
 
@@ -95,13 +93,11 @@ test.describe("Chat API Integration", () => {
 
     // Record the length after stopping
     const assistantMessage = page.locator("[data-role='assistant']").first();
-    const stoppedLength =
-      (await assistantMessage.textContent())?.length ?? 0;
+    const stoppedLength = (await assistantMessage.textContent())?.length ?? 0;
 
     // Wait and verify the text hasn't grown
     await page.waitForTimeout(3000);
-    const laterLength =
-      (await assistantMessage.textContent())?.length ?? 0;
+    const laterLength = (await assistantMessage.textContent())?.length ?? 0;
 
     expect(laterLength).toBe(stoppedLength);
   });

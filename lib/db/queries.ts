@@ -10,6 +10,7 @@ import type {
   ClientTag,
   ClinicalNote,
   ClinicalNoteInsert,
+  ClinicalNoteWithSession,
   ConsentingParty,
   ConsentType,
   DBMessage,
@@ -17,18 +18,18 @@ import type {
   HybridSearchResult,
   NoteContent,
   NoteStatus,
+  RecentSession,
   RecordingType,
   SessionConsent,
   SessionConsentInsert,
   SessionSegment,
   SessionSegmentInsert,
-  Suggestion,
+  SidebarSession,
   TherapistProfile,
   TherapistProfileInsert,
   TherapySession,
   TherapySessionInsert,
   TherapySessionWithClient,
-  Vote,
 } from "./types";
 
 // Re-export types for backward compatibility
@@ -38,13 +39,16 @@ export type {
   ClientTag,
   ClinicalNote,
   ClinicalNoteInsert,
+  ClinicalNoteWithSession,
   DBMessage,
   Document,
   HybridSearchResult,
+  RecentSession,
   SessionConsent,
   SessionConsentInsert,
   SessionSegment,
   SessionSegmentInsert,
+  SidebarSession,
   Suggestion,
   TherapistProfile,
   TherapistProfileInsert,
@@ -126,12 +130,14 @@ export async function saveChat({
   title,
   visibility,
   clientId,
+  sessionId,
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: "private" | "public";
   clientId?: string | null;
+  sessionId?: string | null;
 }) {
   try {
     const supabase = await createClient();
@@ -144,6 +150,7 @@ export async function saveChat({
         title,
         visibility,
         clientId: clientId ?? null,
+        sessionId: sessionId ?? null,
       })
       .select()
       .single();
@@ -399,66 +406,6 @@ export async function getMessagesByChatId({ id }: { id: string }) {
   }
 }
 
-export async function voteMessage({
-  chatId,
-  messageId,
-  type,
-}: {
-  chatId: string;
-  messageId: string;
-  type: "up" | "down";
-}) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("Vote_v2")
-      .upsert(
-        {
-          chatId,
-          messageId,
-          isUpvoted: type === "up",
-        },
-        {
-          onConflict: "chatId,messageId",
-        }
-      )
-      .select();
-
-    if (error) {
-      handleSupabaseError(error, "vote message");
-    }
-    return data;
-  } catch (error) {
-    if (error instanceof ChatSDKError) {
-      throw error;
-    }
-    throw new ChatSDKError("bad_request:database", "Failed to vote message");
-  }
-}
-
-export async function getVotesByChatId({ id }: { id: string }) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("Vote_v2")
-      .select("*")
-      .eq("chatId", id);
-
-    if (error) {
-      handleSupabaseError(error, "get votes by chat id");
-    }
-    return data as Vote[];
-  } catch (error) {
-    if (error instanceof ChatSDKError) {
-      throw error;
-    }
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to get votes by chat id"
-    );
-  }
-}
-
 export async function saveDocument({
   id,
   title,
@@ -587,72 +534,6 @@ export async function deleteDocumentsByIdAfterTimestamp({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to delete documents by id after timestamp"
-    );
-  }
-}
-
-export async function saveSuggestions({
-  suggestions,
-}: {
-  suggestions: Suggestion[];
-}) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("Suggestion")
-      .insert(
-        suggestions.map((s) => ({
-          id: s.id,
-          documentId: s.documentId,
-          documentCreatedAt: s.documentCreatedAt,
-          originalText: s.originalText,
-          suggestedText: s.suggestedText,
-          description: s.description,
-          isResolved: s.isResolved,
-          userId: s.userId,
-          createdAt: s.createdAt,
-        }))
-      )
-      .select();
-
-    if (error) {
-      handleSupabaseError(error, "save suggestions");
-    }
-    return data;
-  } catch (error) {
-    if (error instanceof ChatSDKError) {
-      throw error;
-    }
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to save suggestions"
-    );
-  }
-}
-
-export async function getSuggestionsByDocumentId({
-  documentId,
-}: {
-  documentId: string;
-}) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("Suggestion")
-      .select("*")
-      .eq("documentId", documentId);
-
-    if (error) {
-      handleSupabaseError(error, "get suggestions by document id");
-    }
-    return data as Suggestion[];
-  } catch (error) {
-    if (error instanceof ChatSDKError) {
-      throw error;
-    }
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to get suggestions by document id"
     );
   }
 }
@@ -1395,6 +1276,7 @@ export async function hybridSearch({
       content: row.content,
       documentId: row.document_id,
       sectionPath: row.section_path,
+      documentTitle: row.document_title,
       modality: row.modality,
       jurisdiction: row.jurisdiction,
       documentType: row.document_type,
@@ -1488,9 +1370,7 @@ function mapRowToTherapySession(row: any): TherapySession {
   };
 }
 
-function mapRowToTherapySessionWithClient(
-  row: any
-): TherapySessionWithClient {
+function mapRowToTherapySessionWithClient(row: any): TherapySessionWithClient {
   return {
     ...mapRowToTherapySession(row),
     clientName: row.clients?.name ?? null,
@@ -1514,7 +1394,8 @@ function mapRowToSessionSegment(row: any): SessionSegment {
 function mapRowToClinicalNote(row: any): ClinicalNote {
   return {
     id: row.id,
-    sessionId: row.session_id,
+    sessionId: row.session_id ?? null,
+    clientId: row.client_id ?? null,
     therapistId: row.therapist_id,
     noteFormat: row.note_format,
     content: row.content,
@@ -1838,7 +1719,8 @@ export async function createClinicalNote(
     const { data, error } = await supabase
       .from("clinical_notes")
       .insert({
-        session_id: note.sessionId,
+        session_id: note.sessionId ?? null,
+        client_id: note.clientId ?? null,
         therapist_id: note.therapistId,
         note_format: note.noteFormat,
         content: note.content,
@@ -2089,6 +1971,269 @@ export async function withdrawConsent({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to withdraw consent"
+    );
+  }
+}
+
+// ============================================================
+// Dashboard, clients list, and sidebar queries
+// ============================================================
+
+export async function getRecentSessions({
+  therapistId,
+  limit = 5,
+}: {
+  therapistId: string;
+  limit?: number;
+}): Promise<RecentSession[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("therapy_sessions")
+      .select(
+        "id, client_id, session_date, duration_minutes, transcription_status, notes_status, clients(name)"
+      )
+      .eq("therapist_id", therapistId)
+      .order("session_date", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      handleSupabaseError(error, "get recent sessions");
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      clientId: row.client_id ?? null,
+      clientName: row.clients?.name ?? null,
+      sessionDate: row.session_date,
+      durationMinutes: row.duration_minutes ?? null,
+      transcriptionStatus: row.transcription_status,
+      notesStatus: row.notes_status,
+    }));
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get recent sessions"
+    );
+  }
+}
+
+export async function getSessionCountsByClient({
+  therapistId,
+}: {
+  therapistId: string;
+}): Promise<Record<string, number>> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("therapy_sessions")
+      .select("client_id")
+      .eq("therapist_id", therapistId)
+      .not("client_id", "is", null);
+
+    if (error) {
+      handleSupabaseError(error, "get session counts by client");
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of data || []) {
+      const cid = row.client_id as string;
+      counts[cid] = (counts[cid] || 0) + 1;
+    }
+    return counts;
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get session counts by client"
+    );
+  }
+}
+
+export async function getLastActivityByClient({
+  therapistId,
+}: {
+  therapistId: string;
+}): Promise<Record<string, Date>> {
+  try {
+    const supabase = await createClient();
+
+    // Get most recent session date per client
+    const { data: sessionData, error: sessionError } = await supabase
+      .from("therapy_sessions")
+      .select("client_id, session_date")
+      .eq("therapist_id", therapistId)
+      .not("client_id", "is", null);
+
+    if (sessionError) {
+      handleSupabaseError(sessionError, "get last activity (sessions)");
+    }
+
+    // Get most recent chat date per client
+    const { data: chatData, error: chatError } = await supabase
+      .from("Chat")
+      .select("clientId, createdAt")
+      .eq("userId", therapistId)
+      .not("clientId", "is", null);
+
+    if (chatError) {
+      handleSupabaseError(chatError, "get last activity (chats)");
+    }
+
+    const latest: Record<string, Date> = {};
+
+    for (const row of sessionData || []) {
+      const cid = row.client_id as string;
+      const d = new Date(row.session_date);
+      if (!latest[cid] || d > latest[cid]) {
+        latest[cid] = d;
+      }
+    }
+
+    for (const row of chatData || []) {
+      const cid = row.clientId as string;
+      const d = new Date(row.createdAt);
+      if (!latest[cid] || d > latest[cid]) {
+        latest[cid] = d;
+      }
+    }
+
+    return latest;
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get last activity by client"
+    );
+  }
+}
+
+export async function getClinicalNotesByClient({
+  clientId,
+  therapistId,
+}: {
+  clientId: string;
+  therapistId: string;
+}): Promise<ClinicalNoteWithSession[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .select(
+        "id, session_id, note_format, status, content, created_at, updated_at, therapy_sessions(session_date)"
+      )
+      .eq("therapist_id", therapistId)
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      handleSupabaseError(error, "get clinical notes by client");
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      sessionId: row.session_id ?? null,
+      sessionDate: row.therapy_sessions?.session_date ?? null,
+      noteFormat: row.note_format,
+      status: row.status,
+      content: row.content,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get clinical notes by client"
+    );
+  }
+}
+
+export async function createStandaloneClinicalNote({
+  clientId,
+  therapistId,
+  noteFormat,
+  content,
+}: {
+  clientId: string;
+  therapistId: string;
+  noteFormat: ClinicalNote["noteFormat"];
+  content: ClinicalNote["content"];
+}): Promise<ClinicalNote> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .insert({
+        session_id: null,
+        client_id: clientId,
+        therapist_id: therapistId,
+        note_format: noteFormat,
+        content,
+        generated_by: "manual",
+        status: "draft",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "create standalone clinical note");
+    }
+
+    return mapRowToClinicalNote(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create standalone clinical note"
+    );
+  }
+}
+
+export async function getRecentSessionsForSidebar({
+  therapistId,
+  limit = 5,
+}: {
+  therapistId: string;
+  limit?: number;
+}): Promise<SidebarSession[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("therapy_sessions")
+      .select("id, client_id, session_date, clients(name)")
+      .eq("therapist_id", therapistId)
+      .order("session_date", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      handleSupabaseError(error, "get recent sessions for sidebar");
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      clientId: row.client_id ?? null,
+      clientName: row.clients?.name ?? null,
+      sessionDate: row.session_date,
+    }));
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get recent sessions for sidebar"
     );
   }
 }

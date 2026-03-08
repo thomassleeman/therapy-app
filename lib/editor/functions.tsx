@@ -9,7 +9,7 @@ import type { Node } from "prosemirror-model";
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 
 import { documentSchema } from "./config";
-import { createSuggestionWidget, type UISuggestion } from "./suggestions";
+import type { UISuggestion } from "./suggestions";
 
 // Lazy-initialized markdown parser to avoid circular dependency issues
 // (config.ts imports from functions.tsx, and functions.tsx imports from config.ts)
@@ -101,20 +101,6 @@ export const createDecorations = (
         {
           suggestionId: suggestion.id,
           type: "highlight",
-        }
-      )
-    );
-
-    decorations.push(
-      Decoration.widget(
-        suggestion.selectionStart,
-        (currentView) => {
-          const { dom } = createSuggestionWidget(suggestion, currentView);
-          return dom;
-        },
-        {
-          suggestionId: suggestion.id,
-          type: "widget",
         }
       )
     );

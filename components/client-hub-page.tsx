@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { createStandaloneNoteAction } from "@/app/(app)/clients/actions";
 import { ClientDialog } from "@/components/client-dialog";
 import { FabNewChat } from "@/components/fab-new-chat";
 import { PencilEditIcon } from "@/components/icons";
@@ -14,21 +15,38 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import type {
   AgeBracket,
   Chat,
   Client,
   ClientStatus,
+  ClinicalNoteWithSession,
+  DapNoteContent,
   DeliveryMethod,
+  FreeformNoteContent,
+  NoteContent,
+  NoteFormat,
+  NoteStatus,
   SessionFrequency,
+  SoapNoteContent,
   TherapySession,
 } from "@/lib/db/types";
 import {
   AGE_BRACKET_LABELS,
   CLIENT_STATUS_LABELS,
   DELIVERY_METHOD_LABELS,
+  NOTE_FORMATS,
   SESSION_FREQUENCY_LABELS,
 } from "@/lib/db/types";
 import { formatDate } from "@/lib/utils";
@@ -80,10 +98,16 @@ const TRANSCRIPTION_STATUS_LABELS: Record<string, string> = {
 interface ClientHubPageProps {
   client: Client;
   chats: Chat[];
+  clinicalNotes: ClinicalNoteWithSession[];
   sessions: TherapySession[];
 }
 
-export function ClientHubPage({ client, chats, sessions }: ClientHubPageProps) {
+export function ClientHubPage({
+  client,
+  chats,
+  clinicalNotes,
+  sessions,
+}: ClientHubPageProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   return (
@@ -115,7 +139,7 @@ export function ClientHubPage({ client, chats, sessions }: ClientHubPageProps) {
             <Link href={`/chat/new?clientId=${client.id}`}>
               <Button size="sm">New Chat</Button>
             </Link>
-            <Link href="/sessions/new">
+            <Link href={`/sessions/new?clientId=${client.id}`}>
               <Button size="sm" variant="outline">
                 New Session
               </Button>
@@ -131,6 +155,12 @@ export function ClientHubPage({ client, chats, sessions }: ClientHubPageProps) {
             ))}
           </div>
         )}
+        <SummaryStatsLine
+          chatsCount={chats.length}
+          clinicalNotesCount={clinicalNotes.length}
+          sessionsCount={sessions.length}
+          therapyStartDate={client.therapyStartDate}
+        />
       </header>
 
       {/* Tabs */}
@@ -138,13 +168,17 @@ export function ClientHubPage({ client, chats, sessions }: ClientHubPageProps) {
         <Tabs defaultValue="overview">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="chats">
-              Chats{chats.length > 0 && ` (${chats.length})`}
-            </TabsTrigger>
             <TabsTrigger value="sessions">
               Sessions{sessions.length > 0 && ` (${sessions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="clinical-notes">
+              Clinical Notes
+              {clinicalNotes.length > 0 && ` (${clinicalNotes.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="chats">
+              Chats{chats.length > 0 && ` (${chats.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="supervision">Supervision</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -153,21 +187,32 @@ export function ClientHubPage({ client, chats, sessions }: ClientHubPageProps) {
               <DetailsCard client={client} />
               <PracticeCard client={client} />
             </div>
-          </TabsContent>
-
-          {/* Chats Tab */}
-          <TabsContent className="mt-4" value="chats">
-            <ChatsTab chats={chats} clientId={client.id} />
+            <OverviewStatsCards
+              chatsCount={chats.length}
+              clinicalNotesCount={clinicalNotes.length}
+              sessionsCount={sessions.length}
+              therapyStartDate={client.therapyStartDate}
+            />
           </TabsContent>
 
           {/* Sessions Tab */}
           <TabsContent className="mt-4" value="sessions">
-            <SessionsTab sessions={sessions} />
+            <SessionsTab clientId={client.id} sessions={sessions} />
           </TabsContent>
 
-          {/* Notes Tab */}
-          <TabsContent className="mt-4" value="notes">
-            <NotesTab client={client} />
+          {/* Clinical Notes Tab */}
+          <TabsContent className="mt-4" value="clinical-notes">
+            <ClinicalNotesTab clientId={client.id} notes={clinicalNotes} />
+          </TabsContent>
+
+          {/* Chats Tab */}
+          <TabsContent className="mt-4" value="chats">
+            <ChatsTab chats={chats} clientId={client.id} sessions={sessions} />
+          </TabsContent>
+
+          {/* Supervision Tab */}
+          <TabsContent className="mt-4" value="supervision">
+            <SupervisionTab client={client} />
           </TabsContent>
         </Tabs>
       </div>
@@ -284,7 +329,23 @@ function PracticeCard({ client }: { client: Client }) {
   );
 }
 
-function ChatsTab({ chats, clientId }: { chats: Chat[]; clientId: string }) {
+function ChatsTab({
+  chats,
+  clientId,
+  sessions,
+}: {
+  chats: Chat[];
+  clientId: string;
+  sessions: TherapySession[];
+}) {
+  // Build a map from chatId → session date for session-linked chats
+  const chatSessionMap = new Map<string, string>();
+  for (const session of sessions) {
+    if (session.chatId) {
+      chatSessionMap.set(session.chatId, session.sessionDate);
+    }
+  }
+
   if (chats.length === 0) {
     return (
       <Card>
@@ -307,35 +368,51 @@ function ChatsTab({ chats, clientId }: { chats: Chat[]; clientId: string }) {
       </div>
       <Card>
         <CardContent className="p-0">
-          {chats.map((chat, i) => (
-            <div key={chat.id}>
-              {i > 0 && <Separator />}
-              <Link
-                className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors"
-                href={`/chat/${chat.id}`}
-              >
-                <span className="truncate text-sm font-medium">
-                  {chat.title}
-                </span>
-                <span className="ml-4 shrink-0 text-xs text-muted-foreground">
-                  {formatDate(chat.createdAt)}
-                </span>
-              </Link>
-            </div>
-          ))}
+          {chats.map((chat, i) => {
+            const linkedSessionDate = chatSessionMap.get(chat.id);
+            return (
+              <div key={chat.id}>
+                {i > 0 && <Separator />}
+                <Link
+                  className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors"
+                  href={`/chat/${chat.id}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="truncate text-sm font-medium">
+                      {chat.title}
+                    </span>
+                    {linkedSessionDate && (
+                      <Badge className="shrink-0 text-xs" variant="secondary">
+                        Session: {formatShortDate(linkedSessionDate)}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="ml-4 shrink-0 text-xs text-muted-foreground">
+                    {formatDate(chat.createdAt)}
+                  </span>
+                </Link>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function SessionsTab({ sessions }: { sessions: TherapySession[] }) {
+function SessionsTab({
+  sessions,
+  clientId,
+}: {
+  sessions: TherapySession[];
+  clientId: string;
+}) {
   if (sessions.length === 0) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center py-8">
           <CardDescription>No sessions recorded yet.</CardDescription>
-          <Link className="mt-4" href="/sessions/new">
+          <Link className="mt-4" href={`/sessions/new?clientId=${clientId}`}>
             <Button size="sm" variant="outline">
               New Session
             </Button>
@@ -348,7 +425,7 @@ function SessionsTab({ sessions }: { sessions: TherapySession[] }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <Link href="/sessions/new">
+        <Link href={`/sessions/new?clientId=${clientId}`}>
           <Button size="sm" variant="outline">
             New Session
           </Button>
@@ -361,7 +438,7 @@ function SessionsTab({ sessions }: { sessions: TherapySession[] }) {
               {i > 0 && <Separator />}
               <Link
                 className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors"
-                href={`/sessions/${session.id}`}
+                href={`/sessions/${session.id}?from=client`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-sm font-medium">
@@ -386,7 +463,7 @@ function SessionsTab({ sessions }: { sessions: TherapySession[] }) {
   );
 }
 
-function NotesTab({ client }: { client: Client }) {
+function SupervisionTab({ client }: { client: Client }) {
   const hasSupervisorNotes = Boolean(client.supervisorNotes);
   const hasTags = client.tags && client.tags.length > 0;
 
@@ -430,6 +507,487 @@ function NotesTab({ client }: { client: Client }) {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+// ── Clinical Notes Tab ───────────────────────────────────────────────
+
+const FORMAT_COLORS: Record<NoteFormat, string> = {
+  soap: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  dap: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  progress:
+    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  freeform:
+    "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+};
+
+const FORMAT_LABELS: Record<NoteFormat, string> = {
+  soap: "SOAP",
+  dap: "DAP",
+  progress: "Progress",
+  freeform: "Freeform",
+};
+
+const STATUS_BADGE_COLORS: Record<NoteStatus, string> = {
+  draft:
+    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  reviewed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  finalised:
+    "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+};
+
+function getNotePreview(note: ClinicalNoteWithSession): string {
+  const content = note.content;
+  let text = "";
+  if (note.noteFormat === "soap" && "subjective" in content) {
+    text = (content as SoapNoteContent).subjective;
+  } else if (note.noteFormat === "dap" && "data" in content) {
+    text = (content as DapNoteContent).data;
+  } else if ("body" in content) {
+    text = (content as FreeformNoteContent).body;
+  }
+  if (text.length > 100) {
+    return `${text.slice(0, 100)}…`;
+  }
+  return text || "No content";
+}
+
+type FilterFormat = "all" | NoteFormat;
+
+function ClinicalNotesTab({
+  notes,
+  clientId,
+}: {
+  notes: ClinicalNoteWithSession[];
+  clientId: string;
+}) {
+  const [filter, setFilter] = useState<FilterFormat>("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const filteredNotes =
+    filter === "all" ? notes : notes.filter((n) => n.noteFormat === filter);
+
+  const filterOptions: { value: FilterFormat; label: string }[] = [
+    { value: "all", label: "All" },
+    ...NOTE_FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] })),
+  ];
+
+  if (notes.length === 0 && !dialogOpen) {
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <NewNoteDialog
+            clientId={clientId}
+            onCreated={() => setDialogOpen(false)}
+            onOpenChange={setDialogOpen}
+            open={dialogOpen}
+          />
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center py-8">
+            <CardDescription className="text-center">
+              No clinical notes yet. Notes are generated from session
+              transcripts, or you can create standalone notes.
+            </CardDescription>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header row: filters + new note */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {filterOptions.map((opt) => (
+            <Button
+              className="h-7 px-2.5 text-xs"
+              key={opt.value}
+              onClick={() => setFilter(opt.value)}
+              size="sm"
+              variant={filter === opt.value ? "default" : "outline"}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+        <NewNoteDialog
+          clientId={clientId}
+          onCreated={() => setDialogOpen(false)}
+          onOpenChange={setDialogOpen}
+          open={dialogOpen}
+        />
+      </div>
+
+      {/* Notes list */}
+      {filteredNotes.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-8">
+            <CardDescription>
+              No {filter !== "all" ? FORMAT_LABELS[filter] : ""} notes found.
+            </CardDescription>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            {filteredNotes.map((note, i) => (
+              <div key={note.id}>
+                {i > 0 && <Separator />}
+                <NoteRow note={note} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function NoteRow({ note }: { note: ClinicalNoteWithSession }) {
+  const inner = (
+    <div className="flex flex-col gap-1.5 px-4 py-3 hover:bg-accent transition-colors">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-medium">
+            {formatShortDate(note.createdAt)}
+          </span>
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${FORMAT_COLORS[note.noteFormat]}`}
+          >
+            {FORMAT_LABELS[note.noteFormat]}
+          </span>
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_COLORS[note.status]}`}
+          >
+            {note.status}
+          </span>
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground truncate">
+        {getNotePreview(note)}
+      </p>
+      {note.sessionId ? (
+        <span className="text-xs text-muted-foreground">
+          From session:{" "}
+          <span className="underline">
+            {note.sessionDate
+              ? formatShortDate(note.sessionDate)
+              : "Unknown date"}
+          </span>
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">Standalone note</span>
+      )}
+    </div>
+  );
+
+  if (note.sessionId) {
+    return <Link href={`/sessions/${note.sessionId}`}>{inner}</Link>;
+  }
+
+  return inner;
+}
+
+function NewNoteDialog({
+  clientId,
+  onCreated,
+  open,
+  onOpenChange,
+}: {
+  clientId: string;
+  onCreated: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [format, setFormat] = useState<NoteFormat>("freeform");
+  const [saving, setSaving] = useState(false);
+
+  // Freeform fields
+  const [body, setBody] = useState("");
+
+  // SOAP fields
+  const [subjective, setSubjective] = useState("");
+  const [objective, setObjective] = useState("");
+  const [soapAssessment, setSoapAssessment] = useState("");
+  const [soapPlan, setSoapPlan] = useState("");
+
+  // DAP fields
+  const [dapData, setDapData] = useState("");
+  const [dapAssessment, setDapAssessment] = useState("");
+  const [dapPlan, setDapPlan] = useState("");
+
+  function resetForm() {
+    setBody("");
+    setSubjective("");
+    setObjective("");
+    setSoapAssessment("");
+    setSoapPlan("");
+    setDapData("");
+    setDapAssessment("");
+    setDapPlan("");
+  }
+
+  function buildContent(): NoteContent {
+    switch (format) {
+      case "soap":
+        return {
+          subjective,
+          objective,
+          assessment: soapAssessment,
+          plan: soapPlan,
+        };
+      case "dap":
+        return {
+          data: dapData,
+          assessment: dapAssessment,
+          plan: dapPlan,
+        };
+      case "progress":
+      case "freeform":
+        return { body };
+      default:
+        return { body };
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await createStandaloneNoteAction({
+        clientId,
+        noteFormat: format,
+        content: buildContent(),
+      });
+      resetForm();
+      onCreated();
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm">+ New Note</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>New Clinical Note</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Format selector */}
+          <div className="space-y-1.5">
+            <Label>Format</Label>
+            <div className="flex flex-wrap gap-1">
+              {NOTE_FORMATS.map((f) => (
+                <Button
+                  className="h-7 px-2.5 text-xs"
+                  key={f}
+                  onClick={() => setFormat(f)}
+                  size="sm"
+                  variant={format === f ? "default" : "outline"}
+                >
+                  {FORMAT_LABELS[f]}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Format-specific fields */}
+          {(format === "freeform" || format === "progress") && (
+            <div className="space-y-1.5">
+              <Label>Note</Label>
+              <Textarea
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Write your note..."
+                rows={6}
+                value={body}
+              />
+            </div>
+          )}
+
+          {format === "soap" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Subjective</Label>
+                <Textarea
+                  onChange={(e) => setSubjective(e.target.value)}
+                  placeholder="Client's reported experience..."
+                  rows={3}
+                  value={subjective}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Objective</Label>
+                <Textarea
+                  onChange={(e) => setObjective(e.target.value)}
+                  placeholder="Observable data and clinical observations..."
+                  rows={3}
+                  value={objective}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assessment</Label>
+                <Textarea
+                  onChange={(e) => setSoapAssessment(e.target.value)}
+                  placeholder="Clinical interpretation..."
+                  rows={3}
+                  value={soapAssessment}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Plan</Label>
+                <Textarea
+                  onChange={(e) => setSoapPlan(e.target.value)}
+                  placeholder="Next steps and treatment plan..."
+                  rows={3}
+                  value={soapPlan}
+                />
+              </div>
+            </>
+          )}
+
+          {format === "dap" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Data</Label>
+                <Textarea
+                  onChange={(e) => setDapData(e.target.value)}
+                  placeholder="Session data and observations..."
+                  rows={3}
+                  value={dapData}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assessment</Label>
+                <Textarea
+                  onChange={(e) => setDapAssessment(e.target.value)}
+                  placeholder="Clinical assessment..."
+                  rows={3}
+                  value={dapAssessment}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Plan</Label>
+                <Textarea
+                  onChange={(e) => setDapPlan(e.target.value)}
+                  placeholder="Next steps..."
+                  rows={3}
+                  value={dapPlan}
+                />
+              </div>
+            </>
+          )}
+
+          <Button className="w-full" disabled={saving} onClick={handleSave}>
+            {saving ? "Saving..." : "Save Note"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function formatShortDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getTimeInTherapy(startDate: string): string {
+  const start = new Date(startDate);
+  const now = new Date();
+  const months =
+    (now.getFullYear() - start.getFullYear()) * 12 +
+    (now.getMonth() - start.getMonth());
+  if (months < 1) {
+    return "Less than a month";
+  }
+  if (months === 1) {
+    return "1 month";
+  }
+  if (months < 12) {
+    return `${months} months`;
+  }
+  const years = Math.floor(months / 12);
+  const remaining = months % 12;
+  if (remaining === 0) {
+    return `${years} year${years > 1 ? "s" : ""}`;
+  }
+  return `${years} year${years > 1 ? "s" : ""}, ${remaining} month${remaining > 1 ? "s" : ""}`;
+}
+
+interface StatsProps {
+  therapyStartDate: string | null;
+  sessionsCount: number;
+  clinicalNotesCount: number;
+  chatsCount: number;
+}
+
+function SummaryStatsLine({
+  therapyStartDate,
+  sessionsCount,
+  clinicalNotesCount,
+  chatsCount,
+}: StatsProps) {
+  const parts: string[] = [];
+  if (therapyStartDate) {
+    parts.push(`In therapy since ${formatShortDate(therapyStartDate)}`);
+  }
+  parts.push(`${sessionsCount} session${sessionsCount !== 1 ? "s" : ""}`);
+  parts.push(
+    `${clinicalNotesCount} note${clinicalNotesCount !== 1 ? "s" : ""}`
+  );
+  parts.push(`${chatsCount} reflective chat${chatsCount !== 1 ? "s" : ""}`);
+
+  return (
+    <p className="mt-2 text-sm text-muted-foreground">
+      {parts.join(" \u00B7 ")}
+    </p>
+  );
+}
+
+function OverviewStatsCards({
+  therapyStartDate,
+  sessionsCount,
+  clinicalNotesCount,
+  chatsCount,
+}: StatsProps) {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <Card>
+        <CardContent className="pt-6 text-center">
+          <p className="text-3xl font-bold">{sessionsCount}</p>
+          <p className="text-sm text-muted-foreground">Total Sessions</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6 text-center">
+          <p className="text-3xl font-bold">{clinicalNotesCount}</p>
+          <p className="text-sm text-muted-foreground">Total Notes</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6 text-center">
+          <p className="text-3xl font-bold">{chatsCount}</p>
+          <p className="text-sm text-muted-foreground">Total Chats</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6 text-center">
+          <p className="text-base font-bold">
+            {therapyStartDate ? getTimeInTherapy(therapyStartDate) : "N/A"}
+          </p>
+          <p className="text-sm text-muted-foreground">Time in Therapy</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

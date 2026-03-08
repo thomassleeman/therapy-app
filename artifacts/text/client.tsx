@@ -1,42 +1,19 @@
 import { toast } from "sonner";
 import { Artifact } from "@/components/create-artifact";
-import { DiffView } from "@/components/diffview";
 import { DocumentSkeleton } from "@/components/document-skeleton";
 import {
   ClockRewind,
   CopyIcon,
-  MessageIcon,
   PenIcon,
   RedoIcon,
   UndoIcon,
 } from "@/components/icons";
 import { Editor } from "@/components/text-editor";
-import type { Suggestion } from "@/lib/db/types";
-import { getSuggestions } from "../actions";
 
-type TextArtifactMetadata = {
-  suggestions: Suggestion[];
-};
-
-export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
+export const textArtifact = new Artifact<"text">({
   kind: "text",
   description: "Useful for text content, like drafting essays and emails.",
-  initialize: async ({ documentId, setMetadata }) => {
-    const suggestions = await getSuggestions({ documentId });
-
-    setMetadata({
-      suggestions,
-    });
-  },
-  onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
-    if (streamPart.type === "data-suggestion") {
-      setMetadata((metadata) => {
-        return {
-          suggestions: [...metadata.suggestions, streamPart.data],
-        };
-      });
-    }
-
+  onStreamPart: ({ streamPart, setArtifact }) => {
     if (streamPart.type === "data-textDelta") {
       setArtifact((draftArtifact) => {
         return {
@@ -54,25 +31,15 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     }
   },
   content: ({
-    mode,
     status,
     content,
     isCurrentVersion,
     currentVersionIndex,
     onSaveContent,
-    getDocumentContentById,
     isLoading,
-    metadata,
   }) => {
     if (isLoading) {
       return <DocumentSkeleton />;
-    }
-
-    if (mode === "diff") {
-      const oldContent = getDocumentContentById(currentVersionIndex - 1);
-      const newContent = getDocumentContentById(currentVersionIndex);
-
-      return <DiffView newContent={newContent} oldContent={oldContent} />;
     }
 
     return (
@@ -83,12 +50,8 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
           isCurrentVersion={isCurrentVersion}
           onSaveContent={onSaveContent}
           status={status}
-          suggestions={metadata ? metadata.suggestions : []}
+          suggestions={[]}
         />
-
-        {metadata?.suggestions && metadata.suggestions.length > 0 ? (
-          <div className="h-dvh w-12 shrink-0 md:hidden" />
-        ) : null}
       </div>
     );
   },
@@ -155,21 +118,6 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
             {
               type: "text",
               text: "Please add final polish and check for grammar, add section titles for better structure, and ensure everything reads smoothly.",
-            },
-          ],
-        });
-      },
-    },
-    {
-      icon: <MessageIcon />,
-      description: "Request suggestions",
-      onClick: ({ sendMessage }) => {
-        sendMessage({
-          role: "user",
-          parts: [
-            {
-              type: "text",
-              text: "Please add suggestions you have that could improve the writing.",
             },
           ],
         });

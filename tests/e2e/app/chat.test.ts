@@ -99,9 +99,9 @@ test.describe("Chat Page", () => {
     await page.getByTestId("multimodal-input").fill("Test error");
     await page.getByTestId("send-button").click();
 
-    await expect(
-      page.getByText(/error|failed|trouble/i).first(),
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/error|failed|trouble/i).first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 });
 

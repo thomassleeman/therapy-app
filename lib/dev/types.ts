@@ -39,7 +39,7 @@ export interface RawSearchResultEntry {
   rrfScore: number;
   /** First 200 characters of chunk content. */
   contentPreview: string;
-  modality: string | null;
+  modality: string[] | null;
   jurisdiction: string | null;
 }
 
@@ -50,7 +50,7 @@ export interface FilteredResultEntry {
   similarityScore: number | null;
   /** First 200 characters of chunk content. */
   contentPreview: string;
-  modality: string | null;
+  modality: string[] | null;
   jurisdiction: string | null;
 }
 

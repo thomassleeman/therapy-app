@@ -12,7 +12,7 @@ async function mockSidebarApis(page: Page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ chats: [], hasMore: false }),
-    }),
+    })
   );
 
   await page.route("**/api/clients*", (route) =>
@@ -20,7 +20,7 @@ async function mockSidebarApis(page: Page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify([]),
-    }),
+    })
   );
 }
 
@@ -31,9 +31,13 @@ test.describe("Dashboard page", () => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(
-      page.getByText("Welcome back. Here's an overview of your recent activity."),
+      page.getByRole("heading", { name: "Dashboard" })
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Welcome back. Here's an overview of your recent activity."
+      )
     ).toBeVisible();
   });
 
@@ -41,8 +45,12 @@ test.describe("Dashboard page", () => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Recent Chats" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Recent Documents" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Recent Chats" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Recent Documents" })
+    ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Clients" })).toBeVisible();
   });
 
@@ -53,19 +61,27 @@ test.describe("Dashboard page", () => {
     await page.goto("/");
 
     // Recent Chats: either the empty message or at least one chat link
-    const chatsSection = page.locator("section").filter({ hasText: "Recent Chats" });
+    const chatsSection = page
+      .locator("section")
+      .filter({ hasText: "Recent Chats" });
     const hasChats = await chatsSection.locator("a[href^='/chat/']").count();
 
     if (hasChats > 0) {
-      await expect(chatsSection.locator("a[href^='/chat/']").first()).toBeVisible();
+      await expect(
+        chatsSection.locator("a[href^='/chat/']").first()
+      ).toBeVisible();
     } else {
       await expect(
-        chatsSection.getByText("No chats yet. Start a conversation to get going."),
+        chatsSection.getByText(
+          "No chats yet. Start a conversation to get going."
+        )
       ).toBeVisible();
     }
 
     // Recent Documents: either the empty message or at least one document entry
-    const docsSection = page.locator("section").filter({ hasText: "Recent Documents" });
+    const docsSection = page
+      .locator("section")
+      .filter({ hasText: "Recent Documents" });
     const hasDocs = await docsSection.locator(".truncate").count();
 
     if (hasDocs > 0) {
@@ -73,24 +89,28 @@ test.describe("Dashboard page", () => {
     } else {
       await expect(
         docsSection.getByText(
-          "No documents yet. Documents created during chats will appear here.",
-        ),
+          "No documents yet. Documents created during chats will appear here."
+        )
       ).toBeVisible();
     }
 
     // Clients: either the empty message or at least one client card
-    const clientsSection = page.locator("section").filter({ hasText: /^Clients/ });
-    const hasClients = await clientsSection.locator("a[href^='/chat/new?clientId=']").count();
+    const clientsSection = page
+      .locator("section")
+      .filter({ hasText: /^Clients/ });
+    const hasClients = await clientsSection
+      .locator("a[href^='/chat/new?clientId=']")
+      .count();
 
     if (hasClients > 0) {
       await expect(
-        clientsSection.locator("a[href^='/chat/new?clientId=']").first(),
+        clientsSection.locator("a[href^='/chat/new?clientId=']").first()
       ).toBeVisible();
     } else {
       await expect(
         clientsSection.getByText(
-          "No clients yet. Add a client to start organizing your reflections.",
-        ),
+          "No clients yet. Add a client to start organizing your reflections."
+        )
       ).toBeVisible();
     }
   });
@@ -101,18 +121,24 @@ test.describe("Dashboard page", () => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    const startChatLink = page.getByRole("link", { name: "Start General Chat" });
+    const startChatLink = page.getByRole("link", {
+      name: "Start General Chat",
+    });
     await expect(startChatLink).toBeVisible();
     await startChatLink.click();
 
     await expect(page).toHaveURL("/chat/new?clientId=general");
   });
 
-  test("View All Clients button navigates to clients page", async ({ page }) => {
+  test("View All Clients button navigates to clients page", async ({
+    page,
+  }) => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    const viewClientsLink = page.getByRole("link", { name: "View All Clients" });
+    const viewClientsLink = page.getByRole("link", {
+      name: "View All Clients",
+    });
     await expect(viewClientsLink).toBeVisible();
     await viewClientsLink.click();
 
@@ -131,11 +157,15 @@ test.describe("Dashboard page", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
-  test("View all link in Recent Chats navigates to clients", async ({ page }) => {
+  test("View all link in Recent Chats navigates to clients", async ({
+    page,
+  }) => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    const chatsSection = page.locator("section").filter({ hasText: "Recent Chats" });
+    const chatsSection = page
+      .locator("section")
+      .filter({ hasText: "Recent Chats" });
     const viewAllLink = chatsSection.getByRole("link", { name: "View all" });
     await expect(viewAllLink).toBeVisible();
     await viewAllLink.click();
@@ -147,8 +177,12 @@ test.describe("Dashboard page", () => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    const clientsSection = page.locator("section").filter({ hasText: /^Clients/ });
-    const manageLink = clientsSection.getByRole("link", { name: "Manage clients" });
+    const clientsSection = page
+      .locator("section")
+      .filter({ hasText: /^Clients/ });
+    const manageLink = clientsSection.getByRole("link", {
+      name: "Manage clients",
+    });
     await expect(manageLink).toBeVisible();
     await manageLink.click();
 
@@ -166,11 +200,13 @@ test.describe("Dashboard responsive layout", () => {
     await page.goto("/");
 
     // Page heading is visible
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Dashboard" })
+    ).toBeVisible();
 
     // No horizontal scrollbar — page width matches viewport
     const bodyScrollWidth = await page.evaluate(
-      () => document.body.scrollWidth,
+      () => document.body.scrollWidth
     );
     const viewportWidth = 375;
     expect(bodyScrollWidth).toBeLessThanOrEqual(viewportWidth);
@@ -181,13 +217,13 @@ test.describe("Dashboard responsive layout", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("link", { name: "Start General Chat" }),
+      page.getByRole("link", { name: "Start General Chat" })
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Add Client" }),
+      page.getByRole("button", { name: "Add Client" })
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "View All Clients" }),
+      page.getByRole("link", { name: "View All Clients" })
     ).toBeVisible();
   });
 
@@ -195,8 +231,12 @@ test.describe("Dashboard responsive layout", () => {
     await mockSidebarApis(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Recent Chats" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Recent Documents" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Recent Chats" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Recent Documents" })
+    ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Clients" })).toBeVisible();
   });
 });

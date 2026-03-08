@@ -34,6 +34,37 @@ import {
 
 type ChatCounts = { clientId: string | null; count: number }[];
 
+type ActivityData = {
+  sessionCounts: Record<string, number>;
+  lastActivity: Record<string, string>;
+};
+
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return "Today";
+  }
+  if (diffDays === 1) {
+    return "Yesterday";
+  }
+  if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  }
+  if (diffDays < 14) {
+    return "1 week ago";
+  }
+
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+
 const STATUS_COLORS: Record<ClientStatus, string> = {
   active:
     "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300",
@@ -65,6 +96,10 @@ export function ClientsPage() {
   const { data: countsData, mutate: mutateCounts } = useSWR<{
     counts: ChatCounts;
   }>("/api/clients/chats", fetcher);
+  const { data: activityData } = useSWR<ActivityData>(
+    "/api/clients/activity",
+    fetcher
+  );
 
   const [showClientDialog, setShowClientDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -215,13 +250,13 @@ export function ClientsPage() {
                           className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase sm:table-cell"
                           scope="col"
                         >
-                          Chats
+                          Activity
                         </th>
                         <th
                           className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase xl:table-cell"
                           scope="col"
                         >
-                          Tags
+                          Last Active
                         </th>
                         <th className="py-3 pr-4 pl-3 sm:pr-0" scope="col">
                           <span className="sr-only">Actions</span>
@@ -231,13 +266,17 @@ export function ClientsPage() {
                     <tbody className="divide-y divide-border">
                       {filteredClients.map((client) => {
                         const modalities = client.therapeuticModalities ?? [];
-                        const tags = client.tags ?? [];
                         const chatCount = getCountForClient(client.id);
+                        const sessionCount =
+                          activityData?.sessionCounts[client.id] ?? 0;
+                        const lastActive =
+                          activityData?.lastActivity[client.id];
 
                         return (
                           <tr
-                            className="hover:bg-muted/50 transition-colors"
+                            className="hover:bg-muted/50 transition-colors cursor-pointer"
                             key={client.id}
+                            onClick={() => router.push(`/clients/${client.id}`)}
                           >
                             <td className="py-4 pr-3 pl-4 sm:pl-0">
                               <div className="flex items-center gap-3">
@@ -248,6 +287,7 @@ export function ClientsPage() {
                                   <Link
                                     className="text-sm font-medium hover:underline"
                                     href={`/clients/${client.id}`}
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     {client.name}
                                   </Link>
@@ -294,28 +334,17 @@ export function ClientsPage() {
 
                             <td className="hidden px-3 py-4 sm:table-cell">
                               <span className="text-sm text-muted-foreground">
-                                {chatCount}
+                                {sessionCount} session
+                                {sessionCount !== 1 ? "s" : ""} &middot;{" "}
+                                {chatCount} chat{chatCount !== 1 ? "s" : ""}
                               </span>
                             </td>
 
                             <td className="hidden px-3 py-4 xl:table-cell">
-                              {tags.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {tags.slice(0, 2).map((t) => (
-                                    <Badge
-                                      className="px-1.5 py-0 text-[10px]"
-                                      key={t}
-                                      variant="secondary"
-                                    >
-                                      {t}
-                                    </Badge>
-                                  ))}
-                                  {tags.length > 2 && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      +{tags.length - 2}
-                                    </span>
-                                  )}
-                                </div>
+                              {lastActive ? (
+                                <span className="text-sm text-muted-foreground">
+                                  {formatRelativeDate(lastActive)}
+                                </span>
                               ) : (
                                 <span className="text-sm text-muted-foreground">
                                   —
@@ -327,11 +356,12 @@ export function ClientsPage() {
                               <div className="flex items-center justify-end gap-1">
                                 <Button
                                   className="size-8"
-                                  onClick={() =>
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     router.push(
                                       `/chat/new?clientId=${client.id}`
-                                    )
-                                  }
+                                    );
+                                  }}
                                   size="icon"
                                   variant="ghost"
                                 >
@@ -342,7 +372,8 @@ export function ClientsPage() {
                                 </Button>
                                 <Button
                                   className="size-8"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingClient(client);
                                     setShowClientDialog(true);
                                   }}
@@ -356,7 +387,10 @@ export function ClientsPage() {
                                 </Button>
                                 <Button
                                   className="size-8 text-destructive hover:text-destructive"
-                                  onClick={() => setDeleteClient(client)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteClient(client);
+                                  }}
                                   size="icon"
                                   variant="ghost"
                                 >

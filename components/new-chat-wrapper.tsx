@@ -9,10 +9,14 @@ export function NewChatWrapper({
   id,
   initialChatModel,
   preselectedClientId,
+  sessionId,
+  sessionDate,
 }: {
   id: string;
   initialChatModel: string;
   preselectedClientId?: string | null;
+  sessionId?: string | null;
+  sessionDate?: string | null;
 }) {
   // undefined = picker not yet answered, null = "General", string = specific client
   const [selectedClientId, setSelectedClientId] = useState<
@@ -31,6 +35,8 @@ export function NewChatWrapper({
         initialChatModel={initialChatModel}
         initialClientId={selectedClientId}
         initialMessages={[]}
+        initialSessionDate={sessionDate ?? null}
+        initialSessionId={sessionId ?? null}
         isReadonly={false}
         key={id}
       />

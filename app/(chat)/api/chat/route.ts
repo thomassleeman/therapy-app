@@ -22,7 +22,9 @@ import {
   getClientById,
   getMessageCountByUserId,
   getMessagesByChatId,
+  getSessionSegments,
   getTherapistProfile,
+  getTherapySession,
   saveChat,
   saveMessages,
   updateChatTitleById,
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
         messages,
         selectedChatModel,
         selectedClientId,
+        selectedSessionId,
         therapeuticOrientation,
       } = requestBody;
 
@@ -106,6 +109,7 @@ export async function POST(request: Request) {
           title: "New chat",
           visibility: "private",
           clientId: selectedClientId ?? null,
+          sessionId: selectedSessionId ?? null,
         });
         titlePromise = generateTitleFromUserMessage({ message });
       }
@@ -140,12 +144,59 @@ export async function POST(request: Request) {
 
       const modelMessages = await convertToModelMessages(uiMessages);
 
-      const [therapistProfile, client] = await Promise.all([
+      // Fetch therapist profile, client, and session transcript context in parallel
+      const [therapistProfile, client, therapySession] = await Promise.all([
         getTherapistProfile({ userId: session.user.id }),
         selectedClientId
           ? getClientById({ id: selectedClientId })
           : Promise.resolve(null),
+        (() => {
+          const effectiveSessionId = selectedSessionId ?? chat?.sessionId;
+          return effectiveSessionId
+            ? getTherapySession({ id: effectiveSessionId })
+            : Promise.resolve(null);
+        })(),
       ]);
+
+      // Build session transcript context for the system prompt
+      let sessionContextPrompt = "";
+      if (
+        therapySession &&
+        therapySession.therapistId === session.user.id &&
+        therapySession.transcriptionStatus === "completed"
+      ) {
+        const segments = await getSessionSegments({
+          sessionId: therapySession.id,
+        });
+        if (segments.length > 0) {
+          const transcriptLines = segments.map(
+            (s) => `[${s.speaker}]: ${s.content}`
+          );
+          // Truncate to ~2000 chars to avoid token bloat
+          let transcriptText = "";
+          for (const line of transcriptLines) {
+            if (transcriptText.length + line.length > 2000) {
+              transcriptText += "\n[transcript truncated]";
+              break;
+            }
+            transcriptText += `${transcriptText ? "\n" : ""}${line}`;
+          }
+
+          const sessionDate = new Date(
+            therapySession.sessionDate
+          ).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
+          const clientLabel = client?.name ?? "their client";
+          const duration = therapySession.durationMinutes
+            ? ` (${therapySession.durationMinutes} minutes)`
+            : "";
+
+          sessionContextPrompt = `\n\n## Session Context\nThe therapist is reflecting on a session from ${sessionDate}${duration} with ${clientLabel}. Here is a summary of the session transcript:\n\n${transcriptText}`;
+        }
+      }
 
       const effectiveModality = resolveModality({
         chatOrientation: therapeuticOrientation as
@@ -223,6 +274,7 @@ export async function POST(request: Request) {
               effectiveJurisdiction,
               sensitiveContentPrompt,
               sensitiveCategories: sensitiveContent.detectedCategories,
+              sessionContextPrompt,
               session,
               requestHints,
               selectedChatModel,

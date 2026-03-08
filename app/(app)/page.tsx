@@ -5,7 +5,8 @@ import {
   getChatCountsByClient,
   getChatsByUserId,
   getClientsByUserId,
-  getRecentDocumentsByUserId,
+  getRecentSessions,
+  getSessionCountsByClient,
 } from "@/lib/db/queries";
 
 export default async function Page() {
@@ -17,24 +18,27 @@ export default async function Page() {
 
   const userId = session.user.id;
 
-  const [chatsResult, documents, clients, chatCounts] = await Promise.all([
-    getChatsByUserId({
-      id: userId,
-      limit: 5,
-      startingAfter: null,
-      endingBefore: null,
-    }),
-    getRecentDocumentsByUserId({ userId, limit: 5 }),
-    getClientsByUserId({ userId }),
-    getChatCountsByClient({ userId }),
-  ]);
+  const [chatsResult, recentSessions, clients, chatCounts, sessionCounts] =
+    await Promise.all([
+      getChatsByUserId({
+        id: userId,
+        limit: 5,
+        startingAfter: null,
+        endingBefore: null,
+      }),
+      getRecentSessions({ therapistId: userId, limit: 5 }),
+      getClientsByUserId({ userId }),
+      getChatCountsByClient({ userId }),
+      getSessionCountsByClient({ therapistId: userId }),
+    ]);
 
   return (
     <DashboardPage
       chatCounts={chatCounts}
       clients={clients}
-      documents={documents}
       recentChats={chatsResult.chats}
+      recentSessions={recentSessions}
+      sessionCounts={sessionCounts}
     />
   );
 }

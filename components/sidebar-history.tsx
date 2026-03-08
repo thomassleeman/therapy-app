@@ -3,9 +3,10 @@
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { type ChangeEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
-import useSWRInfinite from "swr/infinite";
+import { useSWRConfig } from "swr";
+import useSWRInfinite, { unstable_serialize } from "swr/infinite";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +22,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -30,7 +32,7 @@ import {
 import { useClients } from "@/hooks/use-clients";
 import type { Chat, Client } from "@/lib/db/types";
 import { fetcher } from "@/lib/utils";
-import { ChevronDownIcon, LoaderIcon, UserIcon } from "./icons";
+import { ChevronDownIcon, LoaderIcon, TrashIcon, UserIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
 
 type GroupedChatsByClient = {
@@ -118,16 +120,18 @@ function ClientSection({
   client,
   chats,
   activeId,
+  defaultOpen,
   onDelete,
   setOpenMobile,
 }: {
   client: Client;
   chats: Chat[];
   activeId: string | null;
+  defaultOpen: boolean;
   onDelete: (chatId: string) => void;
   setOpenMobile: (open: boolean) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
     <Collapsible onOpenChange={setIsOpen} open={isOpen}>
@@ -164,6 +168,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const pathname = usePathname();
   const id = pathname?.startsWith("/chat/") ? pathname.split("/")[2] : null;
 
+  const { mutate: globalMutate } = useSWRConfig();
   const {
     data: paginatedChatHistories,
     setSize,
@@ -179,7 +184,8 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [uncategorizedOpen, setUncategorizedOpen] = useState(false);
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState("");
 
   const hasReachedEnd = paginatedChatHistories
     ? paginatedChatHistories.some((page) => page.hasMore === false)
@@ -201,6 +207,24 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     () => groupChatsByClient(chatsFromHistory, clients),
     [chatsFromHistory, clients]
   );
+
+  // Determine which client owns the active chat
+  const activeClientId = useMemo(() => {
+    if (!id) {
+      return null;
+    }
+    const activeChat = chatsFromHistory.find((chat) => chat.id === id);
+    return activeChat?.clientId ?? null;
+  }, [id, chatsFromHistory]);
+
+  // Active chat is uncategorized (General) if it exists but has no clientId
+  const isActiveUncategorized = useMemo(() => {
+    if (!id) {
+      return false;
+    }
+    const activeChat = chatsFromHistory.find((chat) => chat.id === id);
+    return activeChat ? !activeChat.clientId : false;
+  }, [id, chatsFromHistory]);
 
   const handleDelete = () => {
     const chatToDelete = deleteId;
@@ -234,6 +258,25 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
         return "Chat deleted successfully";
       },
       error: "Failed to delete chat",
+    });
+  };
+
+  const handleDeleteAll = () => {
+    const deletePromise = fetch("/api/history", {
+      method: "DELETE",
+    });
+
+    toast.promise(deletePromise, {
+      loading: "Deleting all chats...",
+      success: () => {
+        globalMutate(unstable_serialize(getChatHistoryPaginationKey));
+        setShowDeleteAllDialog(false);
+        setDeleteAllConfirmText("");
+        router.replace("/");
+        router.refresh();
+        return "All chats deleted successfully";
+      },
+      error: "Failed to delete all chats",
     });
   };
 
@@ -307,6 +350,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                   activeId={id}
                   chats={chats}
                   client={client}
+                  defaultOpen={client.id === activeClientId}
                   key={client.id}
                   onDelete={onDeleteChat}
                   setOpenMobile={setOpenMobile}
@@ -315,13 +359,10 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
 
               {/* Uncategorized section */}
               {groupedChats.uncategorized.length > 0 && (
-                <Collapsible
-                  onOpenChange={setUncategorizedOpen}
-                  open={uncategorizedOpen}
-                >
+                <Collapsible defaultOpen={isActiveUncategorized}>
                   <CollapsibleTrigger className="flex w-full items-center gap-2 px-2 py-1 text-sidebar-foreground/50 text-xs hover:text-sidebar-foreground transition-colors">
                     <motion.div
-                      animate={{ rotate: uncategorizedOpen ? 0 : -90 }}
+                      animate={{ rotate: isActiveUncategorized ? 0 : -90 }}
                       transition={{ duration: 0.2 }}
                     >
                       <ChevronDownIcon />
@@ -357,11 +398,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
             }}
           />
 
-          {hasReachedEnd ? (
-            <div className="mt-8 flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
-              --------
-            </div>
-          ) : (
+          {!hasReachedEnd && (
             <div className="mt-8 flex flex-row items-center gap-2 p-2 text-zinc-500 dark:text-zinc-400">
               <div className="animate-spin">
                 <LoaderIcon />
@@ -369,9 +406,22 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
               <div>Loading Chats...</div>
             </div>
           )}
+
+          {/* Delete All Chats — muted danger link at bottom */}
+          {hasReachedEnd && chatsFromHistory.length > 0 && (
+            <button
+              className="mt-6 flex w-full items-center justify-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/50 hover:text-destructive transition-colors"
+              onClick={() => setShowDeleteAllDialog(true)}
+              type="button"
+            >
+              <TrashIcon size={12} />
+              <span>Delete all chats</span>
+            </button>
+          )}
         </SidebarGroupContent>
       </SidebarGroup>
 
+      {/* Single chat delete dialog */}
       <AlertDialog onOpenChange={setShowDeleteDialog} open={showDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -385,6 +435,45 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete}>
               Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete all chats dialog with type-to-confirm */}
+      <AlertDialog
+        onOpenChange={(open) => {
+          setShowDeleteAllDialog(open);
+          if (!open) {
+            setDeleteAllConfirmText("");
+          }
+        }}
+        open={showDeleteAllDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete all your
+              chats and remove them from our servers. Type{" "}
+              <span className="font-mono font-semibold">DELETE</span> to
+              confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+              setDeleteAllConfirmText(e.target.value);
+            }}
+            placeholder="Type DELETE to confirm"
+            value={deleteAllConfirmText}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteAllConfirmText !== "DELETE"}
+              onClick={handleDeleteAll}
+            >
+              Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

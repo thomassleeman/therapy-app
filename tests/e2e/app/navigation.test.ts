@@ -28,14 +28,14 @@ const MOCK_CHAT_HISTORY = {
  */
 async function mockSidebarApis(
   page: import("@playwright/test").Page,
-  chatHistory = MOCK_CHAT_HISTORY,
+  chatHistory = MOCK_CHAT_HISTORY
 ) {
   await page.route("**/api/history*", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(chatHistory),
-    }),
+    })
   );
 
   await page.route("**/api/clients*", (route) =>
@@ -43,7 +43,7 @@ async function mockSidebarApis(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify([]),
-    }),
+    })
   );
 }
 
@@ -104,14 +104,14 @@ test.describe("Desktop sidebar navigation", () => {
 
     const sidebar = page.locator("[data-sidebar='sidebar']");
     const clientsButton = sidebar.locator(
-      "[data-sidebar='menu-button']:has-text('Clients')",
+      "[data-sidebar='menu-button']:has-text('Clients')"
     );
 
     await expect(clientsButton).toHaveAttribute("data-active", "true");
 
     // Dashboard should NOT be active
     const dashboardButton = sidebar.locator(
-      "[data-sidebar='menu-button']:has-text('Dashboard')",
+      "[data-sidebar='menu-button']:has-text('Dashboard')"
     );
     await expect(dashboardButton).toHaveAttribute("data-active", "false");
   });
@@ -123,7 +123,7 @@ test.describe("Desktop sidebar navigation", () => {
     // The PlusIcon button in the sidebar header — find by tooltip content
     const sidebar = page.locator("[data-sidebar='sidebar']");
     const newChatButton = sidebar.locator(
-      "[data-sidebar='header'] button:has(svg)",
+      "[data-sidebar='header'] button:has(svg)"
     );
 
     // The second button in the header is New Chat (first is Delete All)
@@ -148,12 +148,8 @@ test.describe("Desktop sidebar navigation", () => {
     // Expand the General section to see chat titles
     await generalTrigger.click();
 
-    await expect(
-      sidebar.getByText("Session with Client A"),
-    ).toBeVisible();
-    await expect(
-      sidebar.getByText("Reflection on CBT approach"),
-    ).toBeVisible();
+    await expect(sidebar.getByText("Session with Client A")).toBeVisible();
+    await expect(sidebar.getByText("Reflection on CBT approach")).toBeVisible();
   });
 });
 

@@ -239,7 +239,10 @@ function parseFrontmatter(
     if (Array.isArray(raw)) {
       values = raw.map((v: unknown) => String(v).trim());
     } else if (typeof raw === "string") {
-      values = raw.split(",").map((v) => v.trim()).filter(Boolean);
+      values = raw
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
     } else {
       throw new Error(
         `Invalid 'modality' type in ${filePath}: expected string, array, or null, got ${typeof raw}`
@@ -251,7 +254,7 @@ function parseFrontmatter(
       if (!MODALITIES.includes(value as Modality)) {
         throw new Error(
           `Invalid modality value "${value}" in ${filePath}. ` +
-          `Must be one of: ${MODALITIES.join(", ")}, or null.`
+            `Must be one of: ${MODALITIES.join(", ")}, or null.`
         );
       }
     }

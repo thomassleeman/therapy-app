@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 interface ListPageShellProps {
   title: string;
+  subtitle?: string;
   count?: number;
   isLoading?: boolean;
   headerAction: ReactNode;
@@ -12,6 +13,7 @@ interface ListPageShellProps {
 
 export function ListPageShell({
   title,
+  subtitle,
   count,
   isLoading,
   headerAction,
@@ -20,10 +22,15 @@ export function ListPageShell({
   return (
     <div className="flex flex-1 flex-col bg-background overflow-y-auto">
       <header className="flex items-center gap-2 bg-background px-4 py-1.5 sm:px-6 lg:px-8">
-        <h1 className="text-lg font-semibold">
-          {title}
-          {!isLoading && count !== undefined && ` (${count})`}
-        </h1>
+        <div>
+          <h1 className="text-lg font-semibold">
+            {title}
+            {!isLoading && count !== undefined && ` (${count})`}
+          </h1>
+          {subtitle && (
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          )}
+        </div>
         <div className="ml-auto">{headerAction}</div>
       </header>
 

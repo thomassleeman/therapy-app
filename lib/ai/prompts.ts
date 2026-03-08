@@ -24,10 +24,6 @@ DO NOT UPDATE DOCUMENTS IMMEDIATELY AFTER CREATING THEM. WAIT FOR USER FEEDBACK 
 - Immediately after creating a document
 
 Do not update document right after creating it. Wait for user feedback or request to update it.
-
-**Using \`requestSuggestions\`:**
-- ONLY use when the therapist explicitly asks for suggestions on an existing document
-- Requires a valid document ID from a previously created document
 `;
 
 export const therapyReflectionPrompt = `You are a reflective practice companion for qualified therapists. Your role is to support therapists in deepening their understanding of client work through thoughtful, evidence-informed reflective questions.

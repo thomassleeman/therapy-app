@@ -29,6 +29,12 @@ const PureChatItem = ({
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
+          {chat.sessionId && (
+            <span
+              className="inline-block size-2 shrink-0 rounded-full bg-blue-500"
+              title="Linked to session"
+            />
+          )}
           <span>{chat.title}</span>
         </Link>
       </SidebarMenuButton>
@@ -60,6 +66,9 @@ const PureChatItem = ({
 
 export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
   if (prevProps.isActive !== nextProps.isActive) {
+    return false;
+  }
+  if (prevProps.chat.sessionId !== nextProps.chat.sessionId) {
     return false;
   }
   return true;

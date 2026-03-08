@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import {
   getChatsByClientId,
   getClientById,
+  getClinicalNotesByClient,
   getTherapySessions,
 } from "@/lib/db/queries";
 
@@ -29,12 +30,18 @@ export default async function Page({
     notFound();
   }
 
-  const [chats, sessions] = await Promise.all([
+  const [chats, sessions, clinicalNotes] = await Promise.all([
     getChatsByClientId({ clientId: id, userId: session.user.id }),
     getTherapySessions({ therapistId: session.user.id, clientId: id }),
+    getClinicalNotesByClient({ clientId: id, therapistId: session.user.id }),
   ]);
 
   return (
-    <ClientHubPage chats={chats ?? []} client={client} sessions={sessions} />
+    <ClientHubPage
+      chats={chats ?? []}
+      client={client}
+      clinicalNotes={clinicalNotes}
+      sessions={sessions}
+    />
   );
 }

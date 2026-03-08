@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.skip(
   !process.env.E2E_INTEGRATION,
-  "Skipped: set E2E_INTEGRATION=true to run",
+  "Skipped: set E2E_INTEGRATION=true to run"
 );
 
 test.describe("Auth Flow Integration", () => {
@@ -18,7 +18,7 @@ test.describe("Auth Flow Integration", () => {
 
       // Verify we're on the login page
       await expect(
-        page.getByRole("heading", { name: "Sign in" }),
+        page.getByRole("heading", { name: "Sign in" })
       ).toBeVisible();
 
       // Enter test credentials

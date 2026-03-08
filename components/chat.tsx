@@ -3,8 +3,8 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
 import {
@@ -20,10 +20,11 @@ import {
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatClient } from "@/hooks/use-chat-client";
-import type { Vote } from "@/lib/db/types";
+import { useClients } from "@/hooks/use-clients";
+import type { TherapeuticOrientation } from "@/lib/ai/prompts";
 import { ChatSDKError } from "@/lib/errors";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
+import { fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
@@ -35,6 +36,8 @@ export function Chat({
   initialMessages,
   initialChatModel,
   initialClientId,
+  initialSessionId,
+  initialSessionDate,
   isReadonly,
   autoResume,
 }: {
@@ -42,6 +45,8 @@ export function Chat({
   initialMessages: ChatMessage[];
   initialChatModel: string;
   initialClientId: string | null;
+  initialSessionId?: string | null;
+  initialSessionDate?: string | null;
   isReadonly: boolean;
   autoResume: boolean;
 }) {
@@ -74,6 +79,14 @@ export function Chat({
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
+
+  const approachRef = useRef<TherapeuticOrientation>("integrative");
+  const handleApproachChange = useCallback(
+    (orientation: TherapeuticOrientation) => {
+      approachRef.current = orientation;
+    },
+    []
+  );
 
   const {
     messages,
@@ -125,6 +138,8 @@ export function Chat({
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: "private",
             selectedClientId: clientId,
+            therapeuticOrientation: approachRef.current,
+            selectedSessionId: initialSessionId ?? undefined,
             ...request.body,
           },
         };
@@ -169,13 +184,16 @@ export function Chat({
     }
   }, [query, sendMessage, hasAppendedQuery, id]);
 
-  const { data: votes } = useSWR<Vote[]>(
-    messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
-    fetcher
-  );
-
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
+
+  const { clients } = useClients();
+  const clientName = useMemo(() => {
+    if (!initialClientId) {
+      return null;
+    }
+    return clients.find((c) => c.id === initialClientId)?.name ?? null;
+  }, [clients, initialClientId]);
 
   useAutoResume({
     autoResume,
@@ -190,20 +208,24 @@ export function Chat({
         <ChatHeader
           chatId={id}
           isReadonly={isReadonly}
+          onApproachChange={handleApproachChange}
           selectedClientId={initialClientId}
+          sessionDate={initialSessionDate ?? null}
+          sessionId={initialSessionId ?? null}
         />
 
         <Messages
           addToolApprovalResponse={addToolApprovalResponse}
           chatId={id}
+          clientName={clientName}
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
           messages={messages}
           regenerate={regenerate}
           selectedModelId={initialChatModel}
+          sessionDate={initialSessionDate}
           setMessages={setMessages}
           status={status}
-          votes={votes}
         />
 
         <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
@@ -241,7 +263,6 @@ export function Chat({
         setMessages={setMessages}
         status={status}
         stop={stop}
-        votes={votes}
       />
 
       <AlertDialog

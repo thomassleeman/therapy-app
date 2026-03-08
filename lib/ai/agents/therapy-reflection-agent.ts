@@ -9,7 +9,7 @@ import {
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
-import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+
 import { searchKnowledgeBase } from "@/lib/ai/tools/search-knowledge-base";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import type { Session } from "@/lib/auth";
@@ -23,6 +23,8 @@ const callOptionsSchema = z.object({
   // Sensitive content (already processed by the route)
   sensitiveContentPrompt: z.string().default(""),
   sensitiveCategories: z.array(z.string()).default([]),
+  // Session transcript context (injected when chat is linked to a therapy session)
+  sessionContextPrompt: z.string().default(""),
   // Session for tool factories
   session: z.custom<Session>(),
   // Request hints for system prompt
@@ -50,7 +52,9 @@ export const therapyReflectionAgent = new ToolLoopAgent({
         therapeuticOrientation: options.therapeuticOrientation,
         effectiveModality: options.effectiveModality,
         effectiveJurisdiction: options.effectiveJurisdiction,
-      }) + options.sensitiveContentPrompt;
+      }) +
+      options.sessionContextPrompt +
+      options.sensitiveContentPrompt;
 
     return {
       ...settings,
@@ -62,10 +66,6 @@ export const therapyReflectionAgent = new ToolLoopAgent({
           dataStream: options.dataStream,
         }),
         updateDocument: updateDocument({
-          session: options.session,
-          dataStream: options.dataStream,
-        }),
-        requestSuggestions: requestSuggestions({
           session: options.session,
           dataStream: options.dataStream,
         }),

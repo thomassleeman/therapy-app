@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -16,11 +15,21 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useClients } from "@/hooks/use-clients";
 import { useSessions } from "@/hooks/use-sessions";
 import type {
   TherapySessionWithClient,
   TranscriptionStatus,
 } from "@/lib/db/types";
+import { PlusIcon, TrashIcon } from "./icons";
 import {
   ListPageEmpty,
   ListPageFilters,
@@ -28,9 +37,9 @@ import {
   ListPageShell,
   ListPageSkeleton,
 } from "./list-page";
-import { PlusIcon, TrashIcon } from "./icons";
 
 type SessionFilter = "completed" | "transcribing" | "pending" | "failed";
+type NotesFilter = "none" | "draft" | "finalised";
 
 const SESSION_FILTER_OPTIONS: { value: SessionFilter; label: string }[] = [
   { value: "completed", label: "Completed" },
@@ -56,6 +65,21 @@ function matchesFilter(
       return status === "completed";
     case "failed":
       return status === "failed";
+    default:
+      return false;
+  }
+}
+
+function matchesNotesFilter(notesStatus: string, filter: NotesFilter): boolean {
+  switch (filter) {
+    case "none":
+      return notesStatus === "none" || notesStatus === "";
+    case "draft":
+      return notesStatus === "draft";
+    case "finalised":
+      return notesStatus === "finalised" || notesStatus === "reviewed";
+    default:
+      return false;
   }
 }
 
@@ -68,8 +92,12 @@ function formatDate(dateStr: string): string {
 }
 
 function formatDuration(minutes: number | null): string {
-  if (!minutes) return "\u2014";
-  if (minutes < 60) return `${minutes} min`;
+  if (!minutes) {
+    return "\u2014";
+  }
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
   const hrs = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
@@ -136,19 +164,161 @@ function NotesBadge({ status }: { status: string }) {
   }
 }
 
+// ── Summary cards ─────────────────────────────────────────────────────
+
+interface SummaryCounts {
+  awaitingNotes: number;
+  transcribing: number;
+  failed: number;
+}
+
+function computeSummaryCounts(
+  sessions: TherapySessionWithClient[]
+): SummaryCounts {
+  let awaitingNotes = 0;
+  let transcribing = 0;
+  let failed = 0;
+
+  for (const s of sessions) {
+    if (s.transcriptionStatus === "failed") {
+      failed++;
+    }
+    if (
+      s.transcriptionStatus === "transcribing" ||
+      s.transcriptionStatus === "labelling" ||
+      s.transcriptionStatus === "uploading"
+    ) {
+      transcribing++;
+    }
+    if (
+      s.transcriptionStatus === "completed" &&
+      (s.notesStatus === "none" ||
+        s.notesStatus === "" ||
+        s.notesStatus === "draft")
+    ) {
+      awaitingNotes++;
+    }
+  }
+
+  return { awaitingNotes, transcribing, failed };
+}
+
+function SummaryCards({ counts }: { counts: SummaryCounts }) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <Card className="border-amber-200 dark:border-amber-800 py-0">
+        <CardContent className="px-4 py-3">
+          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+            {counts.awaitingNotes}
+          </p>
+          <p className="text-xs text-muted-foreground">Awaiting notes</p>
+        </CardContent>
+      </Card>
+      <Card className="border-blue-200 dark:border-blue-800 py-0">
+        <CardContent className="px-4 py-3">
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {counts.transcribing}
+          </p>
+          <p className="text-xs text-muted-foreground">Transcribing</p>
+        </CardContent>
+      </Card>
+      <Card className="border-red-200 dark:border-red-800 py-0">
+        <CardContent className="px-4 py-3">
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+            {counts.failed}
+          </p>
+          <p className="text-xs text-muted-foreground">Failed</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Contextual row action ─────────────────────────────────────────────
+
+function RowAction({ session }: { session: TherapySessionWithClient }) {
+  if (session.transcriptionStatus === "failed") {
+    return (
+      <Button
+        asChild
+        className="text-red-600 dark:text-red-400"
+        size="sm"
+        variant="ghost"
+      >
+        <Link href={`/sessions/${session.id}`}>Retry</Link>
+      </Button>
+    );
+  }
+
+  if (
+    session.transcriptionStatus === "completed" &&
+    (session.notesStatus === "none" || session.notesStatus === "")
+  ) {
+    return (
+      <Button
+        asChild
+        className="text-amber-600 dark:text-amber-400"
+        size="sm"
+        variant="ghost"
+      >
+        <Link href={`/sessions/${session.id}?tab=notes`}>Generate Notes</Link>
+      </Button>
+    );
+  }
+
+  if (
+    session.notesStatus === "draft" ||
+    session.notesStatus === "reviewed" ||
+    session.notesStatus === "finalised"
+  ) {
+    return (
+      <Button asChild size="sm" variant="ghost">
+        <Link href={`/sessions/${session.id}?tab=notes`}>View Notes</Link>
+      </Button>
+    );
+  }
+
+  return (
+    <Button asChild size="sm" variant="ghost">
+      <Link href={`/sessions/${session.id}`}>View</Link>
+    </Button>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────
+
 export function SessionsPage() {
-  const router = useRouter();
   const { sessions, isLoading, refresh } = useSessions();
+  const { clients } = useClients();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<SessionFilter | "all">(
     "all"
   );
+  const [notesFilter, setNotesFilter] = useState<NotesFilter | "all">("all");
+  const [clientFilter, setClientFilter] = useState<string>("all");
   const [deleteSession, setDeleteSession] =
     useState<TherapySessionWithClient | null>(null);
 
+  const summaryCounts = useMemo(
+    () => computeSummaryCounts(sessions),
+    [sessions]
+  );
+
   const filteredSessions = useMemo(() => {
     return sessions.filter((s) => {
-      if (statusFilter !== "all" && !matchesFilter(s.transcriptionStatus, statusFilter)) {
+      if (
+        statusFilter !== "all" &&
+        !matchesFilter(s.transcriptionStatus, statusFilter)
+      ) {
+        return false;
+      }
+      if (
+        notesFilter !== "all" &&
+        !matchesNotesFilter(s.notesStatus, notesFilter)
+      ) {
+        return false;
+      }
+      if (clientFilter !== "all" && s.clientId !== clientFilter) {
         return false;
       }
       if (searchQuery.trim()) {
@@ -162,12 +332,18 @@ export function SessionsPage() {
       }
       return true;
     });
-  }, [sessions, searchQuery, statusFilter]);
+  }, [sessions, searchQuery, statusFilter, notesFilter, clientFilter]);
 
-  const hasActiveFilters = searchQuery.trim() !== "" || statusFilter !== "all";
+  const hasActiveFilters =
+    searchQuery.trim() !== "" ||
+    statusFilter !== "all" ||
+    notesFilter !== "all" ||
+    clientFilter !== "all";
 
   const handleDelete = () => {
-    if (!deleteSession) return;
+    if (!deleteSession) {
+      return;
+    }
 
     const deletePromise = fetch(`/api/sessions/${deleteSession.id}`, {
       method: "DELETE",
@@ -186,9 +362,7 @@ export function SessionsPage() {
 
   return (
     <ListPageShell
-      title="Sessions"
       count={filteredSessions.length}
-      isLoading={isLoading}
       headerAction={
         <Button asChild size="sm">
           <Link href="/sessions/new">
@@ -197,19 +371,56 @@ export function SessionsPage() {
           </Link>
         </Button>
       }
+      isLoading={isLoading}
+      subtitle="Workflow view across all clients"
+      title="Sessions"
     >
       {!isLoading && sessions.length > 0 && (
         <>
+          <SummaryCards counts={summaryCounts} />
+
           <ListPageSearch
-            value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Search sessions by client, date, or delivery method..."
+            value={searchQuery}
           />
-          <ListPageFilters
-            options={SESSION_FILTER_OPTIONS}
-            value={statusFilter}
-            onChange={setStatusFilter}
-          />
+
+          <div className="flex flex-wrap items-center gap-3">
+            <ListPageFilters
+              onChange={setStatusFilter}
+              options={SESSION_FILTER_OPTIONS}
+              value={statusFilter}
+            />
+
+            <Select
+              onValueChange={(v) => setNotesFilter(v as NotesFilter | "all")}
+              value={notesFilter}
+            >
+              <SelectTrigger className="w-[140px] h-8 text-sm">
+                <SelectValue placeholder="Notes status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All notes</SelectItem>
+                <SelectItem value="none">No notes</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="finalised">Finalised</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select onValueChange={setClientFilter} value={clientFilter}>
+              <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectValue placeholder="All clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </>
       )}
 
@@ -219,8 +430,6 @@ export function SessionsPage() {
         <>
           {sessions.length === 0 && (
             <ListPageEmpty
-              title="No sessions yet"
-              description="Record or upload your first session to get started."
               action={
                 <Button asChild variant="outline">
                   <Link href="/sessions/new">
@@ -229,6 +438,8 @@ export function SessionsPage() {
                   </Link>
                 </Button>
               }
+              description="Record or upload your first session to get started."
+              title="No sessions yet"
             />
           )}
 
@@ -236,8 +447,8 @@ export function SessionsPage() {
             filteredSessions.length === 0 &&
             hasActiveFilters && (
               <ListPageEmpty
+                description="Try adjusting your search term or filters."
                 title="No sessions match your search"
-                description="Try adjusting your search term or status filter."
               />
             )}
 
@@ -249,36 +460,36 @@ export function SessionsPage() {
                     <thead>
                       <tr>
                         <th
-                          scope="col"
                           className="py-3 pr-3 pl-4 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase sm:pl-0"
+                          scope="col"
                         >
                           Date
                         </th>
                         <th
-                          scope="col"
                           className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase sm:table-cell"
+                          scope="col"
                         >
                           Client
                         </th>
                         <th
-                          scope="col"
                           className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase md:table-cell"
+                          scope="col"
                         >
                           Duration
                         </th>
                         <th
-                          scope="col"
                           className="px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                          scope="col"
                         >
                           Transcription
                         </th>
                         <th
-                          scope="col"
                           className="hidden px-3 py-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase lg:table-cell"
+                          scope="col"
                         >
                           Notes
                         </th>
-                        <th scope="col" className="py-3 pr-4 pl-3 sm:pr-0">
+                        <th className="py-3 pr-4 pl-3 sm:pr-0" scope="col">
                           <span className="sr-only">Actions</span>
                         </th>
                       </tr>
@@ -286,8 +497,8 @@ export function SessionsPage() {
                     <tbody className="divide-y divide-border">
                       {filteredSessions.map((s) => (
                         <tr
-                          key={s.id}
                           className="hover:bg-muted/50 transition-colors"
+                          key={s.id}
                         >
                           <td className="py-4 pr-3 pl-4 sm:pl-0">
                             <Link
@@ -299,15 +510,33 @@ export function SessionsPage() {
                             {/* Show client inline on mobile */}
                             {s.clientName && (
                               <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
-                                {s.clientName}
+                                {s.clientId ? (
+                                  <Link
+                                    className="hover:underline"
+                                    href={`/clients/${s.clientId}`}
+                                  >
+                                    {s.clientName}
+                                  </Link>
+                                ) : (
+                                  s.clientName
+                                )}
                               </p>
                             )}
                           </td>
 
                           <td className="hidden px-3 py-4 sm:table-cell">
-                            <span className="text-sm text-muted-foreground">
-                              {s.clientName ?? "\u2014"}
-                            </span>
+                            {s.clientId ? (
+                              <Link
+                                className="text-sm text-muted-foreground hover:underline hover:text-foreground"
+                                href={`/clients/${s.clientId}`}
+                              >
+                                {s.clientName ?? "\u2014"}
+                              </Link>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                {s.clientName ?? "\u2014"}
+                              </span>
+                            )}
                           </td>
 
                           <td className="hidden px-3 py-4 md:table-cell">
@@ -328,9 +557,7 @@ export function SessionsPage() {
 
                           <td className="py-4 pr-4 pl-3 text-right whitespace-nowrap sm:pr-0">
                             <div className="flex items-center justify-end gap-1">
-                              <Button asChild size="sm" variant="ghost">
-                                <Link href={`/sessions/${s.id}`}>View</Link>
-                              </Button>
+                              <RowAction session={s} />
                               <Button
                                 className="size-8 text-destructive hover:text-destructive"
                                 onClick={() => setDeleteSession(s)}
@@ -355,7 +582,9 @@ export function SessionsPage() {
 
       <AlertDialog
         onOpenChange={(open) => {
-          if (!open) setDeleteSession(null);
+          if (!open) {
+            setDeleteSession(null);
+          }
         }}
         open={deleteSession !== null}
       >

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import {
+  getClientById,
   getClinicalNotes,
   getSessionConsents,
   getSessionSegments,
@@ -30,15 +31,20 @@ export default async function SessionDetailPage({
     notFound();
   }
 
-  const [segments, notes, consents] = await Promise.all([
+  const [segments, notes, consents, client] = await Promise.all([
     getSessionSegments({ sessionId: id }),
     getClinicalNotes({ sessionId: id }),
     getSessionConsents({ sessionId: id }),
+    therapySession.clientId
+      ? getClientById({ id: therapySession.clientId })
+      : Promise.resolve(null),
   ]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <SessionDetailClient
+        clientId={therapySession.clientId ?? null}
+        clientName={client?.name ?? null}
         consents={consents}
         notes={notes}
         segments={segments}

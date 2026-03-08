@@ -1,5 +1,8 @@
 import type { Page } from "@playwright/test";
 import { test as base } from "@playwright/test";
+import type { Client } from "@/lib/db/types";
+
+console.log("✅ FIXTURES LOADED FROM:", import.meta.filename);
 
 interface MockApiFixture {
   /**
@@ -16,7 +19,7 @@ interface MockApiFixture {
   /**
    * Intercept GET /api/clients and return mock client data.
    */
-  clients: (page: Page, clients?: Record<string, unknown>[]) => Promise<void>;
+  clients: (page: Page, clients?: Client[]) => Promise<void>;
 }
 
 export const test = base.extend<{ mockApi: MockApiFixture }>({

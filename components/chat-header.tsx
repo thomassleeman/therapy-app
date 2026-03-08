@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useWindowSize } from "usehooks-ts";
@@ -13,16 +14,37 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useChatClient } from "@/hooks/use-chat-client";
 import { useClients } from "@/hooks/use-clients";
+import type { TherapeuticOrientation } from "@/lib/ai/prompts";
 import { ChevronDownIcon, PlusIcon } from "./icons";
 import { useSidebar } from "./ui/sidebar";
 
+const DISPLAY_TO_ORIENTATION: Record<string, TherapeuticOrientation> = {
+  CBT: "cbt",
+  "Person-Centred": "person-centred",
+  Psychodynamic: "psychodynamic",
+  Integrative: "integrative",
+  Systemic: "systemic",
+  Existential: "existential",
+};
+
+function toOrientation(display: string): TherapeuticOrientation {
+  return DISPLAY_TO_ORIENTATION[display] ?? "integrative";
+}
+
 function ApproachSelector({
-  selectedClientId,
+  chatId,
+  onApproachChange,
 }: {
-  selectedClientId: string | null;
+  chatId: string;
+  onApproachChange: (orientation: TherapeuticOrientation) => void;
 }) {
   const { clients } = useClients();
+  const { clientId: selectedClientId } = useChatClient({
+    chatId,
+    initialClientId: null,
+  });
   const [selectedApproach, setSelectedApproach] = useState<string>("General");
 
   const modalities = useMemo(() => {
@@ -34,14 +56,15 @@ function ApproachSelector({
   }, [clients, selectedClientId]);
 
   useEffect(() => {
-    if (modalities.length === 1) {
-      setSelectedApproach(modalities[0]);
-    } else if (modalities.length > 1) {
-      setSelectedApproach(modalities[0]);
+    let next: string;
+    if (modalities.length >= 1) {
+      next = modalities[0];
     } else {
-      setSelectedApproach("General");
+      next = "General";
     }
-  }, [modalities]);
+    setSelectedApproach(next);
+    onApproachChange(toOrientation(next));
+  }, [modalities, onApproachChange]);
 
   const hasMultiple = modalities.length > 1;
 
@@ -68,7 +91,10 @@ function ApproachSelector({
         {modalities.map((modality) => (
           <DropdownMenuItem
             key={modality}
-            onSelect={() => setSelectedApproach(modality)}
+            onSelect={() => {
+              setSelectedApproach(modality);
+              onApproachChange(toOrientation(modality));
+            }}
           >
             {modality}
           </DropdownMenuItem>
@@ -78,18 +104,51 @@ function ApproachSelector({
   );
 }
 
+function SessionBadge({
+  sessionId,
+  sessionDate,
+}: {
+  sessionId: string;
+  sessionDate: string;
+}) {
+  const formatted = new Date(sessionDate).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <Link
+      className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      href={`/sessions/${sessionId}`}
+    >
+      📎 Session: {formatted}
+    </Link>
+  );
+}
+
 function PureChatHeader({
   chatId,
   selectedClientId,
+  sessionId,
+  sessionDate,
   isReadonly,
+  onApproachChange,
 }: {
   chatId: string;
   selectedClientId: string | null;
+  sessionId: string | null;
+  sessionDate: string | null;
   isReadonly: boolean;
+  onApproachChange: (orientation: TherapeuticOrientation) => void;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
   const [showClientDialog, setShowClientDialog] = useState(false);
+  const { clientId } = useChatClient({
+    chatId,
+    initialClientId: selectedClientId,
+  });
 
   const { width: windowWidth } = useWindowSize();
 
@@ -121,9 +180,27 @@ function PureChatHeader({
           />
         )}
 
+        {clientId && (
+          <Link
+            className="order-2 text-xs text-muted-foreground transition-colors hover:text-foreground md:order-3"
+            href={`/clients/${clientId}`}
+          >
+            View client →
+          </Link>
+        )}
+
+        {sessionId && sessionDate && (
+          <div className="order-4">
+            <SessionBadge sessionDate={sessionDate} sessionId={sessionId} />
+          </div>
+        )}
+
         {!isReadonly && (
-          <div className="order-3 w-full md:w-auto">
-            <ApproachSelector selectedClientId={selectedClientId} />
+          <div className="order-5 w-full md:w-auto">
+            <ApproachSelector
+              chatId={chatId}
+              onApproachChange={onApproachChange}
+            />
           </div>
         )}
       </header>
@@ -140,6 +217,9 @@ export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
   return (
     prevProps.chatId === nextProps.chatId &&
     prevProps.selectedClientId === nextProps.selectedClientId &&
-    prevProps.isReadonly === nextProps.isReadonly
+    prevProps.sessionId === nextProps.sessionId &&
+    prevProps.sessionDate === nextProps.sessionDate &&
+    prevProps.isReadonly === nextProps.isReadonly &&
+    prevProps.onApproachChange === nextProps.onApproachChange
   );
 });

@@ -9,7 +9,8 @@ import {
   Mic,
   Upload,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AudioUpload } from "@/components/transcription/audio-upload";
 import { SessionRecorder } from "@/components/transcription/session-recorder";
@@ -120,6 +121,7 @@ function getTodayString(): string {
 
 export default function NewSessionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Step management
   const [step, setStep] = useState<Step>("details");
@@ -135,12 +137,13 @@ export default function NewSessionPage() {
   >("full_session");
   const [creatingSession, setCreatingSession] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [clientFromUrl, setClientFromUrl] = useState(false);
 
   // Step 2 state
   const [consents, setConsents] = useState<ConsentState>(createEmptyConsents());
   const [savingConsents, setSavingConsents] = useState(false);
 
-  // Fetch clients on mount
+  // Fetch clients on mount and pre-select from URL if provided
   useEffect(() => {
     async function fetchClients() {
       try {
@@ -148,21 +151,30 @@ export default function NewSessionPage() {
         if (res.ok) {
           const data = await res.json();
           const clientList = Array.isArray(data) ? data : (data.clients ?? []);
-          setClients(
-            clientList.map((c: { id: string; name: string }) => ({
-              id: c.id,
-              name: c.name,
-            }))
-          );
+          const mapped = clientList.map((c: { id: string; name: string }) => ({
+            id: c.id,
+            name: c.name,
+          }));
+          setClients(mapped);
+
+          // Pre-select client from URL query parameter
+          const urlClientId = searchParams.get("clientId");
+          if (
+            urlClientId &&
+            mapped.some((c: ClientOption) => c.id === urlClientId)
+          ) {
+            setClientId(urlClientId);
+            setClientFromUrl(true);
+          }
         }
       } catch {
-        // Non-critical — therapist can proceed without client selection
+        // Client fetch failed — user will see empty state
       } finally {
         setLoadingClients(false);
       }
     }
     fetchClients();
-  }, []);
+  }, [searchParams]);
 
   // Step 1: Create session
   const handleCreateSession = useCallback(async () => {
@@ -173,7 +185,7 @@ export default function NewSessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionDate,
-          clientId: clientId || undefined,
+          clientId,
           deliveryMethod,
           recordingType,
         }),
@@ -339,26 +351,51 @@ export default function NewSessionPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="client-select">Client</Label>
-              <Select onValueChange={setClientId} value={clientId}>
-                <SelectTrigger className="min-h-11" id="client-select">
-                  <SelectValue
-                    placeholder={
-                      loadingClients
-                        ? "Loading clients..."
-                        : "No client selected"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No client selected</SelectItem>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="client-select">
+                Client <span className="text-destructive">*</span>
+              </Label>
+              {loadingClients ? (
+                <div className="flex items-center gap-2 min-h-11 px-3 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading clients...
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  You need to add a client before creating a session.{" "}
+                  <Link
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                    href="/clients"
+                  >
+                    Go to Clients
+                  </Link>
+                </div>
+              ) : clientFromUrl ? (
+                <div className="flex items-center justify-between min-h-11 rounded-md border bg-muted/50 px-3 py-2">
+                  <span className="text-sm font-medium">
+                    {clients.find((c) => c.id === clientId)?.name}
+                  </span>
+                  <button
+                    className="text-xs text-primary underline underline-offset-4 hover:text-primary/80"
+                    onClick={() => setClientFromUrl(false)}
+                    type="button"
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <Select onValueChange={setClientId} value={clientId}>
+                  <SelectTrigger className="min-h-11" id="client-select">
+                    <SelectValue placeholder="Select a client..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -446,7 +483,7 @@ export default function NewSessionPage() {
 
             <Button
               className="w-full min-h-12"
-              disabled={creatingSession || !sessionDate}
+              disabled={creatingSession || !sessionDate || !clientId}
               onClick={handleCreateSession}
               size="lg"
             >

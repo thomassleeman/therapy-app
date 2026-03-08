@@ -95,6 +95,7 @@ export interface Chat {
   userId: string;
   visibility: VisibilityType;
   clientId: string | null;
+  sessionId: string | null;
 }
 
 export interface Client {
@@ -256,6 +257,7 @@ export interface ChatInsert {
   userId: string;
   visibility?: VisibilityType;
   clientId?: string | null;
+  sessionId?: string | null;
 }
 
 export interface ClientInsert {
@@ -451,7 +453,8 @@ export type NoteContent =
 
 export interface ClinicalNote {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
+  clientId: string | null;
   therapistId: string;
   noteFormat: NoteFormat;
   content: NoteContent;
@@ -497,7 +500,8 @@ export interface SessionSegmentInsert {
 }
 
 export interface ClinicalNoteInsert {
-  sessionId: string;
+  sessionId?: string | null;
+  clientId?: string | null;
   therapistId: string;
   noteFormat: NoteFormat;
   content: NoteContent;
@@ -512,4 +516,34 @@ export interface SessionConsentInsert {
   consented: boolean;
   consentMethod: string;
   ipAddress?: string | null;
+}
+
+// ── Dashboard / sidebar / clients list query result types ─────────────
+
+export interface RecentSession {
+  id: string;
+  clientId: string | null;
+  clientName: string | null;
+  sessionDate: string;
+  durationMinutes: number | null;
+  transcriptionStatus: TranscriptionStatus;
+  notesStatus: string;
+}
+
+export interface SidebarSession {
+  id: string;
+  clientId: string | null;
+  clientName: string | null;
+  sessionDate: string;
+}
+
+export interface ClinicalNoteWithSession {
+  id: string;
+  sessionId: string | null;
+  sessionDate: string | null;
+  noteFormat: NoteFormat;
+  status: NoteStatus;
+  content: NoteContent;
+  createdAt: string;
+  updatedAt: string;
 }

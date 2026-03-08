@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test as setup } from "@playwright/test";
 
-const AUTH_DIR = path.join(__dirname, ".auth");
+const AUTH_DIR = path.join(import.meta.dirname, ".auth");
 const AUTH_FILE = path.join(AUTH_DIR, "user.json");
 
 setup("authenticate", async ({ page }) => {

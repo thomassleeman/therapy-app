@@ -12,9 +12,7 @@ test.describe("Authentication Pages", () => {
       await expect(page.getByLabel("Email")).toBeVisible();
       await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
       await expect(page.getByLabel("Password")).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Sign in" }),
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
       await expect(page.getByText("Don't have an account?")).toBeVisible();
     });
 
@@ -31,7 +29,7 @@ test.describe("Authentication Pages", () => {
     test.skip("shows Google OAuth button", async ({ page }) => {
       await page.goto("/sign-in");
       await expect(
-        page.getByRole("button", { name: /sign in with google/i }),
+        page.getByRole("button", { name: /sign in with google/i })
       ).toBeVisible();
     });
 
@@ -50,9 +48,7 @@ test.describe("Authentication Pages", () => {
       await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
       await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
       await expect(page.getByLabel("Confirm Password")).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Sign up" }),
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sign up" })).toBeVisible();
       await expect(page.getByText("Already have an account?")).toBeVisible();
     });
   });

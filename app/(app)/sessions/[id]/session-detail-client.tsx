@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +55,8 @@ interface Props {
   segments: SessionSegment[];
   notes: ClinicalNote[];
   consents: SessionConsent[];
+  clientId: string | null;
+  clientName: string | null;
 }
 
 function formatTimestamp(ms: number): string {
@@ -844,25 +846,42 @@ export function SessionDetailClient({
   segments,
   notes,
   consents,
+  clientId,
+  clientName,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
+
+  const backHref =
+    from === "client" && clientId ? `/clients/${clientId}` : "/sessions";
+  const backLabel =
+    from === "client" && clientId ? (clientName ?? "Client") : "Sessions";
 
   return (
     <div>
       <div className="flex items-center gap-4 mb-8">
-        <Button
-          onClick={() => router.push("/sessions")}
-          size="sm"
-          variant="ghost"
-        >
+        <Button onClick={() => router.push(backHref)} size="sm" variant="ghost">
           <ArrowLeft className="size-4" />
-          Sessions
+          {backLabel}
         </Button>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Session — {formatDate(session.sessionDate)}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
+            {clientName && clientId && (
+              <>
+                <span>Client: </span>
+                <Link
+                  className="underline hover:text-foreground transition-colors"
+                  href={`/clients/${clientId}`}
+                >
+                  {clientName}
+                </Link>
+              </>
+            )}
+            {clientName && clientId && session.deliveryMethod && " \u00B7 "}
             {session.deliveryMethod && (
               <span className="capitalize">{session.deliveryMethod}</span>
             )}
@@ -872,17 +891,40 @@ export function SessionDetailClient({
         </div>
       </div>
 
-      <Link
-        className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 md:w-auto md:justify-start md:gap-2 mb-6"
-        href={
-          session.chatId
-            ? `/chat/${session.chatId}`
-            : `/chat/new?clientId=${session.clientId ?? "general"}`
-        }
-      >
-        <span>Chat About This Session</span>
-        <ArrowRight className="size-4" />
-      </Link>
+      {session.chatId ? (
+        <Link
+          className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 md:w-auto md:justify-start md:gap-2 mb-6"
+          href={`/chat/${session.chatId}`}
+        >
+          <span>Chat About This Session</span>
+          <ArrowRight className="size-4" />
+        </Link>
+      ) : session.transcriptionStatus === "completed" ? (
+        <Link
+          className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 md:w-auto md:justify-start md:gap-2 mb-6"
+          href={`/chat/new?clientId=${session.clientId ?? "general"}&sessionId=${session.id}`}
+        >
+          <span>Chat About This Session</span>
+          <ArrowRight className="size-4" />
+        </Link>
+      ) : (
+        <div className="mb-6">
+          <Link
+            className="flex w-full items-center justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900 md:w-auto md:justify-start md:gap-2"
+            href={`/chat/new?clientId=${session.clientId ?? "general"}`}
+          >
+            <span>
+              Start New Reflection
+              {clientName ? ` for ${clientName}` : ""}
+            </span>
+            <ArrowRight className="size-4" />
+          </Link>
+          <p className="text-xs text-muted-foreground mt-1.5 px-1">
+            Transcript not yet available — this will start a general reflection
+            chat
+          </p>
+        </div>
+      )}
 
       <Tabs defaultValue="transcript">
         <TabsList className="mb-6">
