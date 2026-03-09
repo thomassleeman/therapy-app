@@ -8,12 +8,16 @@ import { DataStreamHandler } from "@/components/data-stream-handler";
 export function NewChatWrapper({
   id,
   initialChatModel,
+  defaultModality,
+  hasProfile,
   preselectedClientId,
   sessionId,
   sessionDate,
 }: {
   id: string;
   initialChatModel: string;
+  defaultModality: string | null;
+  hasProfile?: boolean;
   preselectedClientId?: string | null;
   sessionId?: string | null;
   sessionDate?: string | null;
@@ -31,6 +35,8 @@ export function NewChatWrapper({
     <>
       <Chat
         autoResume={false}
+        defaultModality={defaultModality}
+        hasProfile={hasProfile}
         id={id}
         initialChatModel={initialChatModel}
         initialClientId={selectedClientId}

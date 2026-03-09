@@ -24,6 +24,7 @@ import {
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -317,6 +318,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   return (
     <>
       <SidebarGroup>
+        <SidebarGroupLabel>Chats</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
             <div className="flex flex-col gap-4">
@@ -382,7 +384,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
               <div>Loading Chats...</div>
             </div>
           )}
-
         </SidebarGroupContent>
       </SidebarGroup>
 
@@ -404,7 +405,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </>
   );
 }

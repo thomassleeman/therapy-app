@@ -149,7 +149,9 @@ export type TherapeuticOrientation =
   | "cbt"
   | "psychodynamic"
   | "systemic"
-  | "existential";
+  | "existential"
+  | "mct"
+  | "act";
 
 export const orientationDescriptions: Record<TherapeuticOrientation, string> = {
   integrative:
@@ -163,6 +165,8 @@ export const orientationDescriptions: Record<TherapeuticOrientation, string> = {
     "Ground reflections in systemic principles: relational patterns, family dynamics, circular causality, social context, and the meaning systems within which clients operate.",
   existential:
     "Ground reflections in existential principles: meaning-making, freedom and responsibility, mortality, isolation, authenticity, and the client's way of being-in-the-world.",
+  mct: "Ground reflections in metacognitive therapy principles: metacognitive beliefs, attentional strategies (CAS — Cognitive Attentional Syndrome), detached mindfulness, and the distinction between object-level cognition and metacognition.",
+  act: "Ground reflections in acceptance and commitment therapy principles: psychological flexibility, acceptance, cognitive defusion, present moment awareness, self-as-context, values, and committed action.",
 };
 
 const getOrientationPrompt = (orientation?: TherapeuticOrientation): string => {

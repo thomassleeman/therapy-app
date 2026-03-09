@@ -34,6 +34,8 @@ const therapeuticOrientationSchema = z.enum([
   "psychodynamic",
   "systemic",
   "existential",
+  "mct",
+  "act",
 ]);
 
 export const postRequestBodySchema = z.object({

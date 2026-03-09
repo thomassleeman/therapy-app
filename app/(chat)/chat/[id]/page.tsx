@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import {
   getChatById,
   getMessagesByChatId,
+  getTherapistProfile,
   getTherapySession,
 } from "@/lib/db/queries";
 import { convertToUIMessages } from "@/lib/utils";
@@ -42,13 +43,15 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     return notFound();
   }
 
-  const [messagesFromDb, cookieStore, therapySession] = await Promise.all([
-    getMessagesByChatId({ id }),
-    cookies(),
-    chat.sessionId
-      ? getTherapySession({ id: chat.sessionId })
-      : Promise.resolve(null),
-  ]);
+  const [messagesFromDb, cookieStore, therapySession, therapistProfile] =
+    await Promise.all([
+      getMessagesByChatId({ id }),
+      cookies(),
+      chat.sessionId
+        ? getTherapySession({ id: chat.sessionId })
+        : Promise.resolve(null),
+      getTherapistProfile({ userId: session.user.id }),
+    ]);
 
   const uiMessages = convertToUIMessages(messagesFromDb);
   const chatModelFromCookie = cookieStore.get("chat-model");
@@ -58,6 +61,8 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     <>
       <Chat
         autoResume={true}
+        defaultModality={therapistProfile?.defaultModality ?? null}
+        hasProfile={therapistProfile !== null}
         id={chat.id}
         initialChatModel={chatModel}
         initialClientId={chat.clientId}

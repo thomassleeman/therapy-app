@@ -27,17 +27,50 @@ const DISPLAY_TO_ORIENTATION: Record<string, TherapeuticOrientation> = {
   Integrative: "integrative",
   Systemic: "systemic",
   Existential: "existential",
+  MCT: "mct",
+  ACT: "act",
 };
+
+const ORIENTATION_TO_DISPLAY: Record<string, string> = {
+  cbt: "CBT",
+  "person-centred": "Person-Centred",
+  psychodynamic: "Psychodynamic",
+  integrative: "Integrative",
+  systemic: "Systemic",
+  existential: "Existential",
+  mct: "MCT",
+  act: "ACT",
+};
+
+const ALL_DISPLAY_OPTIONS = [
+  "Integrative",
+  "CBT",
+  "Person-Centred",
+  "Psychodynamic",
+  "MCT",
+  "ACT",
+  "Systemic",
+  "Existential",
+];
 
 function toOrientation(display: string): TherapeuticOrientation {
   return DISPLAY_TO_ORIENTATION[display] ?? "integrative";
 }
 
+function toDisplay(dbModality: string | null): string {
+  if (!dbModality) {
+    return "Integrative";
+  }
+  return ORIENTATION_TO_DISPLAY[dbModality] ?? "Integrative";
+}
+
 function ApproachSelector({
   chatId,
+  defaultModality,
   onApproachChange,
 }: {
   chatId: string;
+  defaultModality: string | null;
   onApproachChange: (orientation: TherapeuticOrientation) => void;
 }) {
   const { clients } = useClients();
@@ -45,9 +78,13 @@ function ApproachSelector({
     chatId,
     initialClientId: null,
   });
-  const [selectedApproach, setSelectedApproach] = useState<string>("General");
 
-  const modalities = useMemo(() => {
+  const therapistDefault = toDisplay(defaultModality);
+
+  const [selectedApproach, setSelectedApproach] =
+    useState<string>(therapistDefault);
+
+  const clientModalities = useMemo(() => {
     if (!selectedClientId) {
       return [];
     }
@@ -55,28 +92,43 @@ function ApproachSelector({
     return client?.therapeuticModalities ?? [];
   }, [clients, selectedClientId]);
 
+  // Build the list of options to show in the dropdown
+  const options = useMemo(() => {
+    if (clientModalities.length > 0) {
+      // Client has modalities — show those plus Integrative as a fallback
+      const items = [...clientModalities];
+      if (!items.includes("Integrative")) {
+        items.push("Integrative");
+      }
+      return items;
+    }
+    // No client or no modalities — show the full set
+    return ALL_DISPLAY_OPTIONS;
+  }, [clientModalities]);
+
+  // Reset selected approach when client changes
   useEffect(() => {
     let next: string;
-    if (modalities.length >= 1) {
-      next = modalities[0];
+    if (clientModalities.length >= 1) {
+      next = clientModalities[0];
     } else {
-      next = "General";
+      next = therapistDefault;
     }
     setSelectedApproach(next);
     onApproachChange(toOrientation(next));
-  }, [modalities, onApproachChange]);
+  }, [clientModalities, therapistDefault, onApproachChange]);
 
-  const hasMultiple = modalities.length > 1;
+  const hasDropdown = options.length > 1;
 
   const pill = (
     <div className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 dark:border-blue-800 dark:bg-blue-950">
       <span className="text-xs text-muted-foreground">Approach:</span>
       <span className="text-xs font-medium">{selectedApproach}</span>
-      {hasMultiple && <ChevronDownIcon />}
+      {hasDropdown && <ChevronDownIcon />}
     </div>
   );
 
-  if (!hasMultiple) {
+  if (!hasDropdown) {
     return pill;
   }
 
@@ -88,15 +140,15 @@ function ApproachSelector({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {modalities.map((modality) => (
+        {options.map((option) => (
           <DropdownMenuItem
-            key={modality}
+            key={option}
             onSelect={() => {
-              setSelectedApproach(modality);
-              onApproachChange(toOrientation(modality));
+              setSelectedApproach(option);
+              onApproachChange(toOrientation(option));
             }}
           >
-            {modality}
+            {option}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -129,6 +181,7 @@ function SessionBadge({
 
 function PureChatHeader({
   chatId,
+  defaultModality,
   selectedClientId,
   sessionId,
   sessionDate,
@@ -136,6 +189,7 @@ function PureChatHeader({
   onApproachChange,
 }: {
   chatId: string;
+  defaultModality: string | null;
   selectedClientId: string | null;
   sessionId: string | null;
   sessionDate: string | null;
@@ -199,6 +253,7 @@ function PureChatHeader({
           <div className="order-5 w-full md:w-auto">
             <ApproachSelector
               chatId={chatId}
+              defaultModality={defaultModality}
               onApproachChange={onApproachChange}
             />
           </div>
@@ -216,6 +271,7 @@ function PureChatHeader({
 export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
   return (
     prevProps.chatId === nextProps.chatId &&
+    prevProps.defaultModality === nextProps.defaultModality &&
     prevProps.selectedClientId === nextProps.selectedClientId &&
     prevProps.sessionId === nextProps.sessionId &&
     prevProps.sessionDate === nextProps.sessionDate &&

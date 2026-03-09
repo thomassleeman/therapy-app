@@ -1,9 +1,8 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import useSWR from "swr";
-import type { User } from "@supabase/supabase-js";
-import type { SidebarSession } from "@/lib/db/types";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -13,6 +12,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import type { SidebarSession } from "@/lib/db/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -35,7 +35,7 @@ export function SidebarRecentSessions({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
   const { data: sessions } = useSWR<SidebarSession[]>(
     user ? "/api/recent-sessions" : null,
-    fetcher,
+    fetcher
   );
 
   if (!user || !sessions || sessions.length === 0) {
@@ -54,7 +54,9 @@ export function SidebarRecentSessions({ user }: { user: User | undefined }) {
                   href={`/sessions/${session.id}`}
                   onClick={() => setOpenMobile(false)}
                 >
-                  <span className="truncate">{formatClientName(session.clientName)}</span>
+                  <span className="truncate">
+                    {formatClientName(session.clientName)}
+                  </span>
                   <span className="ml-auto text-xs text-sidebar-foreground/50">
                     {formatDate(session.sessionDate)}
                   </span>

@@ -29,6 +29,7 @@ import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
+import { ProfileNudgeBanner } from "./profile-nudge-banner";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 import { toast } from "./toast";
 export function Chat({
@@ -38,8 +39,10 @@ export function Chat({
   initialClientId,
   initialSessionId,
   initialSessionDate,
+  defaultModality,
   isReadonly,
   autoResume,
+  hasProfile = true,
 }: {
   id: string;
   initialMessages: ChatMessage[];
@@ -47,8 +50,10 @@ export function Chat({
   initialClientId: string | null;
   initialSessionId?: string | null;
   initialSessionDate?: string | null;
+  defaultModality?: string | null;
   isReadonly: boolean;
   autoResume: boolean;
+  hasProfile?: boolean;
 }) {
   const router = useRouter();
 
@@ -207,12 +212,15 @@ export function Chat({
       <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
         <ChatHeader
           chatId={id}
+          defaultModality={defaultModality ?? null}
           isReadonly={isReadonly}
           onApproachChange={handleApproachChange}
           selectedClientId={initialClientId}
           sessionDate={initialSessionDate ?? null}
           sessionId={initialSessionId ?? null}
         />
+
+        <ProfileNudgeBanner hasProfile={hasProfile} />
 
         <Messages
           addToolApprovalResponse={addToolApprovalResponse}

@@ -2,6 +2,14 @@ import Link from "next/link";
 import { memo } from "react";
 import type { Chat } from "@/lib/db/types";
 import { MoreHorizontalIcon, TrashIcon } from "./icons";
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +43,10 @@ const PureChatItem = ({
               title="Linked to session"
             />
           )}
-          <span>{chat.title}</span>
+          <span className="min-w-0 truncate">{chat.title}</span>
+          <span className="ml-auto shrink-0 text-xs text-sidebar-foreground/50">
+            {formatDate(chat.createdAt)}
+          </span>
         </Link>
       </SidebarMenuButton>
 

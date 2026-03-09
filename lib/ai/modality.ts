@@ -13,6 +13,8 @@ const ORIENTATION_TO_MODALITY: Record<TherapeuticOrientation, string | null> = {
   integrative: null,
   systemic: null,
   existential: null,
+  mct: "mct",
+  act: "act",
 };
 
 export function orientationToModality(

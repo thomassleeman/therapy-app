@@ -379,33 +379,31 @@ function NotesTab({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {(
-            Object.entries(FORMAT_DESCRIPTIONS) as [NoteFormat, string][]
-          ).map(([format, desc]) => (
-            <label
-              className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
-                selectedFormat === format
-                  ? "border-primary bg-primary/5"
-                  : "hover:bg-muted"
-              }`}
-              key={format}
-            >
-              <input
-                checked={selectedFormat === format}
-                className="sr-only"
-                name="note-format"
-                onChange={() => setSelectedFormat(format)}
-                type="radio"
-                value={format}
-              />
-              <span className="text-sm font-medium uppercase">
-                {format}
-              </span>
-              <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                {desc}
-              </span>
-            </label>
-          ))}
+          {(Object.entries(FORMAT_DESCRIPTIONS) as [NoteFormat, string][]).map(
+            ([format, desc]) => (
+              <label
+                className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
+                  selectedFormat === format
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted"
+                }`}
+                key={format}
+              >
+                <input
+                  checked={selectedFormat === format}
+                  className="sr-only"
+                  name="note-format"
+                  onChange={() => setSelectedFormat(format)}
+                  type="radio"
+                  value={format}
+                />
+                <span className="text-sm font-medium uppercase">{format}</span>
+                <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {desc}
+                </span>
+              </label>
+            )
+          )}
         </div>
 
         <div className="space-y-2">

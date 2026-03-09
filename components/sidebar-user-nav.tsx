@@ -1,8 +1,9 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Settings } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
@@ -78,6 +79,18 @@ export function SidebarUserNav({ user }: { user: User }) {
             data-testid="user-nav-menu"
             side="top"
           >
+            <DropdownMenuItem
+              asChild
+              data-testid="user-nav-item-settings"
+            >
+              <Link
+                className="cursor-pointer"
+                href="/settings/profile"
+              >
+                <Settings className="mr-2 size-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer"
               data-testid="user-nav-item-theme"
