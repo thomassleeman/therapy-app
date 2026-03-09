@@ -3,10 +3,9 @@
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
-import { type ChangeEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useSWRConfig } from "swr";
-import useSWRInfinite, { unstable_serialize } from "swr/infinite";
+import useSWRInfinite from "swr/infinite";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +21,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -32,7 +30,7 @@ import {
 import { useClients } from "@/hooks/use-clients";
 import type { Chat, Client } from "@/lib/db/types";
 import { fetcher } from "@/lib/utils";
-import { ChevronDownIcon, LoaderIcon, TrashIcon, UserIcon } from "./icons";
+import { ChevronDownIcon, LoaderIcon, UserIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
 
 type GroupedChatsByClient = {
@@ -168,7 +166,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const pathname = usePathname();
   const id = pathname?.startsWith("/chat/") ? pathname.split("/")[2] : null;
 
-  const { mutate: globalMutate } = useSWRConfig();
   const {
     data: paginatedChatHistories,
     setSize,
@@ -184,8 +181,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
-  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState("");
 
   const hasReachedEnd = paginatedChatHistories
     ? paginatedChatHistories.some((page) => page.hasMore === false)
@@ -258,25 +253,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
         return "Chat deleted successfully";
       },
       error: "Failed to delete chat",
-    });
-  };
-
-  const handleDeleteAll = () => {
-    const deletePromise = fetch("/api/history", {
-      method: "DELETE",
-    });
-
-    toast.promise(deletePromise, {
-      loading: "Deleting all chats...",
-      success: () => {
-        globalMutate(unstable_serialize(getChatHistoryPaginationKey));
-        setShowDeleteAllDialog(false);
-        setDeleteAllConfirmText("");
-        router.replace("/");
-        router.refresh();
-        return "All chats deleted successfully";
-      },
-      error: "Failed to delete all chats",
     });
   };
 
@@ -407,17 +383,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
             </div>
           )}
 
-          {/* Delete All Chats — muted danger link at bottom */}
-          {hasReachedEnd && chatsFromHistory.length > 0 && (
-            <button
-              className="mt-6 flex w-full items-center justify-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/50 hover:text-destructive transition-colors"
-              onClick={() => setShowDeleteAllDialog(true)}
-              type="button"
-            >
-              <TrashIcon size={12} />
-              <span>Delete all chats</span>
-            </button>
-          )}
         </SidebarGroupContent>
       </SidebarGroup>
 
@@ -440,44 +405,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete all chats dialog with type-to-confirm */}
-      <AlertDialog
-        onOpenChange={(open) => {
-          setShowDeleteAllDialog(open);
-          if (!open) {
-            setDeleteAllConfirmText("");
-          }
-        }}
-        open={showDeleteAllDialog}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete all your
-              chats and remove them from our servers. Type{" "}
-              <span className="font-mono font-semibold">DELETE</span> to
-              confirm.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Input
-            onChange={(e: ChangeEvent<HTMLInputElement>) => {
-              setDeleteAllConfirmText(e.target.value);
-            }}
-            placeholder="Type DELETE to confirm"
-            value={deleteAllConfirmText}
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleteAllConfirmText !== "DELETE"}
-              onClick={handleDeleteAll}
-            >
-              Delete All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

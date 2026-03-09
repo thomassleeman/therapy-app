@@ -72,8 +72,8 @@ export async function PATCH(
   });
 
   // Keep therapy_sessions.notes_status in sync with clinical note status
-  if (status === "finalised") {
-    await updateTherapySession({ id, notesStatus: "finalised" });
+  if (status === "reviewed" || status === "finalised") {
+    await updateTherapySession({ id, notesStatus: status });
   }
 
   return NextResponse.json(updatedNote);

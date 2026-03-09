@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { createStandaloneNoteAction } from "@/app/(app)/clients/actions";
 import { ClientDialog } from "@/components/client-dialog";
@@ -108,7 +109,17 @@ export function ClientHubPage({
   clinicalNotes,
   sessions,
 }: ClientHubPageProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") ?? "overview";
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
 
   return (
     <div className="flex flex-1 flex-col bg-background overflow-y-auto">
@@ -165,7 +176,7 @@ export function ClientHubPage({
 
       {/* Tabs */}
       <div className="flex-1 px-4 py-4 md:px-6">
-        <Tabs defaultValue="overview">
+        <Tabs onValueChange={handleTabChange} value={activeTab}>
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="sessions">

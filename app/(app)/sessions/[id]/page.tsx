@@ -41,7 +41,7 @@ export default async function SessionDetailPage({
   ]);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col bg-background overflow-y-auto">
       <SessionDetailClient
         clientId={therapySession.clientId ?? null}
         clientName={client?.name ?? null}

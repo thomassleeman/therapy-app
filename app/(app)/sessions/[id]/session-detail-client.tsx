@@ -2,7 +2,6 @@
 
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   Check,
   FileText,
@@ -11,12 +10,11 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -150,54 +148,48 @@ function TranscriptTab({
 
   if (effectiveStatus !== "completed" && effectiveStatus !== "failed") {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-4 py-12">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <div className="text-center space-y-1">
-            <p className="text-sm font-medium">
-              {effectiveStatus === "transcribing" ||
-              effectiveStatus === "processing"
-                ? "Transcribing session..."
-                : effectiveStatus === "uploading"
-                  ? "Uploading audio..."
-                  : "Waiting for transcription..."}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              This usually takes 2-4 minutes for a 50-minute session.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 py-12">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <div className="text-center space-y-1">
+          <p className="text-sm font-medium">
+            {effectiveStatus === "transcribing" ||
+            effectiveStatus === "processing"
+              ? "Transcribing session..."
+              : effectiveStatus === "uploading"
+                ? "Uploading audio..."
+                : "Waiting for transcription..."}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            This usually takes 2-4 minutes for a 50-minute session.
+          </p>
+        </div>
+      </div>
     );
   }
 
   if (effectiveStatus === "failed") {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-4 py-12">
-          <AlertCircle className="size-6 text-destructive" />
-          <p className="text-sm font-medium text-destructive">
-            Transcription failed
+      <div className="flex flex-col items-center gap-4 py-12">
+        <AlertCircle className="size-6 text-destructive" />
+        <p className="text-sm font-medium text-destructive">
+          Transcription failed
+        </p>
+        {session.errorMessage && (
+          <p className="text-xs text-muted-foreground">
+            {session.errorMessage}
           </p>
-          {session.errorMessage && (
-            <p className="text-xs text-muted-foreground">
-              {session.errorMessage}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </div>
     );
   }
 
   if (segments.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-4 py-12">
-          <p className="text-sm text-muted-foreground">
-            No transcript segments available.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 py-12">
+        <p className="text-sm text-muted-foreground">
+          No transcript segments available.
+        </p>
+      </div>
     );
   }
 
@@ -365,94 +357,88 @@ function NotesTab({
   if (!activeNote) {
     if (session.transcriptionStatus !== "completed") {
       return (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12">
-            <FileText className="size-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground text-center">
-              Notes can be generated after the transcript is complete.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center gap-4 py-12">
+          <FileText className="size-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground text-center">
+            Notes can be generated after the transcript is complete.
+          </p>
+        </div>
       );
     }
 
     return (
       <div className="space-y-6">
-        <Card>
-          <CardContent className="py-6 space-y-6">
-            <div>
-              <h3 className="text-base font-semibold mb-1">
-                Generate Clinical Notes
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Select a note format and our AI will generate a draft from your
-                session transcript for review.
-              </p>
-            </div>
+        <div>
+          <h3 className="text-base font-semibold mb-1">
+            Generate Clinical Notes
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Select a note format and our AI will generate a draft from your
+            session transcript for review.
+          </p>
+        </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(
-                Object.entries(FORMAT_DESCRIPTIONS) as [NoteFormat, string][]
-              ).map(([format, desc]) => (
-                <label
-                  className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
-                    selectedFormat === format
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted"
-                  }`}
-                  key={format}
-                >
-                  <input
-                    checked={selectedFormat === format}
-                    className="sr-only"
-                    name="note-format"
-                    onChange={() => setSelectedFormat(format)}
-                    type="radio"
-                    value={format}
-                  />
-                  <span className="text-sm font-medium uppercase">
-                    {format}
-                  </span>
-                  <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    {desc}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="additional-context">
-                Additional therapist observations (optional)
-              </Label>
-              <Textarea
-                id="additional-context"
-                onChange={(e) => setAdditionalContext(e.target.value)}
-                placeholder="Add any observations not captured in the transcript, e.g. non-verbal cues, your clinical impressions..."
-                rows={3}
-                value={additionalContext}
-              />
-            </div>
-
-            <Button
-              className="w-full min-h-12"
-              disabled={generating}
-              onClick={() => handleGenerate(selectedFormat)}
-              size="lg"
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(
+            Object.entries(FORMAT_DESCRIPTIONS) as [NoteFormat, string][]
+          ).map(([format, desc]) => (
+            <label
+              className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
+                selectedFormat === format
+                  ? "border-primary bg-primary/5"
+                  : "hover:bg-muted"
+              }`}
+              key={format}
             >
-              {generating ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Generating clinical notes... This may take up to a minute.
-                </>
-              ) : (
-                <>
-                  <FileText className="size-4" />
-                  Generate Notes
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+              <input
+                checked={selectedFormat === format}
+                className="sr-only"
+                name="note-format"
+                onChange={() => setSelectedFormat(format)}
+                type="radio"
+                value={format}
+              />
+              <span className="text-sm font-medium uppercase">
+                {format}
+              </span>
+              <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                {desc}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="additional-context">
+            Additional therapist observations (optional)
+          </Label>
+          <Textarea
+            id="additional-context"
+            onChange={(e) => setAdditionalContext(e.target.value)}
+            placeholder="Add any observations not captured in the transcript, e.g. non-verbal cues, your clinical impressions..."
+            rows={3}
+            value={additionalContext}
+          />
+        </div>
+
+        <Button
+          className="w-full min-h-12"
+          disabled={generating}
+          onClick={() => handleGenerate(selectedFormat)}
+          size="lg"
+        >
+          {generating ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Generating clinical notes... This may take up to a minute.
+            </>
+          ) : (
+            <>
+              <FileText className="size-4" />
+              Generate Notes
+            </>
+          )}
+        </Button>
       </div>
     );
   }
@@ -850,101 +836,119 @@ export function SessionDetailClient({
   clientName,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
+  const activeTab = searchParams.get("tab") ?? "transcript";
 
   const backHref =
     from === "client" && clientId ? `/clients/${clientId}` : "/sessions";
   const backLabel =
     from === "client" && clientId ? (clientName ?? "Client") : "Sessions";
 
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-8">
-        <Button onClick={() => router.push(backHref)} size="sm" variant="ghost">
-          <ArrowLeft className="size-4" />
-          {backLabel}
-        </Button>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Session — {formatDate(session.sessionDate)}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {clientName && clientId && (
-              <>
-                <span>Client: </span>
-                <Link
-                  className="underline hover:text-foreground transition-colors"
-                  href={`/clients/${clientId}`}
-                >
-                  {clientName}
-                </Link>
-              </>
-            )}
-            {clientName && clientId && session.deliveryMethod && " \u00B7 "}
-            {session.deliveryMethod && (
-              <span className="capitalize">{session.deliveryMethod}</span>
-            )}
-            {session.durationMinutes &&
-              ` \u00B7 ${session.durationMinutes} minutes`}
-          </p>
-        </div>
-      </div>
-
-      {session.chatId ? (
-        <Link
-          className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 md:w-auto md:justify-start md:gap-2 mb-6"
-          href={`/chat/${session.chatId}`}
-        >
-          <span>Chat About This Session</span>
-          <ArrowRight className="size-4" />
-        </Link>
-      ) : session.transcriptionStatus === "completed" ? (
-        <Link
-          className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 md:w-auto md:justify-start md:gap-2 mb-6"
-          href={`/chat/new?clientId=${session.clientId ?? "general"}&sessionId=${session.id}`}
-        >
-          <span>Chat About This Session</span>
-          <ArrowRight className="size-4" />
-        </Link>
-      ) : (
-        <div className="mb-6">
+    <>
+      {/* Header */}
+      <header className="bg-background border-b px-4 py-4 md:px-6">
+        <div className="mb-3">
           <Link
-            className="flex w-full items-center justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900 md:w-auto md:justify-start md:gap-2"
-            href={`/chat/new?clientId=${session.clientId ?? "general"}`}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            href={backHref}
           >
-            <span>
-              Start New Reflection
-              {clientName ? ` for ${clientName}` : ""}
-            </span>
-            <ArrowRight className="size-4" />
+            &larr; {backLabel}
           </Link>
-          <p className="text-xs text-muted-foreground mt-1.5 px-1">
-            Transcript not yet available — this will start a general reflection
-            chat
-          </p>
         </div>
-      )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Session — {formatDate(session.sessionDate)}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {clientName && clientId && (
+                <>
+                  <span>Client: </span>
+                  <Link
+                    className="underline hover:text-foreground transition-colors"
+                    href={`/clients/${clientId}`}
+                  >
+                    {clientName}
+                  </Link>
+                </>
+              )}
+              {clientName && clientId && session.deliveryMethod && " \u00B7 "}
+              {session.deliveryMethod && (
+                <span className="capitalize">{session.deliveryMethod}</span>
+              )}
+              {session.durationMinutes &&
+                ` \u00B7 ${session.durationMinutes} minutes`}
+            </p>
+          </div>
 
-      <Tabs defaultValue="transcript">
-        <TabsList className="mb-6">
-          <TabsTrigger value="transcript">Transcript</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="details">Details</TabsTrigger>
-        </TabsList>
+          {session.chatId ? (
+            <Link
+              className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
+              href={`/chat/${session.chatId}`}
+            >
+              <span>Chat About This Session</span>
+              <ArrowRight className="size-4" />
+            </Link>
+          ) : session.transcriptionStatus === "completed" ? (
+            <Link
+              className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
+              href={`/chat/new?clientId=${session.clientId ?? "general"}&sessionId=${session.id}`}
+            >
+              <span>Chat About This Session</span>
+              <ArrowRight className="size-4" />
+            </Link>
+          ) : (
+            <div>
+              <Link
+                className="flex w-full items-center justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900 sm:w-auto sm:justify-start sm:gap-2"
+                href={`/chat/new?clientId=${session.clientId ?? "general"}`}
+              >
+                <span>
+                  Start New Reflection
+                  {clientName ? ` for ${clientName}` : ""}
+                </span>
+                <ArrowRight className="size-4" />
+              </Link>
+              <p className="text-xs text-muted-foreground mt-1.5 px-1">
+                Transcript not yet available — this will start a general
+                reflection chat
+              </p>
+            </div>
+          )}
+        </div>
+      </header>
 
-        <TabsContent value="transcript">
-          <TranscriptTab segments={segments} session={session} />
-        </TabsContent>
+      {/* Tabs */}
+      <div className="flex-1 px-4 py-4 md:px-6">
+        <Tabs onValueChange={handleTabChange} value={activeTab}>
+          <TabsList>
+            <TabsTrigger value="transcript">Transcript</TabsTrigger>
+            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="details">Details</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="notes">
-          <NotesTab notes={notes} session={session} />
-        </TabsContent>
+          <TabsContent className="mt-4" value="transcript">
+            <TranscriptTab segments={segments} session={session} />
+          </TabsContent>
 
-        <TabsContent value="details">
-          <DetailsTab consents={consents} session={session} />
-        </TabsContent>
-      </Tabs>
-    </div>
+          <TabsContent className="mt-4" value="notes">
+            <NotesTab notes={notes} session={session} />
+          </TabsContent>
+
+          <TabsContent className="mt-4" value="details">
+            <DetailsTab consents={consents} session={session} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
   );
 }

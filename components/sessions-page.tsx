@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -39,7 +40,7 @@ import {
 } from "./list-page";
 
 type SessionFilter = "completed" | "transcribing" | "pending" | "failed";
-type NotesFilter = "none" | "draft" | "finalised";
+type NotesFilter = "none" | "draft" | "reviewed" | "finalised";
 
 const SESSION_FILTER_OPTIONS: { value: SessionFilter; label: string }[] = [
   { value: "completed", label: "Completed" },
@@ -76,8 +77,10 @@ function matchesNotesFilter(notesStatus: string, filter: NotesFilter): boolean {
       return notesStatus === "none" || notesStatus === "";
     case "draft":
       return notesStatus === "draft";
+    case "reviewed":
+      return notesStatus === "reviewed";
     case "finalised":
-      return notesStatus === "finalised" || notesStatus === "reviewed";
+      return notesStatus === "finalised";
     default:
       return false;
   }
@@ -234,60 +237,10 @@ function SummaryCards({ counts }: { counts: SummaryCounts }) {
   );
 }
 
-// ── Contextual row action ─────────────────────────────────────────────
-
-function RowAction({ session }: { session: TherapySessionWithClient }) {
-  if (session.transcriptionStatus === "failed") {
-    return (
-      <Button
-        asChild
-        className="text-red-600 dark:text-red-400"
-        size="sm"
-        variant="ghost"
-      >
-        <Link href={`/sessions/${session.id}`}>Retry</Link>
-      </Button>
-    );
-  }
-
-  if (
-    session.transcriptionStatus === "completed" &&
-    (session.notesStatus === "none" || session.notesStatus === "")
-  ) {
-    return (
-      <Button
-        asChild
-        className="text-amber-600 dark:text-amber-400"
-        size="sm"
-        variant="ghost"
-      >
-        <Link href={`/sessions/${session.id}?tab=notes`}>Generate Notes</Link>
-      </Button>
-    );
-  }
-
-  if (
-    session.notesStatus === "draft" ||
-    session.notesStatus === "reviewed" ||
-    session.notesStatus === "finalised"
-  ) {
-    return (
-      <Button asChild size="sm" variant="ghost">
-        <Link href={`/sessions/${session.id}?tab=notes`}>View Notes</Link>
-      </Button>
-    );
-  }
-
-  return (
-    <Button asChild size="sm" variant="ghost">
-      <Link href={`/sessions/${session.id}`}>View</Link>
-    </Button>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────
 
 export function SessionsPage() {
+  const router = useRouter();
   const { sessions, isLoading, refresh } = useSessions();
   const { clients } = useClients();
   const [searchQuery, setSearchQuery] = useState("");
@@ -403,6 +356,7 @@ export function SessionsPage() {
                 <SelectItem value="all">All notes</SelectItem>
                 <SelectItem value="none">No notes</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="reviewed">Reviewed</SelectItem>
                 <SelectItem value="finalised">Finalised</SelectItem>
               </SelectContent>
             </Select>
@@ -497,8 +451,15 @@ export function SessionsPage() {
                     <tbody className="divide-y divide-border">
                       {filteredSessions.map((s) => (
                         <tr
-                          className="hover:bg-muted/50 transition-colors"
+                          className="hover:bg-muted/50 transition-colors cursor-pointer"
                           key={s.id}
+                          onClick={(e) => {
+                            const target = e.target as HTMLElement;
+                            if (target.closest("a, button")) {
+                              return;
+                            }
+                            router.push(`/sessions/${s.id}`);
+                          }}
                         >
                           <td className="py-4 pr-3 pl-4 sm:pl-0">
                             <Link
@@ -556,18 +517,15 @@ export function SessionsPage() {
                           </td>
 
                           <td className="py-4 pr-4 pl-3 text-right whitespace-nowrap sm:pr-0">
-                            <div className="flex items-center justify-end gap-1">
-                              <RowAction session={s} />
-                              <Button
-                                className="size-8 text-destructive hover:text-destructive"
-                                onClick={() => setDeleteSession(s)}
-                                size="icon"
-                                variant="ghost"
-                              >
-                                <TrashIcon />
-                                <span className="sr-only">Delete session</span>
-                              </Button>
-                            </div>
+                            <Button
+                              className="size-8 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteSession(s)}
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <TrashIcon />
+                              <span className="sr-only">Delete session</span>
+                            </Button>
                           </td>
                         </tr>
                       ))}
