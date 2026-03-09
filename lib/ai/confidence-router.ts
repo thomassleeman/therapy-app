@@ -63,7 +63,7 @@ export type ConfidenceRoute<T> =
  * content is not sourced from the curated platform knowledge base.
  */
 export const GENERAL_KNOWLEDGE_DISCLAIMER =
-  "I don't have specific guidance on this in the knowledge base. The following is based on general clinical knowledge and should not be treated as verified platform guidance. Always consult your supervisor for case-specific decisions.";
+  "No relevant knowledge base content was found. Respond from general clinical knowledge. Do not preface with disclaimers about the knowledge base — the UI handles attribution. Recommend supervisor consultation where appropriate.";
 
 /**
  * Formats an array of sensitive category slugs into a human-readable string.

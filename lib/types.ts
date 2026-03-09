@@ -37,7 +37,15 @@ export type CustomUIDataTypes = {
   clear: null;
   finish: null;
   "chat-title": string;
+  ragStatus: {
+    status: "searching" | "complete";
+    strategy: "grounded" | "general_knowledge" | "graceful_decline" | null;
+    documentCount: number | null;
+    confidenceTier: "high" | "moderate" | "low" | null;
+  };
 };
+
+export type RagStatusData = CustomUIDataTypes["ragStatus"];
 
 export type ChatMessage = UIMessage<
   MessageMetadata,

@@ -6,6 +6,18 @@ import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
 
+function lastAssistantMessageHasVisibleContent(messages: ChatMessage[]): boolean {
+  const lastAssistant = [...messages].reverse().find((m) => {
+    return m.role === "assistant";
+  });
+  if (!lastAssistant) return false;
+  return lastAssistant.parts.some(
+    (part) =>
+      (part.type === "text" && part.text.trim().length > 0) ||
+      part.type === "reasoning"
+  );
+}
+
 type MessagesProps = {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
@@ -73,7 +85,8 @@ function PureMessages({
             />
           ))}
 
-          {status === "submitted" &&
+          {((status === "submitted") ||
+            (status === "streaming" && !lastAssistantMessageHasVisibleContent(messages))) &&
             !messages.some((msg) =>
               msg.parts?.some(
                 (part) => "state" in part && part.state === "approval-responded"

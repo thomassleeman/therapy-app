@@ -33,7 +33,7 @@ import {
 import type { DBMessage } from "@/lib/db/types";
 import { devLogger } from "@/lib/dev/logger";
 import { ChatSDKError } from "@/lib/errors";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, RagStatusData } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
@@ -264,6 +264,18 @@ export async function POST(request: Request) {
       const stream = createUIMessageStream({
         originalMessages: isToolApprovalFlow ? uiMessages : undefined,
         execute: async ({ writer: dataStream }) => {
+          // ── RAG status: searching ─────────────────────────────────
+          dataStream.write({
+            type: "data-ragStatus",
+            id: "rag-status",
+            data: {
+              status: "searching" as const,
+              strategy: null,
+              documentCount: null,
+              confidenceTier: null,
+            },
+          });
+
           const result = await therapyReflectionAgent.stream({
             messages: modelMessages,
             options: {
@@ -313,6 +325,54 @@ export async function POST(request: Request) {
               console.error("[chat] Failed to write fallback text delta:", err);
             }
           }
+
+          // ── RAG status: extract strategy from tool results ──────────
+          const kbToolNames = new Set([
+            "searchKnowledgeBase",
+            "searchLegislation",
+            "searchGuidelines",
+            "searchTherapeuticContent",
+          ]);
+
+          let finalStrategy: RagStatusData["strategy"] = null;
+          let finalDocumentCount: number | null = null;
+          let finalConfidenceTier: RagStatusData["confidenceTier"] = null;
+
+          for (const step of steps) {
+            for (const toolResult of step.toolResults ?? []) {
+              if (kbToolNames.has(toolResult.toolName)) {
+                const output = toolResult.output as Record<string, unknown>;
+                if (output.strategy && typeof output.strategy === "string") {
+                  finalStrategy = output.strategy as RagStatusData["strategy"];
+                  finalDocumentCount =
+                    typeof output.result_count === "number"
+                      ? output.result_count
+                      : null;
+                  finalConfidenceTier =
+                    typeof output.confidenceTier === "string"
+                      ? (output.confidenceTier as RagStatusData["confidenceTier"])
+                      : null;
+                }
+              }
+            }
+          }
+
+          if (!fullText || fullText.trim().length === 0) {
+            finalStrategy = "graceful_decline";
+            finalConfidenceTier = "low";
+            finalDocumentCount = 0;
+          }
+
+          dataStream.write({
+            type: "data-ragStatus",
+            id: "rag-status",
+            data: {
+              status: "complete" as const,
+              strategy: finalStrategy,
+              documentCount: finalDocumentCount,
+              confidenceTier: finalConfidenceTier,
+            },
+          });
 
           // ── Usage and finish reason logging ──────────────────────────────
           const toolCallCount = steps.reduce(

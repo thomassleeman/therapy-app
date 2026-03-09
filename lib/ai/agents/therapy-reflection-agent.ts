@@ -1,4 +1,9 @@
-import { type InferAgentUIMessage, stepCountIs, ToolLoopAgent } from "ai";
+import {
+  type InferAgentUIMessage,
+  smoothStream,
+  stepCountIs,
+  ToolLoopAgent,
+} from "ai";
 import { z } from "zod";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import {
@@ -81,6 +86,7 @@ export const therapyReflectionAgent = new ToolLoopAgent({
       providerOptions: isReasoningModel
         ? { anthropic: { thinking: { type: "enabled", budgetTokens: 10_000 } } }
         : undefined,
+      experimental_transform: smoothStream({ chunking: "word" }),
       experimental_telemetry: {
         isEnabled: isProductionEnvironment,
         functionId: "stream-text",

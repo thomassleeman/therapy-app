@@ -6,6 +6,18 @@ import type { ChatMessage } from "@/lib/types";
 import type { UIArtifact } from "./artifact";
 import { PreviewMessage, ThinkingMessage } from "./message";
 
+function lastAssistantMessageHasVisibleContent(messages: ChatMessage[]): boolean {
+  const lastAssistant = [...messages].reverse().find((m) => {
+    return m.role === "assistant";
+  });
+  if (!lastAssistant) return false;
+  return lastAssistant.parts.some(
+    (part) =>
+      (part.type === "text" && part.text.trim().length > 0) ||
+      part.type === "reasoning"
+  );
+}
+
 type ArtifactMessagesProps = {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
@@ -58,7 +70,8 @@ function PureArtifactMessages({
       ))}
 
       <AnimatePresence mode="wait">
-        {status === "submitted" &&
+        {((status === "submitted") ||
+          (status === "streaming" && !lastAssistantMessageHasVisibleContent(messages))) &&
           !messages.some((msg) =>
             msg.parts?.some(
               (part) => "state" in part && part.state === "approval-responded"

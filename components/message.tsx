@@ -15,6 +15,7 @@ import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
+import { RagStatusIndicator } from "./rag-status-indicator";
 import { SEARCH_TOOL_TYPES, SearchToolStatus } from "./search-tool-status";
 
 const PurePreviewMessage = ({
@@ -212,6 +213,17 @@ const PurePreviewMessage = ({
                     result={part.output}
                   />
                 </div>
+              );
+            }
+
+            /* ── RAG status badge ────────────────────────────────── */
+
+            if (type === "data-ragStatus") {
+              return (
+                <RagStatusIndicator
+                  data={part.data}
+                  key={part.id ?? `rag-status-${message.id}`}
+                />
               );
             }
 
