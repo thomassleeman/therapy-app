@@ -7,19 +7,24 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  CircleCheck,
+  CircleX,
   FileText,
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { checkDocumentSufficiency } from "@/lib/documents/sufficiency";
+import type { DataAvailability, SufficiencyResult } from "@/lib/documents/sufficiency";
 import {
   CLINICAL_DOCUMENT_TYPES,
   DOCUMENT_TYPE_REGISTRY,
@@ -37,6 +42,7 @@ interface DocumentGenerationFormProps {
   existingDocuments: ClinicalDocumentSummary[];
   clinicalNotes: ClinicalNoteWithSession[];
   sessions: TherapySessionWithClient[];
+  dataAvailability: DataAvailability;
 }
 
 export function DocumentGenerationForm({
@@ -45,6 +51,7 @@ export function DocumentGenerationForm({
   existingDocuments,
   clinicalNotes,
   sessions,
+  dataAvailability,
 }: DocumentGenerationFormProps) {
   const router = useRouter();
 
@@ -67,6 +74,27 @@ export function DocumentGenerationForm({
   const typeConfig: DocumentTypeConfig | null = selectedType
     ? DOCUMENT_TYPE_REGISTRY[selectedType]
     : null;
+
+  // Sufficiency check for the selected type
+  const [sufficiency, setSufficiency] = useState<SufficiencyResult | null>(null);
+
+  useEffect(() => {
+    if (selectedType) {
+      const result = checkDocumentSufficiency(selectedType, dataAvailability);
+      setSufficiency(result);
+    } else {
+      setSufficiency(null);
+    }
+  }, [selectedType, dataAvailability]);
+
+  // Pre-compute sufficiency for all types (for card indicators)
+  const sufficiencyByType = useMemo(() => {
+    const results: Partial<Record<ClinicalDocumentType, SufficiencyResult>> = {};
+    for (const type of CLINICAL_DOCUMENT_TYPES) {
+      results[type] = checkDocumentSufficiency(type, dataAvailability);
+    }
+    return results;
+  }, [dataAvailability]);
 
   // Check which prerequisites are missing for each type
   const missingPrerequisites = useMemo(() => {
@@ -107,8 +135,8 @@ export function DocumentGenerationForm({
     setSelectedSessionIds(sessions.map((s) => s.id));
   };
 
-  // Data availability for the selected type
-  const dataAvailability = useMemo(() => {
+  // Per-type data source summary for display in Step 2
+  const typeDataSummary = useMemo(() => {
     if (!typeConfig) return null;
 
     const sources = typeConfig.dataSources;
@@ -176,6 +204,18 @@ export function DocumentGenerationForm({
         body: JSON.stringify(body),
       });
 
+      if (res.status === 422) {
+        const errorData = await res.json().catch(() => ({ blockers: [], warnings: [] }));
+        setSufficiency({
+          canGenerate: false,
+          blockers: errorData.blockers || [],
+          warnings: errorData.warnings || [],
+          dataAvailable: dataAvailability,
+        });
+        setIsGenerating(false);
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
@@ -240,6 +280,7 @@ export function DocumentGenerationForm({
             const config = DOCUMENT_TYPE_REGISTRY[type];
             const isSelected = selectedType === type;
             const missing = missingPrerequisites[type];
+            const typeSufficiency = sufficiencyByType[type];
 
             return (
               <button
@@ -270,6 +311,25 @@ export function DocumentGenerationForm({
                     <p className="text-xs text-muted-foreground/70 mt-1.5">
                       {config.wordCountGuidance}
                     </p>
+                    {/* Sufficiency indicator */}
+                    {typeSufficiency && typeSufficiency.blockers.length > 0 && (
+                      <p className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 mt-1.5">
+                        <CircleX className="size-3.5 shrink-0" />
+                        Insufficient data
+                      </p>
+                    )}
+                    {typeSufficiency && typeSufficiency.blockers.length === 0 && typeSufficiency.warnings.length > 0 && (
+                      <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+                        <AlertTriangle className="size-3.5 shrink-0" />
+                        Limited data available
+                      </p>
+                    )}
+                    {typeSufficiency && typeSufficiency.blockers.length === 0 && typeSufficiency.warnings.length === 0 && (
+                      <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-1.5">
+                        <CircleCheck className="size-3.5 shrink-0" />
+                        Ready to generate
+                      </p>
+                    )}
                   </div>
                   {isSelected && (
                     <CheckCircle2 className="size-5 text-primary shrink-0" />
@@ -294,7 +354,7 @@ export function DocumentGenerationForm({
       </section>
 
       {/* Step 2: Data Review — shown after type is selected */}
-      {selectedType && dataAvailability && (
+      {selectedType && typeDataSummary && (
         <section className="mb-10">
           <div className="flex items-center gap-2 mb-4">
             <div className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-medium">
@@ -303,9 +363,47 @@ export function DocumentGenerationForm({
             <h2 className="text-lg font-medium">Available Data</h2>
           </div>
 
+          {/* Sufficiency alerts */}
+          {sufficiency && sufficiency.blockers.length > 0 && (
+            <Alert variant="destructive" className="mb-4">
+              <CircleX className="size-4" />
+              <AlertTitle>Cannot generate — insufficient data</AlertTitle>
+              <AlertDescription>
+                {sufficiency.blockers.map((blocker) => (
+                  <p key={blocker} className="mt-1">{blocker}</p>
+                ))}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {sufficiency && sufficiency.blockers.length === 0 && sufficiency.warnings.length > 0 && (
+            <Alert className="mb-4 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-500">
+              <AlertTriangle className="size-4" />
+              <AlertTitle>Limited source data</AlertTitle>
+              <AlertDescription className="text-amber-800 dark:text-amber-300">
+                {sufficiency.warnings.map((warning) => (
+                  <p key={warning} className="mt-1">{warning}</p>
+                ))}
+                <p className="mt-2 text-xs">
+                  You can still generate this document, but the output may be incomplete. Consider addressing the gaps above first.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {sufficiency && sufficiency.blockers.length === 0 && sufficiency.warnings.length === 0 && (
+            <Alert className="mb-4 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 text-green-900 dark:text-green-200 [&>svg]:text-green-600 dark:[&>svg]:text-green-500">
+              <CircleCheck className="size-4" />
+              <AlertTitle>Ready to generate</AlertTitle>
+              <AlertDescription className="text-green-800 dark:text-green-300">
+                All recommended source data is available. The document should generate with good clinical detail.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Card>
             <CardContent className="py-4 space-y-3">
-              {dataAvailability.hasClientRecord && (
+              {typeDataSummary.hasClientRecord && (
                 <DataRow
                   label="Client record"
                   value="Available"
@@ -313,38 +411,38 @@ export function DocumentGenerationForm({
                 />
               )}
 
-              {dataAvailability.usesSessions && (
+              {typeDataSummary.usesSessions && (
                 <DataRow
                   label="Sessions"
-                  value={`${dataAvailability.sessionCount} session${dataAvailability.sessionCount !== 1 ? "s" : ""} available`}
+                  value={`${typeDataSummary.sessionCount} session${typeDataSummary.sessionCount !== 1 ? "s" : ""} available`}
                   status={
-                    dataAvailability.sessionCount === 0 ? "warning" : "ok"
+                    typeDataSummary.sessionCount === 0 ? "warning" : "ok"
                   }
                   warningText="No sessions available — the generated document will have limited clinical detail."
                 />
               )}
 
-              {dataAvailability.usesNotes && (
+              {typeDataSummary.usesNotes && (
                 <DataRow
                   label="Clinical notes"
-                  value={`${dataAvailability.noteCount} note${dataAvailability.noteCount !== 1 ? "s" : ""} available`}
+                  value={`${typeDataSummary.noteCount} note${typeDataSummary.noteCount !== 1 ? "s" : ""} available`}
                   status={
-                    dataAvailability.noteCount === 0 ? "warning" : "ok"
+                    typeDataSummary.noteCount === 0 ? "warning" : "ok"
                   }
                   warningText="No clinical notes available — the generated document will have limited clinical detail."
                 />
               )}
 
-              {dataAvailability.usesDocuments && (
+              {typeDataSummary.usesDocuments && (
                 <>
-                  {dataAvailability.relevantDocuments.length > 0 ? (
+                  {typeDataSummary.relevantDocuments.length > 0 ? (
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="size-4 text-green-600 dark:text-green-500 shrink-0" />
                         <span className="font-medium">Prior documents</span>
                       </div>
                       <div className="ml-6 space-y-1">
-                        {dataAvailability.relevantDocuments.map((doc) => (
+                        {typeDataSummary.relevantDocuments.map((doc) => (
                           <p
                             key={doc.id}
                             className="text-xs text-muted-foreground"
@@ -547,7 +645,7 @@ export function DocumentGenerationForm({
           <Button
             size="lg"
             className="w-full min-h-12 text-base"
-            disabled={isGenerating}
+            disabled={isGenerating || sufficiency?.canGenerate === false}
             onClick={handleGenerate}
           >
             {isGenerating ? (
@@ -556,8 +654,12 @@ export function DocumentGenerationForm({
                 Generating {typeConfig?.label}... This may take up to 3
                 minutes.
               </>
+            ) : sufficiency?.canGenerate === false ? (
+              "Cannot generate"
             ) : error ? (
               "Try Again"
+            ) : sufficiency && sufficiency.warnings.length > 0 ? (
+              "Generate with limited data"
             ) : (
               `Generate ${typeConfig?.label ?? "Document"}`
             )}

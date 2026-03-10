@@ -23,3 +23,9 @@ Removed the "Delete all chats" button and its type-to-confirm dialog from the si
 **Files:** `components/sidebar-history.tsx`, `components/sidebar-history-item.tsx`
 
 Added a "Chats" `SidebarGroupLabel` heading to the chat history section in the sidebar, matching the existing "Recent Sessions" heading style. Also added creation dates to each chat item in the sidebar — displayed as truncated title on the left with date (e.g. "9 Mar") on the right, matching the sessions format. The date uses `shrink-0` to ensure it's never truncated; the title truncates instead via `min-w-0 truncate`.
+
+## 2026-03-10 — Document viewer: added delete document with confirmation
+
+**Files:** `components/documents/document-viewer.tsx`, `app/api/documents/[id]/route.ts`
+
+Added the ability to delete a clinical document from the document viewer page (`clients/[id]/documents/[documentId]`). A "Delete" button with a trash icon is shown at the right end of the action buttons area, available on all document statuses (draft, reviewed, finalised). Clicking it opens a confirmation dialog warning that the action cannot be undone. On confirmation, a `DELETE` request is sent to `/api/documents/[id]`, which calls the existing `deleteClinicalDocument` query (scoped to the authenticated therapist). On success, a toast is shown and the user is redirected back to the client page.

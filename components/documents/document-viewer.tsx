@@ -12,6 +12,7 @@ import {
   Lock,
   MessageSquare,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -143,6 +144,8 @@ export function DocumentViewer({
   const [saving, setSaving] = useState(false);
   const [confirmFinalise, setConfirmFinalise] = useState(false);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [referencesOpen, setReferencesOpen] = useState(false);
 
   const isEditable =
@@ -182,6 +185,27 @@ export function DocumentViewer({
       setSaving(false);
     }
   }, [document, editedContent, editedTitle]);
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/documents/${document.id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast({ type: "success", description: "Document deleted." });
+        router.push(`/clients/${clientId}`);
+      } else {
+        toast({ type: "error", description: "Failed to delete document." });
+      }
+    } catch {
+      toast({ type: "error", description: "Failed to delete document." });
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [document.id, clientId, router]);
 
   const handleStatusUpdate = useCallback(
     async (status: "reviewed" | "finalised") => {
@@ -478,6 +502,17 @@ export function DocumentViewer({
               Create New Version
             </Button>
           )}
+
+          <Button
+            className="min-h-11 ml-auto"
+            disabled={saving || deleting}
+            onClick={() => setConfirmDelete(true)}
+            size="lg"
+            variant="ghost"
+          >
+            <Trash2 className="size-4" />
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -539,6 +574,37 @@ export function DocumentViewer({
               variant="destructive"
             >
               Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <Dialog onOpenChange={setConfirmDelete} open={confirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this document? This action cannot
+              be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => setConfirmDelete(false)}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={deleting}
+              onClick={handleDelete}
+              variant="destructive"
+            >
+              {deleting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                "Delete Document"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

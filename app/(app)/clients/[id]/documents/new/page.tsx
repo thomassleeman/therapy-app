@@ -8,6 +8,7 @@ import {
   getClinicalNotesByClient,
   getTherapySessions,
 } from "@/lib/db/queries";
+import { buildDataAvailability } from "@/lib/documents/build-data-availability";
 
 export default async function NewDocumentPage({
   params,
@@ -41,12 +42,29 @@ export default async function NewDocumentPage({
     notFound();
   }
 
+  const dataAvailability = buildDataAvailability({
+    client: {
+      presentingIssues: client.presentingIssues,
+      treatmentGoals: client.treatmentGoals,
+      riskConsiderations: client.riskConsiderations,
+    },
+    sessions: sessions.map((s) => ({
+      transcriptionStatus: s.transcriptionStatus,
+    })),
+    notes: notes.map((n) => ({ status: n.status })),
+    documents: documents.map((d) => ({
+      documentType: d.documentType,
+      status: d.status,
+    })),
+  });
+
   return (
     <DocumentGenerationForm
       clientId={clientId}
       clientName={client.name}
-      existingDocuments={documents}
       clinicalNotes={notes}
+      dataAvailability={dataAvailability}
+      existingDocuments={documents}
       sessions={sessions}
     />
   );

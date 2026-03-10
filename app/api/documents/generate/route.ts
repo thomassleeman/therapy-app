@@ -10,10 +10,15 @@ import {
   createClinicalDocument,
   deleteClinicalDocument,
   getClientById,
+  getClinicalDocumentsByClient,
+  getClinicalNotesByClient,
   getTherapistProfile,
+  getTherapySessions,
   updateClinicalDocument,
 } from "@/lib/db/queries";
+import { buildDataAvailability } from "@/lib/documents/build-data-availability";
 import { assembleDocumentContext } from "@/lib/documents/context-assembly";
+import { checkDocumentSufficiency } from "@/lib/documents/sufficiency";
 import type { ClinicalDocumentType } from "@/lib/documents/types";
 import {
   CLINICAL_DOCUMENT_TYPES,
@@ -207,6 +212,52 @@ export async function POST(request: Request) {
 
     if (client.therapistId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Sufficiency check — fail fast before expensive context assembly or LLM calls
+    const [sessions, notes, existingDocuments] = await Promise.all([
+      getTherapySessions({ therapistId: session.user.id, clientId }),
+      getClinicalNotesByClient({ clientId, therapistId: session.user.id }),
+      getClinicalDocumentsByClient({ clientId, therapistId: session.user.id }),
+    ]);
+
+    const dataAvailability = buildDataAvailability({
+      client: {
+        presentingIssues: client.presentingIssues,
+        treatmentGoals: client.treatmentGoals,
+        riskConsiderations: client.riskConsiderations,
+      },
+      sessions: sessions.map((s) => ({
+        transcriptionStatus: s.transcriptionStatus,
+      })),
+      notes: notes.map((n) => ({ status: n.status })),
+      documents: existingDocuments.map((d) => ({
+        documentType: d.documentType,
+        status: d.status,
+      })),
+    });
+
+    const sufficiency = checkDocumentSufficiency(
+      validatedType,
+      dataAvailability
+    );
+
+    if (!sufficiency.canGenerate) {
+      return NextResponse.json(
+        {
+          error: "Insufficient data to generate this document",
+          blockers: sufficiency.blockers,
+          warnings: sufficiency.warnings,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (sufficiency.warnings.length > 0) {
+      console.log(
+        `[documents] Generating ${documentType} with warnings:`,
+        sufficiency.warnings
+      );
     }
 
     // Fetch therapist profile

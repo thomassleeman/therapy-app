@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
-import { updateClinicalDocument } from "@/lib/db/queries";
+import { deleteClinicalDocument, updateClinicalDocument } from "@/lib/db/queries";
 import type { ClinicalDocumentStatus } from "@/lib/documents/types";
 import { CLINICAL_DOCUMENT_STATUSES } from "@/lib/documents/types";
 
@@ -53,6 +53,28 @@ export async function PATCH(
   } catch {
     return NextResponse.json(
       { error: "Failed to update document" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    await deleteClinicalDocument({ id, therapistId: session.user.id });
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to delete document" },
       { status: 500 }
     );
   }
