@@ -1,6 +1,10 @@
 // Database types for Supabase
 // These types mirror the database schema
 
+import type {
+  ClinicalDocumentStatus,
+  ClinicalDocumentType,
+} from "@/lib/documents/types";
 import { JURISDICTIONS, type Jurisdiction } from "@/lib/types/knowledge";
 
 export type VisibilityType = "public" | "private";
@@ -544,6 +548,64 @@ export interface ClinicalNoteWithSession {
   noteFormat: NoteFormat;
   status: NoteStatus;
   content: NoteContent;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Clinical Document types ──────────────────────────────────────────
+
+export interface ClinicalDocument {
+  id: string;
+  clientId: string;
+  therapistId: string;
+  documentType: ClinicalDocumentType;
+  title: string;
+  content: Record<string, string>; // section key → section text
+  status: ClinicalDocumentStatus;
+  version: number;
+  supersedesId: string | null;
+  generatedBy: "ai" | "manual";
+  modelUsed: string | null;
+  reviewedAt: string | null;
+  finalisedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClinicalDocumentInsert {
+  clientId: string;
+  therapistId: string;
+  documentType: ClinicalDocumentType;
+  title: string;
+  content: Record<string, string>;
+  status?: ClinicalDocumentStatus;
+  version?: number;
+  supersedesId?: string | null;
+  generatedBy: "ai" | "manual";
+  modelUsed?: string | null;
+}
+
+export interface ClinicalDocumentReference {
+  id: string;
+  documentId: string;
+  referenceType: "session" | "clinical_note" | "clinical_document";
+  referenceId: string;
+  createdAt: string;
+}
+
+export interface ClinicalDocumentWithReferences extends ClinicalDocument {
+  references: ClinicalDocumentReference[];
+}
+
+/** Lightweight type for document lists in the client hub */
+export interface ClinicalDocumentSummary {
+  id: string;
+  documentType: ClinicalDocumentType;
+  title: string;
+  status: ClinicalDocumentStatus;
+  version: number;
+  supersedesId: string | null;
+  generatedBy: "ai" | "manual";
   createdAt: string;
   updatedAt: string;
 }

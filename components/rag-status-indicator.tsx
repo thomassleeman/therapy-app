@@ -1,12 +1,12 @@
 "use client";
 
-import type { RagStatusData } from "@/lib/types";
 import {
   AlertTriangleIcon,
   BookOpenIcon,
   LightbulbIcon,
   SearchIcon,
 } from "lucide-react";
+import type { RagStatusData } from "@/lib/types";
 
 interface RagStatusIndicatorProps {
   data: RagStatusData;

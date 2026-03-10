@@ -6,7 +6,9 @@ import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
 
-function lastAssistantMessageHasVisibleContent(messages: ChatMessage[]): boolean {
+function lastAssistantMessageHasVisibleContent(
+  messages: ChatMessage[]
+): boolean {
   const lastAssistant = [...messages].reverse().find((m) => {
     return m.role === "assistant";
   });
@@ -85,8 +87,9 @@ function PureMessages({
             />
           ))}
 
-          {((status === "submitted") ||
-            (status === "streaming" && !lastAssistantMessageHasVisibleContent(messages))) &&
+          {(status === "submitted" ||
+            (status === "streaming" &&
+              !lastAssistantMessageHasVisibleContent(messages))) &&
             !messages.some((msg) =>
               msg.parts?.some(
                 (part) => "state" in part && part.state === "approval-responded"

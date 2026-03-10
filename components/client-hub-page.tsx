@@ -32,6 +32,7 @@ import type {
   Chat,
   Client,
   ClientStatus,
+  ClinicalDocumentSummary,
   ClinicalNoteWithSession,
   DapNoteContent,
   DeliveryMethod,
@@ -50,6 +51,14 @@ import {
   NOTE_FORMATS,
   SESSION_FREQUENCY_LABELS,
 } from "@/lib/db/types";
+import type {
+  ClinicalDocumentStatus,
+  ClinicalDocumentType,
+} from "@/lib/documents/types";
+import {
+  DOCUMENT_TYPE_REGISTRY,
+  getDocumentTypeLabel,
+} from "@/lib/documents/types";
 import { formatDate } from "@/lib/utils";
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
@@ -99,6 +108,7 @@ const TRANSCRIPTION_STATUS_LABELS: Record<string, string> = {
 interface ClientHubPageProps {
   client: Client;
   chats: Chat[];
+  clinicalDocuments: ClinicalDocumentSummary[];
   clinicalNotes: ClinicalNoteWithSession[];
   sessions: TherapySession[];
 }
@@ -106,6 +116,7 @@ interface ClientHubPageProps {
 export function ClientHubPage({
   client,
   chats,
+  clinicalDocuments,
   clinicalNotes,
   sessions,
 }: ClientHubPageProps) {
@@ -182,6 +193,10 @@ export function ClientHubPage({
             <TabsTrigger value="sessions">
               Sessions{sessions.length > 0 && ` (${sessions.length})`}
             </TabsTrigger>
+            <TabsTrigger value="documents">
+              Documents
+              {clinicalDocuments.length > 0 && ` (${clinicalDocuments.length})`}
+            </TabsTrigger>
             <TabsTrigger value="clinical-notes">
               Clinical Notes
               {clinicalNotes.length > 0 && ` (${clinicalNotes.length})`}
@@ -209,6 +224,14 @@ export function ClientHubPage({
           {/* Sessions Tab */}
           <TabsContent className="mt-4" value="sessions">
             <SessionsTab clientId={client.id} sessions={sessions} />
+          </TabsContent>
+
+          {/* Documents Tab */}
+          <TabsContent className="mt-4" value="documents">
+            <DocumentsTab
+              clientId={client.id}
+              documents={clinicalDocuments}
+            />
           </TabsContent>
 
           {/* Clinical Notes Tab */}
@@ -519,6 +542,210 @@ function SupervisionTab({ client }: { client: Client }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// ── Documents Tab ────────────────────────────────────────────────────
+
+const DOC_TYPE_COLORS: Record<ClinicalDocumentType, string> = {
+  comprehensive_assessment:
+    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  case_formulation:
+    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  treatment_plan:
+    "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  risk_assessment:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  risk_safety_plan:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  supervision_notes:
+    "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200",
+  discharge_summary:
+    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+};
+
+const DOC_STATUS_COLORS: Record<ClinicalDocumentStatus, string> = {
+  generating:
+    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  draft:
+    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  reviewed:
+    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  finalised:
+    "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+};
+
+type DocFilterType = "all" | ClinicalDocumentType;
+
+function DocumentsTab({
+  documents,
+  clientId,
+}: {
+  documents: ClinicalDocumentSummary[];
+  clientId: string;
+}) {
+  const [filter, setFilter] = useState<DocFilterType>("all");
+
+  // Build set of document types that exist for this client
+  const existingTypes = new Set(documents.map((d) => d.documentType));
+
+  // Check which advisory prerequisites are missing per document type
+  const existingTypesSet = existingTypes;
+
+  const filteredDocuments =
+    filter === "all"
+      ? documents
+      : documents.filter((d) => d.documentType === filter);
+
+  const filterOptions: { value: DocFilterType; label: string }[] = [
+    { value: "all", label: "All" },
+    ...Array.from(existingTypes).map((t) => ({
+      value: t,
+      label: DOCUMENT_TYPE_REGISTRY[t].label,
+    })),
+  ];
+
+  if (documents.length === 0) {
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <Link href={`/clients/${clientId}/documents/new`}>
+            <Button size="sm">+ New Document</Button>
+          </Link>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center py-8 text-center">
+            <CardDescription>
+              No clinical documents yet. Documents like assessments, treatment
+              plans, and formulations help build a complete clinical record for
+              this client.
+            </CardDescription>
+            <Link className="mt-4" href={`/clients/${clientId}/documents/new`}>
+              <Button size="sm">Create First Document</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header row: filters + new document */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {filterOptions.map((opt) => (
+            <Button
+              className="h-7 px-2.5 text-xs"
+              key={opt.value}
+              onClick={() => setFilter(opt.value)}
+              size="sm"
+              variant={filter === opt.value ? "default" : "outline"}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+        <Link href={`/clients/${clientId}/documents/new`}>
+          <Button size="sm">+ New Document</Button>
+        </Link>
+      </div>
+
+      {/* Documents list */}
+      {filteredDocuments.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-8">
+            <CardDescription>
+              No {filter !== "all" ? getDocumentTypeLabel(filter) : ""} documents
+              found.
+            </CardDescription>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            {filteredDocuments.map((doc, i) => (
+              <div key={doc.id}>
+                {i > 0 && <Separator />}
+                <DocumentRow
+                  clientId={clientId}
+                  doc={doc}
+                  missingPrereqs={getMissingPrerequisites(
+                    doc.documentType,
+                    existingTypesSet
+                  )}
+                />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function getMissingPrerequisites(
+  docType: ClinicalDocumentType,
+  existingTypes: Set<ClinicalDocumentType>
+): string[] {
+  const config = DOCUMENT_TYPE_REGISTRY[docType];
+  if (config.advisoryPrerequisites.length === 0) {
+    return [];
+  }
+  return config.advisoryPrerequisites
+    .filter((prereq) => !existingTypes.has(prereq))
+    .map((prereq) => DOCUMENT_TYPE_REGISTRY[prereq].label);
+}
+
+function DocumentRow({
+  doc,
+  clientId,
+  missingPrereqs,
+}: {
+  doc: ClinicalDocumentSummary;
+  clientId: string;
+  missingPrereqs: string[];
+}) {
+  return (
+    <Link
+      className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors"
+      href={`/clients/${clientId}/documents/${doc.id}`}
+    >
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_TYPE_COLORS[doc.documentType]}`}
+        >
+          {getDocumentTypeLabel(doc.documentType)}
+        </span>
+        <span className="truncate text-sm font-medium">{doc.title}</span>
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[doc.status]}`}
+        >
+          {doc.status}
+        </span>
+        {doc.version > 1 && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            v{doc.version}
+          </span>
+        )}
+        {doc.supersedesId && (
+          <span className="shrink-0 text-xs text-muted-foreground italic">
+            Superseded
+          </span>
+        )}
+        {missingPrereqs.length > 0 && (
+          <span
+            className="shrink-0 text-xs text-amber-600 dark:text-amber-400"
+            title={`Advisory: missing ${missingPrereqs.join(", ")}`}
+          >
+            ⓘ
+          </span>
+        )}
+      </div>
+      <span className="ml-4 shrink-0 text-xs text-muted-foreground">
+        {formatShortDate(doc.createdAt)}
+      </span>
+    </Link>
   );
 }
 

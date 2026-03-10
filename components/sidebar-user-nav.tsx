@@ -79,14 +79,8 @@ export function SidebarUserNav({ user }: { user: User }) {
             data-testid="user-nav-menu"
             side="top"
           >
-            <DropdownMenuItem
-              asChild
-              data-testid="user-nav-item-settings"
-            >
-              <Link
-                className="cursor-pointer"
-                href="/settings/profile"
-              >
+            <DropdownMenuItem asChild data-testid="user-nav-item-settings">
+              <Link className="cursor-pointer" href="/settings/profile">
                 <Settings className="mr-2 size-4" />
                 Settings
               </Link>

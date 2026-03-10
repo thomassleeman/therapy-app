@@ -6,7 +6,9 @@ import type { ChatMessage } from "@/lib/types";
 import type { UIArtifact } from "./artifact";
 import { PreviewMessage, ThinkingMessage } from "./message";
 
-function lastAssistantMessageHasVisibleContent(messages: ChatMessage[]): boolean {
+function lastAssistantMessageHasVisibleContent(
+  messages: ChatMessage[]
+): boolean {
   const lastAssistant = [...messages].reverse().find((m) => {
     return m.role === "assistant";
   });
@@ -70,8 +72,9 @@ function PureArtifactMessages({
       ))}
 
       <AnimatePresence mode="wait">
-        {((status === "submitted") ||
-          (status === "streaming" && !lastAssistantMessageHasVisibleContent(messages))) &&
+        {(status === "submitted" ||
+          (status === "streaming" &&
+            !lastAssistantMessageHasVisibleContent(messages))) &&
           !messages.some((msg) =>
             msg.parts?.some(
               (part) => "state" in part && part.state === "approval-responded"

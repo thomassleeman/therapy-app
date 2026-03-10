@@ -1,6 +1,10 @@
 import "server-only";
 
 import type { ArtifactKind } from "@/components/artifact";
+import type {
+  ClinicalDocumentStatus,
+  ClinicalDocumentType,
+} from "@/lib/documents/types";
 import { createClient } from "@/utils/supabase/server";
 import { ChatSDKError } from "../errors";
 import type {
@@ -8,6 +12,11 @@ import type {
   Client,
   ClientInsert,
   ClientTag,
+  ClinicalDocument,
+  ClinicalDocumentInsert,
+  ClinicalDocumentReference,
+  ClinicalDocumentSummary,
+  ClinicalDocumentWithReferences,
   ClinicalNote,
   ClinicalNoteInsert,
   ClinicalNoteWithSession,
@@ -2234,6 +2243,381 @@ export async function getRecentSessionsForSidebar({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get recent sessions for sidebar"
+    );
+  }
+}
+
+// ── Clinical Document helpers ─────────────────────────────────────────
+
+function mapRowToClinicalDocument(row: any): ClinicalDocument {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    therapistId: row.therapist_id,
+    documentType: row.document_type,
+    title: row.title,
+    content: row.content,
+    status: row.status,
+    version: row.version,
+    supersedesId: row.supersedes_id ?? null,
+    generatedBy: row.generated_by,
+    modelUsed: row.model_used ?? null,
+    reviewedAt: row.reviewed_at ?? null,
+    finalisedAt: row.finalised_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapRowToClinicalDocumentReference(
+  row: any
+): ClinicalDocumentReference {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    referenceType: row.reference_type,
+    referenceId: row.reference_id,
+    createdAt: row.created_at,
+  };
+}
+
+function mapRowToClinicalDocumentSummary(row: any): ClinicalDocumentSummary {
+  return {
+    id: row.id,
+    documentType: row.document_type,
+    title: row.title,
+    status: row.status,
+    version: row.version,
+    supersedesId: row.supersedes_id ?? null,
+    generatedBy: row.generated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// ── Clinical Document queries ─────────────────────────────────────────
+
+export async function createClinicalDocument(
+  doc: ClinicalDocumentInsert
+): Promise<ClinicalDocument> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_documents")
+      .insert({
+        client_id: doc.clientId,
+        therapist_id: doc.therapistId,
+        document_type: doc.documentType,
+        title: doc.title,
+        content: doc.content,
+        status: doc.status ?? "draft",
+        version: doc.version ?? 1,
+        supersedes_id: doc.supersedesId ?? null,
+        generated_by: doc.generatedBy,
+        model_used: doc.modelUsed ?? null,
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "create clinical document");
+    }
+
+    return mapRowToClinicalDocument(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create clinical document"
+    );
+  }
+}
+
+export async function getClinicalDocument({
+  id,
+  therapistId,
+}: {
+  id: string;
+  therapistId: string;
+}): Promise<ClinicalDocumentWithReferences | null> {
+  try {
+    const supabase = await createClient();
+
+    const { data: docData, error: docError } = await supabase
+      .from("clinical_documents")
+      .select("*")
+      .eq("id", id)
+      .eq("therapist_id", therapistId)
+      .single();
+
+    if (docError) {
+      if (docError.code === "PGRST116") {
+        return null;
+      }
+      handleSupabaseError(docError, "get clinical document");
+    }
+
+    const { data: refsData, error: refsError } = await supabase
+      .from("clinical_document_references")
+      .select("*")
+      .eq("document_id", id);
+
+    if (refsError) {
+      handleSupabaseError(refsError, "get clinical document references");
+    }
+
+    return {
+      ...mapRowToClinicalDocument(docData),
+      references: (refsData || []).map(mapRowToClinicalDocumentReference),
+    };
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get clinical document"
+    );
+  }
+}
+
+export async function getClinicalDocumentsByClient({
+  clientId,
+  therapistId,
+}: {
+  clientId: string;
+  therapistId: string;
+}): Promise<ClinicalDocumentSummary[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_documents")
+      .select(
+        "id, document_type, title, status, version, supersedes_id, generated_by, created_at, updated_at"
+      )
+      .eq("client_id", clientId)
+      .eq("therapist_id", therapistId)
+      .neq("status", "generating")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      handleSupabaseError(error, "get clinical documents by client");
+    }
+
+    return (data || []).map(mapRowToClinicalDocumentSummary);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get clinical documents by client"
+    );
+  }
+}
+
+export async function getClinicalDocumentsByType({
+  clientId,
+  therapistId,
+  documentType,
+}: {
+  clientId: string;
+  therapistId: string;
+  documentType: ClinicalDocumentType;
+}): Promise<ClinicalDocumentSummary[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_documents")
+      .select(
+        "id, document_type, title, status, version, supersedes_id, generated_by, created_at, updated_at"
+      )
+      .eq("client_id", clientId)
+      .eq("therapist_id", therapistId)
+      .eq("document_type", documentType)
+      .neq("status", "generating")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      handleSupabaseError(error, "get clinical documents by type");
+    }
+
+    return (data || []).map(mapRowToClinicalDocumentSummary);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get clinical documents by type"
+    );
+  }
+}
+
+export async function updateClinicalDocument({
+  id,
+  therapistId,
+  ...updates
+}: {
+  id: string;
+  therapistId: string;
+  title?: string;
+  content?: Record<string, string>;
+  status?: ClinicalDocumentStatus;
+  reviewedAt?: string;
+  finalisedAt?: string;
+}): Promise<ClinicalDocument> {
+  try {
+    const supabase = await createClient();
+
+    const updatePayload: Record<string, unknown> = {};
+
+    if (updates.title !== undefined) {
+      updatePayload.title = updates.title;
+    }
+    if (updates.content !== undefined) {
+      updatePayload.content = updates.content;
+    }
+    if (updates.status !== undefined) {
+      updatePayload.status = updates.status;
+      if (updates.status === "finalised" && updates.finalisedAt === undefined) {
+        updatePayload.finalised_at = new Date().toISOString();
+      }
+    }
+    if (updates.reviewedAt !== undefined) {
+      updatePayload.reviewed_at = updates.reviewedAt;
+    }
+    if (updates.finalisedAt !== undefined) {
+      updatePayload.finalised_at = updates.finalisedAt;
+    }
+
+    const { data, error } = await supabase
+      .from("clinical_documents")
+      .update(updatePayload)
+      .eq("id", id)
+      .eq("therapist_id", therapistId)
+      .select("*")
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "update clinical document");
+    }
+
+    return mapRowToClinicalDocument(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update clinical document"
+    );
+  }
+}
+
+export async function deleteClinicalDocument({
+  id,
+  therapistId,
+}: {
+  id: string;
+  therapistId: string;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("clinical_documents")
+      .delete()
+      .eq("id", id)
+      .eq("therapist_id", therapistId);
+
+    if (error) {
+      handleSupabaseError(error, "delete clinical document");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete clinical document"
+    );
+  }
+}
+
+export async function addDocumentReferences(
+  refs: Array<{
+    documentId: string;
+    referenceType: "session" | "clinical_note" | "clinical_document";
+    referenceId: string;
+  }>
+): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("clinical_document_references")
+      .upsert(
+        refs.map((ref) => ({
+          document_id: ref.documentId,
+          reference_type: ref.referenceType,
+          reference_id: ref.referenceId,
+        })),
+        { onConflict: "document_id,reference_type,reference_id" }
+      );
+
+    if (error) {
+      handleSupabaseError(error, "add document references");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to add document references"
+    );
+  }
+}
+
+export async function getLatestDocumentByType({
+  clientId,
+  therapistId,
+  documentType,
+}: {
+  clientId: string;
+  therapistId: string;
+  documentType: ClinicalDocumentType;
+}): Promise<ClinicalDocument | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_documents")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("therapist_id", therapistId)
+      .eq("document_type", documentType)
+      .is("supersedes_id", null)
+      .neq("status", "generating")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return null;
+      }
+      handleSupabaseError(error, "get latest document by type");
+    }
+
+    return mapRowToClinicalDocument(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get latest document by type"
     );
   }
 }
