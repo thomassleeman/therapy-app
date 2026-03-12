@@ -2,6 +2,7 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import Image from "next/image";
 import { useState } from "react";
+import { ARTIFACTS_ENABLED } from "@/lib/features";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import Logo from "@/public/images/brainLogoCompressed.png";
@@ -168,7 +169,14 @@ const PurePreviewMessage = ({
               }
             }
 
-            if (type === "tool-createDocument") {
+            if (
+              type === "tool-createDocument" ||
+              type === "tool-updateDocument"
+            ) {
+              if (!ARTIFACTS_ENABLED) {
+                return null;
+              }
+
               const { toolCallId } = part;
 
               if (part.output && "error" in part.output) {
@@ -177,7 +185,19 @@ const PurePreviewMessage = ({
                     className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
                     key={toolCallId}
                   >
-                    Error creating document: {String(part.output.error)}
+                    Error with document: {String(part.output.error)}
+                  </div>
+                );
+              }
+
+              if (type === "tool-updateDocument") {
+                return (
+                  <div className="relative" key={toolCallId}>
+                    <DocumentPreview
+                      args={{ ...part.output, isUpdate: true }}
+                      isReadonly={isReadonly}
+                      result={part.output}
+                    />
                   </div>
                 );
               }
@@ -188,31 +208,6 @@ const PurePreviewMessage = ({
                   key={toolCallId}
                   result={part.output}
                 />
-              );
-            }
-
-            if (type === "tool-updateDocument") {
-              const { toolCallId } = part;
-
-              if (part.output && "error" in part.output) {
-                return (
-                  <div
-                    className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
-                    key={toolCallId}
-                  >
-                    Error updating document: {String(part.output.error)}
-                  </div>
-                );
-              }
-
-              return (
-                <div className="relative" key={toolCallId}>
-                  <DocumentPreview
-                    args={{ ...part.output, isUpdate: true }}
-                    isReadonly={isReadonly}
-                    result={part.output}
-                  />
-                </div>
               );
             }
 

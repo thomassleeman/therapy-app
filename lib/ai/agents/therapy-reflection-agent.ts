@@ -11,10 +11,10 @@ import {
   systemPrompt,
   type TherapeuticOrientation,
 } from "@/lib/ai/prompts";
+import { ARTIFACTS_ENABLED } from "@/lib/features";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
-
 import { searchKnowledgeBase } from "@/lib/ai/tools/search-knowledge-base";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import type { Session } from "@/lib/auth";
@@ -66,14 +66,18 @@ export const therapyReflectionAgent = new ToolLoopAgent({
       model: getLanguageModel(options.selectedChatModel),
       instructions: fullSystemPrompt,
       tools: {
-        createDocument: createDocument({
-          session: options.session,
-          dataStream: options.dataStream,
-        }),
-        updateDocument: updateDocument({
-          session: options.session,
-          dataStream: options.dataStream,
-        }),
+        ...(ARTIFACTS_ENABLED
+          ? {
+              createDocument: createDocument({
+                session: options.session,
+                dataStream: options.dataStream,
+              }),
+              updateDocument: updateDocument({
+                session: options.session,
+                dataStream: options.dataStream,
+              }),
+            }
+          : {}),
         searchKnowledgeBase: searchKnowledgeBase({
           session: options.session,
           sensitiveCategories: options.sensitiveCategories,

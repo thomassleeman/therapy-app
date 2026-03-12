@@ -19,10 +19,10 @@
  * (`graceful_decline`). See lib/ai/confidence-router.ts for full routing logic.
  */
 
-import { openai } from "@ai-sdk/openai";
-import { embed, tool } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
+import { generateEmbedding } from "@/lib/ai/embedding";
 import {
   buildGracefulDeclineMessage,
   GENERAL_KNOWLEDGE_DISCLAIMER,
@@ -116,11 +116,7 @@ async function executeHybridSearch({
     // each) and 3 additional RPC calls (parallel, so latency ≈ slowest call).
     // Reranking downstream filters the expanded pool back to topN.
     const searchFn = async (q: string): Promise<HybridSearchResult[]> => {
-      const { embedding } = await embed({
-        model: openai.embedding("text-embedding-3-small"),
-        value: q,
-        providerOptions: { openai: { dimensions: 512 } },
-      });
+      const embedding = await generateEmbedding(q, "search_query");
       const { data, error } = await supabase.rpc("hybrid_search", {
         query_text: q,
         query_embedding: `[${embedding.join(",")}]`,

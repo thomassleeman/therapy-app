@@ -22,6 +22,7 @@
     "@ai-sdk/openai": "^3.0.30",
     "@ai-sdk/provider": "^3.0.3",
     "@ai-sdk/react": "3.0.39",
+    "@aws-sdk/client-bedrock-runtime": "^3.1007.0",
     "@icons-pack/react-simple-icons": "^13.7.0",
     "@langchain/core": "^1.1.24",
     "@langchain/textsplitters": "^1.0.1",

@@ -23,6 +23,7 @@ import { useChatClient } from "@/hooks/use-chat-client";
 import { useClients } from "@/hooks/use-clients";
 import type { TherapeuticOrientation } from "@/lib/ai/prompts";
 import { ChatSDKError } from "@/lib/errors";
+import { ARTIFACTS_ENABLED } from "@/lib/features";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
@@ -190,7 +191,8 @@ export function Chat({
   }, [query, sendMessage, hasAppendedQuery, id]);
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
+  const _isArtifactVisible = useArtifactSelector((state) => state.isVisible);
+  const isArtifactVisible = ARTIFACTS_ENABLED && _isArtifactVisible;
 
   const { clients } = useClients();
   const clientName = useMemo(() => {
@@ -256,22 +258,24 @@ export function Chat({
         </div>
       </div>
 
-      <Artifact
-        addToolApprovalResponse={addToolApprovalResponse}
-        attachments={attachments}
-        chatId={id}
-        input={input}
-        isReadonly={isReadonly}
-        messages={messages}
-        regenerate={regenerate}
-        selectedModelId={currentModelId}
-        sendMessage={sendMessage}
-        setAttachments={setAttachments}
-        setInput={setInput}
-        setMessages={setMessages}
-        status={status}
-        stop={stop}
-      />
+      {ARTIFACTS_ENABLED && (
+        <Artifact
+          addToolApprovalResponse={addToolApprovalResponse}
+          attachments={attachments}
+          chatId={id}
+          input={input}
+          isReadonly={isReadonly}
+          messages={messages}
+          regenerate={regenerate}
+          selectedModelId={currentModelId}
+          sendMessage={sendMessage}
+          setAttachments={setAttachments}
+          setInput={setInput}
+          setMessages={setMessages}
+          status={status}
+          stop={stop}
+        />
+      )}
 
       <AlertDialog
         onOpenChange={setShowCreditCardAlert}

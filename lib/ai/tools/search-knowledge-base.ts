@@ -29,8 +29,7 @@
  * so the model can search → evaluate → refine → search again autonomously.
  */
 
-import { openai } from "@ai-sdk/openai";
-import { embed, tool } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
 import {
@@ -38,6 +37,7 @@ import {
   GENERAL_KNOWLEDGE_DISCLAIMER,
   routeByConfidence,
 } from "@/lib/ai/confidence-router";
+import { generateEmbedding } from "@/lib/ai/embedding";
 import { parallelSearchAndMerge } from "@/lib/ai/parallel-search";
 import { reformulateQuery } from "@/lib/ai/query-reformulation";
 import { rerankResults } from "@/lib/ai/rerank";
@@ -168,11 +168,7 @@ export const searchKnowledgeBase = ({
         // Supabase RPC doesn't natively handle vector types in parameters.
         const matchCount = 5;
         const searchFn = async (q: string): Promise<HybridSearchResult[]> => {
-          const { embedding } = await embed({
-            model: openai.embedding("text-embedding-3-small"),
-            value: q,
-            providerOptions: { openai: { dimensions: 512 } },
-          });
+          const embedding = await generateEmbedding(q, "search_query");
           const { data, error } = await supabase.rpc("hybrid_search", {
             query_text: q,
             query_embedding: `[${embedding.join(",")}]`,

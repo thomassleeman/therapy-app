@@ -1,4 +1,5 @@
 import type { Geo } from "@vercel/functions";
+import { ARTIFACTS_ENABLED } from "@/lib/features";
 
 export const artifactsPrompt = `
 You can create and edit documents to help therapists capture their reflections. Documents appear on the right side of the screen while the conversation continues on the left.
@@ -242,7 +243,7 @@ export const systemPrompt = ({
     return `${therapyReflectionPrompt}${orientationPrompt}${toolContextPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${therapyReflectionPrompt}${orientationPrompt}${toolContextPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+  return `${therapyReflectionPrompt}${orientationPrompt}${toolContextPrompt}\n\n${requestPrompt}${ARTIFACTS_ENABLED ? `\n\n${artifactsPrompt}` : ""}`;
 };
 
 export const updateDocumentPrompt = (currentContent: string | null) => {

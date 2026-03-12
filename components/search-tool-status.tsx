@@ -60,7 +60,7 @@ function getResultSummary(output: unknown): string | null {
     return null;
   }
   if (count === 0) {
-    return "No matching sources found";
+    return "Knowledge base search complete";
   }
 
   const sourceWord = count === 1 ? "source" : "sources";

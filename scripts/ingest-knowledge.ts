@@ -11,7 +11,7 @@
  *      therapeutic content → semantic with generous overlap)
  *   3. Optional parent-child chunk generation (--with-parents)
  *   4. Optional contextual enrichment via LLM (--with-context)
- *   5. Embedding generation (text-embedding-3-small @ 512 dimensions)
+ *   5. Embedding generation (Cohere Embed v4 via AWS Bedrock @ 512 dimensions)
  *   6. Upsert into Supabase (knowledge_documents + knowledge_chunks)
  *
  * Usage:
@@ -25,18 +25,18 @@
  *   SUPABASE_URL              — Supabase project URL (falls back to
  *                                NEXT_PUBLIC_SUPABASE_URL if not set)
  *   SUPABASE_SERVICE_ROLE_KEY — Service role key (bypasses RLS)
- *   OPENAI_API_KEY            — OpenAI API key for embeddings
+ *   AWS_ACCESS_KEY_ID         — AWS credentials for Bedrock embeddings
+ *   AWS_SECRET_ACCESS_KEY     — AWS credentials for Bedrock embeddings
  *
  * @module scripts/ingest-knowledge
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
-import { embedMany } from "ai";
 import { config } from "dotenv";
 import matter from "gray-matter";
+import { generateEmbeddings as generateRawEmbeddings } from "../lib/ai/embedding";
 import {
   DOCUMENT_CATEGORIES,
   type DocumentCategory,
@@ -66,9 +66,8 @@ config({ path: ".env.local" });
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-function validateEnv(): void {
+function validateEnv(flags: CliFlags): void {
   const missing: string[] = [];
   if (!SUPABASE_URL) {
     missing.push("SUPABASE_URL");
@@ -76,7 +75,13 @@ function validateEnv(): void {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     missing.push("SUPABASE_SERVICE_ROLE_KEY");
   }
-  if (!OPENAI_API_KEY) {
+  if (!process.env.AWS_ACCESS_KEY_ID) {
+    missing.push("AWS_ACCESS_KEY_ID");
+  }
+  if (!process.env.AWS_SECRET_ACCESS_KEY) {
+    missing.push("AWS_SECRET_ACCESS_KEY");
+  }
+  if (flags.withContext && !process.env.OPENAI_API_KEY) {
     missing.push("OPENAI_API_KEY");
   }
   if (missing.length > 0) {
@@ -152,8 +157,8 @@ interface PreparedChunk {
 // Cost estimation
 // ---------------------------------------------------------------------------
 
-// OpenAI text-embedding-3-small pricing as of Feb 2025
-const EMBEDDING_COST_PER_MILLION_TOKENS = 0.02; // $0.02 per 1M tokens
+// Cohere Embed v4 via Bedrock pricing
+const EMBEDDING_COST_PER_MILLION_TOKENS = 0.12; // $0.12 per 1M tokens
 const CHARS_PER_TOKEN_ESTIMATE = 4;
 
 function estimateEmbeddingCost(totalChars: number): number {
@@ -508,14 +513,13 @@ async function applyContextualEnrichment(
 // ---------------------------------------------------------------------------
 
 const EMBEDDING_BATCH_SIZE = 100;
-const EMBEDDING_MODEL = "text-embedding-3-small";
-const EMBEDDING_DIMENSIONS = 512;
 
 /**
- * Generate embeddings for chunks in batches of 100.
+ * Generate embeddings for chunks in batches.
  * Parent chunks get null embeddings (they exist only for context retrieval).
+ * Uses Cohere Embed v4 via AWS Bedrock (batching handled by generateRawEmbeddings).
  */
-async function generateEmbeddings(
+async function embedChunks(
   chunks: PreparedChunk[]
 ): Promise<(number[] | null)[]> {
   const embeddings: (number[] | null)[] = new Array(chunks.length).fill(null);
@@ -545,13 +549,7 @@ async function generateEmbeddings(
       `    Embedding batch ${batch + 1}/${totalBatches} (${batchTexts.length} chunks)`
     );
 
-    const { embeddings: batchEmbeddings } = await embedMany({
-      model: openai.embedding(EMBEDDING_MODEL),
-      values: batchTexts,
-      providerOptions: {
-        openai: { dimensions: EMBEDDING_DIMENSIONS },
-      },
-    });
+    const batchEmbeddings = await generateRawEmbeddings(batchTexts, "search_document");
 
     // Map embeddings back to their original positions
     for (let i = 0; i < batchItems.length; i++) {
@@ -785,7 +783,7 @@ async function processFile(
 
   // Step 3: Generate embeddings
   console.log("  Generating embeddings...");
-  const embeddings = await generateEmbeddings(chunks);
+  const embeddings = await embedChunks(chunks);
 
   // Step 4: Upsert into Supabase
   // supabase is non-null here: dry-run returns early above, and the client is
@@ -816,11 +814,11 @@ async function main(): Promise<void> {
   console.log(`With parents:  ${flags.withParents}`);
   console.log();
 
-  // Validate environment (skip for dry-run if we only need to parse)
+  // Validate environment (skip for dry-run unless contextual enrichment needs API keys)
   if (!flags.dryRun) {
-    validateEnv();
-  } else if (!OPENAI_API_KEY && flags.withContext) {
-    validateEnv();
+    validateEnv(flags);
+  } else if (flags.withContext) {
+    validateEnv(flags);
   }
 
   // Discover files

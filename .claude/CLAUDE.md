@@ -1,10 +1,14 @@
-# Therapy Reflection Agent - Developer Guide
+# CLAUDE.md — Soundboard (Therapy Reflection Platform)
+
+> **Repository:** `thomassleeman/therapy-app`
+> **Primary developer:** Tom (TypeScript / Next.js)
+> **Clinical collaborator:** Aaron (practicing therapist, content author)
 
 ## What This Is
 
-An AI-powered reflection tool for therapists. Therapists describe client sessions and receive evidence-based reflective questions and insights grounded in therapeutic frameworks via RAG. This is **not** a general chatbot — responses must stay within declared therapeutic frameworks and never provide direct diagnostic advice.
+An AI-powered reflective practice platform for qualified therapists in the UK and Ireland/EU. Therapists use it to reflect on client sessions, receive evidence-informed clinical guidance grounded in a curated knowledge base, record and transcribe sessions, and generate structured clinical notes and documents.
 
-Built on the Vercel Next.js AI Chatbot template, modified to use Supabase (replacing the original Neon/Drizzle + NextAuth setup).
+The strategic differentiator is **GDPR compliance and privacy-by-design** — therapists using general-purpose AI tools like ChatGPT likely breach GDPR when handling mental health data (special category data under Article 9). This platform is purpose-built for clinical confidentiality.
 
 ---
 
@@ -12,202 +16,344 @@ Built on the Vercel Next.js AI Chatbot template, modified to use Supabase (repla
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16 (App Router), React 19 |
-| Language | TypeScript (strict, `strictNullChecks`) |
-| Styling | Tailwind CSS 4, shadcn/ui |
-| Auth | Supabase Auth (via `@supabase/ssr`) |
-| Database | Supabase (PostgreSQL) |
-| AI | Vercel AI SDK v6 (`ai`, `@ai-sdk/react`, `@ai-sdk/anthropic`) |
-| LLM Models | Anthropic Claude via `@ai-sdk/anthropic` (direct, GDPR-compliant) |
-| Linting | Biome (via `ultracite`) |
-| Package Manager | pnpm |
-| Testing | Playwright (E2E) |
-| Hosting | Vercel (target) |
+| Framework | Next.js 16 (App Router, `proxy.ts` instead of `middleware.ts`) |
+| Language | TypeScript (strict mode, `strictNullChecks`) |
+| Database | Supabase (PostgreSQL + pgvector, 512-dim embeddings) |
+| Auth | Supabase Auth (email/password + Google OAuth) |
+| AI / LLM | Vercel AI SDK v6, Anthropic Claude (via `@ai-sdk/anthropic`) |
+| Embeddings | Cohere Embed v4 at 512 dimensions via AWS Bedrock (`eu-west-1`), called through `@aws-sdk/client-bedrock-runtime` |
+| Transcription | OpenAI Whisper API (batch) |
+| Diarisation | Claude (linguistic pattern-based speaker identification) |
+| UI | Tailwind CSS, shadcn/ui, Tiptap editor |
+| Linting | Biome (via `ultracite` presets) |
+| Testing | Playwright (E2E), Vitest (unit) |
+| Package manager | pnpm |
+| Node version | 22 (LTS) |
 
 ---
 
-## Project Layout
+## Project Structure
 
 ```
-/
-├── app/
-│   ├── (auth-pages)/          # Sign-in, sign-up, password reset (unauthenticated)
-│   ├── (chat)/                # Main chat experience (auth-required)
-│   │   ├── api/               # API route handlers (chat, documents, history, votes, files)
-│   │   ├── chat/[id]/         # Per-chat pages
-│   │   ├── actions.ts         # Server actions (title gen, message deletion, visibility)
-│   │   └── page.tsx           # Chat landing page
-│   ├── auth/                  # Supabase auth callbacks
-│   ├── layout.tsx             # Root layout
-│   ├── actions.ts             # Root-level server actions
-│   └── globals.css
-├── components/
-│   ├── ai-elements/           # AI SDK generative UI primitives (artifact, reasoning, etc.)
-│   ├── elements/              # Wrapper/display versions of ai-elements
-│   ├── ui/                    # shadcn/ui base components (do not lint/edit these)
-│   ├── chat.tsx               # Core chat component
-│   ├── messages.tsx           # Message list renderer
-│   ├── multimodal-input.tsx   # Chat input with attachments
-│   └── ...                    # Other feature components
-├── hooks/                     # Client-side React hooks
-├── lib/
-│   ├── ai/
-│   │   ├── models.ts          # Model registry and selection logic
-│   │   ├── providers.ts       # AI SDK provider setup
-│   │   ├── prompts.ts         # System/title prompts (KEY: therapy prompts go here)
-│   │   ├── entitlements.ts    # Per-user model access rules
-│   │   └── tools/             # AI tool definitions (weather, documents, suggestions)
-│   ├── db/
-│   │   ├── queries.ts         # All database query functions
-│   │   └── types.ts           # TypeScript types mirroring DB schema
-│   ├── auth.ts                # Supabase auth client helpers
-│   ├── utils.ts               # Shared utilities
-│   └── types.ts               # Shared app-level types
-├── supabase/
-│   ├── config.toml
-│   └── migrations/            # SQL migrations (single initial schema currently)
-├── middleware.ts              # Auth guard + route protection
-├── next.config.ts
-├── biome.jsonc                # Linter config
-├── components.json            # shadcn/ui config
-└── package.json
+app/
+├── (app)/              # All authenticated non-chat pages (unified sidebar layout)
+│   ├── page.tsx                    # Dashboard
+│   ├── clients/                    # Client list, client hub, clinical documents
+│   ├── sessions/                   # Session list, new session, session detail
+│   └── settings/profile/          # Therapist profile settings (modality, jurisdiction)
+├── (auth-pages)/       # Sign-in, sign-up, password reset (no sidebar)
+├── (chat)/             # Chat interface (own layout with DataStreamProvider)
+│   ├── api/chat/                   # Chat route + stream resumption
+│   ├── api/clients/                # Client CRUD API for chat context
+│   └── chat/                       # Chat pages (new, [id])
+├── api/                # Standalone API routes
+│   ├── documents/                  # Clinical document generation + CRUD
+│   ├── notes/generate/             # Clinical note generation from transcripts
+│   ├── sessions/                   # Session CRUD + transcript retrieval
+│   └── transcription/              # Audio upload + processing pipeline
+└── auth/               # OAuth callback routes
+
+components/             # React components (client-side)
+├── transcription/      # Audio recorder, file upload
+├── documents/          # Document generation form, viewer
+├── ui/                 # shadcn/ui primitives
+└── *.tsx               # Page-level components, sidebar, chat UI
+
+lib/
+├── ai/
+│   ├── agents/         # ToolLoopAgent definition (therapy-reflection-agent.ts)
+│   ├── tools/          # LLM tools: knowledge search (x4), create/update document
+│   ├── prompts.ts      # System prompt construction
+│   ├── confidence.ts   # Three-tier confidence thresholds for RAG results
+│   ├── confidence-router.ts   # CRAG-style routing based on confidence
+│   ├── contextual-response.ts # No-results / low-confidence fallback formatting
+│   ├── sensitive-content.ts   # Keyword-based safety detection (safeguarding, etc.)
+│   ├── modality.ts     # Modality resolution chain (chat → client → therapist → null)
+│   ├── query-reformulation.ts # Multi-query retrieval via LLM reformulation
+│   ├── parallel-search.ts     # RRF merging for parallel query variants
+│   ├── rerank.ts       # Cohere cross-encoder reranking
+│   ├── faithfulness-check.ts  # Post-generation grounding verification
+│   ├── embedding.ts    # Centralised Cohere Embed v4 provider (AWS Bedrock eu-west-1)
+│   ├── models.ts       # Available LLM models
+│   └── providers.ts    # Model provider configuration
+├── db/
+│   ├── queries.ts      # All Supabase query functions
+│   ├── types.ts        # TypeScript types for DB entities
+│   └── faithfulness.ts # Faithfulness check persistence
+├── dev/                # Dev-only RAG quality logging (behind DEV_LOGGING env var)
+├── documents/          # Clinical documents system (types, context assembly, specs/)
+├── transcription/      # Transcription abstraction layer (Whisper + Claude diarisation)
+├── types/
+│   └── knowledge.ts    # Single source of truth for RAG enums (categories, modalities, jurisdictions)
+├── auth.ts             # Supabase auth wrapper
+└── errors.ts           # Typed error classes
+
+scripts/
+├── ingest-knowledge.ts # Knowledge base ingestion CLI (--dry-run, --with-context, --with-parents)
+└── lib/                # Chunking strategies, contextual enrichment, parent-child chunker
+
+knowledge-base/         # Markdown content authored by Aaron (ingested, content authoring ongoing)
+├── therapeutic-content/ # CBT, PCT, GAD subdirectories
+├── guidelines/          # BACP, UKCP
+├── legislation/         # UK, EU
+└── clinical-practice/   # Documentation, record-keeping guidance
+
+supabase/migrations/    # Ordered SQL migrations
+tests/                  # Playwright E2E + fixtures
 ```
 
 ---
 
-## Development Commands
+## Key Conventions
 
-```bash
-pnpm dev              # Start dev server (Turbo mode)
-pnpm build            # Production build
-pnpm start            # Production server
-pnpm lint             # Run Biome linter (ultracite check)
-pnpm format           # Auto-fix lint/format (ultracite fix)
-pnpm db:types         # Regenerate Supabase TypeScript types
-pnpm db:push          # Push migrations to local Supabase
-pnpm test             # Run Playwright E2E tests
+### Code Style
+
+- **Biome** for linting and formatting (extends `ultracite/biome/core`, `ultracite/biome/next`, `ultracite/biome/react`)
+- 2-space indentation
+- No `any` types — use `unknown` or proper generics
+- `import type` for type-only imports
+- Kebab-case filenames (`use-audio-recorder.ts`, not `useAudioRecorder.ts`)
+- `for...of` loops preferred over `.forEach()` (Biome rule)
+- Non-null assertions (`!`) replaced with `?? ""` fallbacks (Biome rule)
+
+### Database
+
+- **Newer tables use `snake_case`** (`therapy_sessions`, `clinical_notes`, `therapist_profiles`, `knowledge_documents`)
+- **Legacy tables use `PascalCase`** (`"Chat"`, `"Message_v2"`) — always quote these in SQL
+- All queries go through `lib/db/queries.ts` using the Supabase client from `@/utils/supabase/server`
+- Error handling via `handleSupabaseError(error, context)` helper
+- "Not found" errors (code `PGRST116`) return `null` rather than throwing
+- TypeScript types use camelCase, mapped from snake_case DB columns
+
+### Migrations
+
+- Located in `supabase/migrations/` with timestamp prefix (`YYYYMMDDHHMMSS_description.sql`)
+- Must be idempotent (`IF NOT EXISTS`, `DROP IF EXISTS` before recreate)
+- Run locally with `pnpm db:push`, apply to hosted Supabase via Dashboard or CLI
+- When changing column types, drop all referencing indexes BEFORE `ALTER TABLE`
+
+### Shared Types
+
+- `lib/types/knowledge.ts` is the **single source of truth** for RAG enums (`DOCUMENT_CATEGORIES`, `JURISDICTIONS`, `MODALITIES`, `THERAPY_STAGES`)
+- Imported by ingestion scripts, search tools, DB types, and UI components
+- The jurisdiction value is `"EU"` (not `"IE"`) throughout — supports expansion to EU member states beyond Ireland
+
+### AI / Agent
+
+- The chat agent is a `ToolLoopAgent` defined in `lib/ai/agents/therapy-reflection-agent.ts`
+- Default model: `claude-sonnet-4-5-20250929`
+- `stopWhen: stepCountIs(6)` — allows up to 5 tool calls per turn
+- Tools are registered via factory functions that accept a `{ session }` parameter
+- The system prompt is assembled in `lib/ai/prompts.ts` via `systemPrompt()` which composes: base prompt + orientation prompt + tool context prompt + sensitive content directives + session transcript context
+
+### Knowledge Base Content
+
+- All metadata is derived from YAML frontmatter fields — folder names are irrelevant to ingestion
+- Legislation content is authored as practitioner-oriented briefings (not raw statutory text)
+- Content authored by Aaron, not scraped or licensed
+- Chunking strategies are content-type-specific (legislation ≈ guidelines, therapeutic content uses semantic chunking)
+
+---
+
+## RAG Pipeline
+
 ```
+Therapist types message
+    ↓
+Chat route: auth + fetch therapist profile + client record
+    ↓
+Sensitive content detection (keyword-based, <1ms)
+  → If detected: augments system prompt with safety directives + forced search queries
+    ↓
+Modality resolution chain: per-chat override → client default → therapist default → null
+    ↓
+System prompt assembly (role + orientation + tool context + sensitive content + session transcript)
+    ↓
+ToolLoopAgent runs (up to 6 steps)
+  → LLM decides to call search tools
+  → Tool generates 512-dim embedding via Cohere Embed v4 on AWS Bedrock eu-west-1 (see lib/ai/embedding.ts)
+  → Optional: query reformulation (3 clinical variants via gpt-4o-mini)
+  → Optional: parallel search + RRF merge
+  → hybrid_search RPC executes (vector similarity + full-text search, merged via RRF)
+  → Optional: Cohere reranking
+  → Confidence threshold applied (high >0.80, moderate 0.65–0.80, low <0.65)
+  → Results returned to LLM with confidenceTier + confidenceNote
+    ↓
+LLM generates cited response
+    ↓
+Optional: async faithfulness check (gpt-4o-mini, non-blocking)
+    ↓
+Response streams to client
+```
+
+### Search Tools (4 registered)
+
+| Tool | Module | Purpose |
+|---|---|---|
+| `searchKnowledgeBase` | `search-knowledge-base.ts` | General search across all categories |
+| `searchLegislation` | `knowledge-search-tools.ts` | Pre-filtered to `category = 'legislation'` |
+| `searchGuidelines` | `knowledge-search-tools.ts` | Pre-filtered to `category = 'guideline'` |
+| `searchTherapeuticContent` | `knowledge-search-tools.ts` | Pre-filtered to `category = 'therapeutic_content'` |
+
+All tools share `executeHybridSearch` in `knowledge-search-tools.ts`.
+
+### Confidence Tiers
+
+| Tier | Similarity Range | LLM Behaviour |
+|---|---|---|
+| High | > 0.80 | Respond freely with full citations |
+| Moderate | 0.65 – 0.80 | Respond with epistemic hedging |
+| Low | < 0.65 | Disclose gap, suggest supervisor referral |
+
+---
+
+## Session Transcription Pipeline
+
+```
+Browser (MediaRecorder or file upload)
+    ↓
+Upload to Supabase Storage (session-audio bucket, private)
+    ↓
+POST /api/transcription/process
+    ↓
+Download audio → Whisper API (batch transcription) → Claude diarisation (speaker labelling)
+    ↓
+Segments stored in session_segments table
+    ↓
+POST /api/notes/generate
+    ↓
+LLM generates structured clinical notes (SOAP, DAP, progress, freeform formats)
+    ↓
+Stored in clinical_notes table (draft → reviewed → finalised lifecycle)
+```
+
+Two recording modes: `full_session` (multi-speaker) and `therapist_summary` (single-speaker narrated summary).
+
+---
+
+## Clinical Documents System
+
+Separate from session notes. Client-level documents spanning multiple sessions:
+
+- Comprehensive Assessment, Case Formulation, Risk Assessment, Risk & Safety Plan, Treatment Plan, Supervision Notes, Discharge Summary
+- Generated via `/api/documents/generate` using context assembly from client record + session history + existing notes + prior documents
+- Format specs in `lib/documents/specs/*.md` (instructions to the LLM, not templates)
+- Stored in `clinical_documents` table with draft → reviewed → finalised lifecycle and versioning via `supersedes_id`
 
 ---
 
 ## Environment Variables
 
-No `.env` or `.env.example` is committed. Create `.env.local` with:
+See `.env.example` for the full list. Key variables:
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Yes | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (server-side only) |
+| `AI_GATEWAY_API_KEY` | Yes | Vercel AI Gateway key |
+| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Yes | For embedding generation via Cohere Embed v4 on AWS Bedrock (`eu-west-1`). See `lib/ai/embedding.ts` |
+| `OPENAI_API_KEY` | Yes | For Whisper transcription and contextual enrichment during ingestion (via AI Gateway) |
+| `ENABLE_TRANSCRIPTION` | No | Feature flag for transcription |
+| `ENABLE_QUERY_REFORMULATION` | No | Multi-query retrieval (~$0.0003/search) |
+| `COHERE_API_KEY` + `ENABLE_RERANKING` | No | Cross-encoder reranking |
+| `DEV_LOGGING` | No | Dev-only RAG quality logging to disk |
+| `ENABLE_FAITHFULNESS_CHECK` | No | Post-generation grounding verification |
+
+---
+
+## Common Commands
+
+```bash
+pnpm dev              # Start dev server (Next.js with Turbopack)
+pnpm build            # Production build
+pnpm lint             # Biome lint check (via ultracite)
+pnpm format           # Biome auto-fix
+pnpm test             # Playwright E2E tests
+pnpm test:unit        # Vitest unit tests
+pnpm db:push          # Apply migrations to local Supabase
+pnpm db:types         # Regenerate TypeScript types from Supabase
+pnpm ingest           # Run knowledge base ingestion
+pnpm ingest --dry-run # Preview ingestion without writing to DB
+pnpm ingest --with-context  # Include contextual enrichment (Anthropic API calls)
+pnpm ingest --with-parents  # Include parent-child chunking
+pnpm dev:logs         # CLI tool for reading/filtering RAG quality logs
+```
+
+---
+
+## Testing
+
+### Two-tier E2E strategy
+
+- **Tier 1 (CI):** Mocked UI tests — page rendering, navigation, form behaviour. Mock all API calls via `page.route()`. Run on every push.
+- **Tier 2 (Local):** Integration tests — real chat flows, transcription, API responses. Gated behind `E2E_INTEGRATION=true`.
+
+### Test structure
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=<supabase project url>
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=<supabase anon key>
-SUPABASE_SERVICE_ROLE_KEY=<supabase service role key>
-ANTHROPIC_API_KEY=<anthropic API key>
-AI_GATEWAY_API_KEY=<vercel AI gateway key — only needed for ingestion enrichment script>
-OPENAI_API_KEY=<openai key — used for embeddings in ingestion script>
+tests/
+├── e2e/
+│   ├── auth/           # Unauthenticated tests (login, register)
+│   ├── app/            # Authenticated UI tests (dashboard, chat, sessions, clients)
+│   └── integration/    # Full-stack integration tests
+├── fixtures/
+│   ├── index.ts        # Custom test fixture with mockApi
+│   └── mock-data.ts    # Shared mock data
+└── global-setup.ts     # Auth setup (saves session to storageState)
 ```
 
-> `ANTHROPIC_API_KEY` is read automatically by `@ai-sdk/anthropic`. `AI_GATEWAY_API_KEY` is only needed for the offline knowledge base enrichment script (`scripts/lib/contextual-enrichment.ts`).
+### Unit tests
+
+- Located alongside source files in `__tests__/` directories (e.g., `lib/ai/__tests__/`)
+- Run with `pnpm test:unit` (Vitest)
 
 ---
 
-## Auth & Middleware
+## Current Status & Known Issues
 
-- Auth is handled by **Supabase Auth** with email/password (+ optional magic link / OAuth — see `app/(auth-pages)/`).
-- `middleware.ts` protects all routes by default. Public routes (sign-in, sign-up, password reset, auth callbacks) are explicitly allowed.
-- The Supabase client is set up for SSR via `@supabase/ssr`. See `lib/auth.ts` for client helpers.
+### Implemented and Working
 
----
+- Full RAG pipeline (database, ingestion script, hybrid search RPC, search tools, system prompt, confidence thresholds, no-results handling, sensitive content detection) — knowledge base has been ingested and content authoring is ongoing
+- Modality-jurisdiction wiring (4-level resolution chain)
+- Unified sidebar navigation shell (NavBar removed)
+- Session transcription pipeline (record + upload → Whisper → Claude diarisation → clinical notes)
+- Session summary recording mode (therapist-narrated summaries)
+- Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
+- Therapist profile settings page (modality, jurisdiction)
+- Client hub with tabs (Overview, Chats, Sessions, Notes, Documents)
+- Dev-only RAG quality logging system
+- Query reformulation + parallel search + Cohere reranking (all optional, feature-flagged)
+- Faithfulness checking (async, non-blocking)
+- System prompt surgery (search-first mandate, terminology preservation, citation rules, no-results disclosure, confidence handling)
+- Blank response bug fix (empty KB guard + fallback)
 
-## Database
+### Not Yet Implemented / On the Horizon
 
-- Single migration file: `supabase/migrations/20240101000000_initial_schema.sql`
-- Types live in `lib/db/types.ts` (manually maintained, mirrors schema)
-- Queries in `lib/db/queries.ts` — all DB access goes through here
-- Core tables: `Chat`, `DBMessage`, `Vote`, `Document`, `Suggestion`, `Stream`
-
-To add a table: write a new migration in `supabase/migrations/`, run `pnpm db:push`, then update types in `lib/db/types.ts`.
-
----
-
-## AI Architecture
-
-### Current Setup
-- **AI SDK v6** drives all LLM interaction (`generateText`, `streamText`, `useChat`)
-- **Anthropic Claude API** via `@ai-sdk/anthropic` — direct provider connection for GDPR compliance (EU data residency)
-- Models are registered in `lib/ai/models.ts`; provider configuration in `lib/ai/providers.ts`
-- System prompts and title generation prompts are in `lib/ai/prompts.ts`
-
-### RAG (Not Yet Implemented)
-RAG is the central differentiator for this product. When building the RAG pipeline:
-1. Embeddings and vector search will likely use **Supabase pgvector** (already on Supabase)
-2. Retrieved context should be injected into the system prompt before sending to the LLM
-3. The retrieved chunks should inform which therapeutic framework constraints apply
-4. `lib/ai/tools/` is where tool definitions live — RAG retrieval could be added as a tool here or as a pre-processing step before `streamText`
-
-### Therapy-Specific Prompt Rules
-Any system prompt or tool output for the therapy agent must:
-- Stay within the therapist's declared therapeutic orientation
-- Never provide direct diagnoses
-- Encourage formal supervision for complex or risk-related cases
-- Avoid storing or echoing back identifiable client information
+- **Confidence threshold integration into tool files** — `applyConfidenceThreshold` exists in `lib/ai/confidence.ts` but the wiring into `knowledge-search-tools.ts` and `search-knowledge-base.ts` may be incomplete. Verify the tool execute functions call it.
+- **Contextual enrichment prompt update** — Add situational vocabulary generation to `scripts/lib/contextual-enrichment.ts` (addresses semantic gap between therapist language and KB terminology). Requires re-running ingestion with `--with-context`.
+- **ICO registration** (~£40/year) and DPIA (Data Protection Impact Assessment) — compliance tasks.
+- **LLM provider evaluation** — Anthropic Claude API directly was recommended over Vercel AI Gateway for EU data residency and strong DPA terms.
+- **Post-diarisation speaker confirmation UI** — Highest-impact improvement to diarisation accuracy. Proposed but not implemented.
+- **Vercel artifact/document system** — Legacy from the template. Coexists with the purpose-built clinical notes and clinical documents systems but shares no data, UI, or database. Decision pending on whether to remove, repurpose, or keep.
+- **Proposed pages implementation** — `proposed-pages-implementation-plan.md` contains 18 prompts for dashboard overhaul, client list enhancements, session detail improvements, sidebar enhancements, and template cleanup. Partially implemented (check individual pages for current state).
+- **Playwright `mockApi` fixture issue** — An `unknown parameter` error was being diagnosed. Check `tests/fixtures/index.ts` for correct `test.extend()` generic type, and verify no test files import from `@playwright/test` directly instead of the custom fixture.
+- **RAGAS evaluation framework** and golden test dataset — knowledge base now has content; evaluation can proceed when prioritised.
 
 ---
 
-## Code Style & Linting
+## Important Principles
 
-- **Biome** with ultracite presets. Run `pnpm lint` to check, `pnpm format` to fix.
-- 2-space indentation, spaces (not tabs)
-- `components/ui/` and `lib/utils.ts` are excluded from linting (third-party / shadcn generated)
-- Path alias: `@/` maps to project root (configured in `tsconfig.json`)
-- Strict TypeScript with `strictNullChecks` enabled
+1. **Blank response is the worst outcome.** In a clinical safety system, returning nothing is worse than returning an imperfect response. All code paths must produce a visible response.
 
----
+2. **KB-grounded for high confidence, general knowledge with labelling for gaps.** Rigid KB-exclusive enforcement during MVP (with an empty KB) kills adoption. The agreed approach: use KB content when available at high confidence, fall back to general clinical knowledge with explicit labelling, hard refusal only for safety-critical edge cases.
 
-## Privacy & Compliance (Non-Negotiable)
+3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`.
 
-This product handles sensitive therapeutic content. All development decisions must account for:
+4. **Legislation as practitioner briefings.** Raw statutory text is inappropriate. All legislation content is practitioner-oriented, organised around therapeutic scenarios, written in therapist-friendly language with inline statutory citations.
 
-- **GDPR compliance** — data residency, right to deletion, lawful basis for processing
-- **No identifiable client data** should be persisted. Therapists are instructed to anonymize inputs; the system should not store or echo back names or identifying details
-- **Encryption** at rest and in transit
-- **Data retention** — chat history storage policy is an open decision (ephemeral vs. encrypted with retention limits)
-- **Professional body standards** — BACP, UKCP, HCPC (UK)
+5. **Migration ordering matters.** PostgreSQL validates partial index predicates during `ALTER COLUMN TYPE`. Drop all referencing indexes BEFORE the `ALTER TABLE` statement.
 
-When adding any storage, logging, or caching: default to the most privacy-restrictive option and require an explicit decision to loosen it.
+6. **Prompt-driven development.** Complex features are broken into sequenced, self-contained prompts for coding AIs. Each prompt must reference actual file paths, function signatures, and line numbers from the real codebase — not specification documents.
 
----
-
-## What's Already Done vs. What's Next
-
-### Done
-- Next.js + Supabase auth skeleton (sign-in, sign-up, password reset)
-- Chat UI with streaming responses, artifacts, document editing, suggestions, votes
-- AI SDK v6 integration with Anthropic Claude (direct provider)
-- Basic DB schema (chats, messages, documents, suggestions)
-- Middleware-based route protection
-- Playwright test infrastructure
-
-### Immediate Next Steps (MVP)
-1. Define initial therapeutic framework(s) and write therapy-specific system prompts (`lib/ai/prompts.ts`)
-2. Build RAG pipeline — ingest knowledge base, set up pgvector in Supabase, wire retrieval into chat
-3. Add therapist profile/orientation selection (persisted in DB or user profile)
-4. Privacy hardening — review what is stored, add anonymization guardrails, set retention policy
-5. Stripe subscription integration
-6. Strip or gate non-therapy features (weather tool, generic artifacts) behind the therapy workflow
-
-### Out of Scope for MVP
-- Audio/voice input
-- Automated session notes
-- Practice management integrations
-- Anything not directly validating the core reflection use case
-
----
-
-## Key Files to Touch First
-
-| Task | File(s) |
-|---|---|
-| Change AI model or provider | `lib/ai/models.ts`, `lib/ai/providers.ts` |
-| Edit system prompts | `lib/ai/prompts.ts` |
-| Add a new AI tool | `lib/ai/tools/` |
-| Add a DB table or query | `supabase/migrations/`, `lib/db/queries.ts`, `lib/db/types.ts` |
-| Change auth flow | `app/(auth-pages)/`, `middleware.ts`, `lib/auth.ts` |
-| Modify chat behavior | `app/(chat)/api/chat/route.ts`, `components/chat.tsx` |
-| Add a new page/route | `app/` — follow existing route group pattern |
+7. **Codebase-first assessment.** Before producing plans or prompts, read the actual repository. Don't rely on specification documents or conversation history for current state.
