@@ -107,6 +107,15 @@ function formatNoteContent(content: NoteContent, noteFormat: string): string {
   if (noteFormat === "dap" && "data" in content) {
     return `Data: ${content.data}\nAssessment: ${content.assessment}\nPlan: ${content.plan}`;
   }
+  if (noteFormat === "birp" && "behaviour" in content) {
+    return `Behaviour: ${content.behaviour}\nIntervention: ${content.intervention}\nResponse: ${content.response}\nPlan: ${content.plan}`;
+  }
+  if (noteFormat === "girp" && "goals" in content) {
+    return `Goals: ${content.goals}\nIntervention: ${content.intervention}\nResponse: ${content.response}\nPlan: ${content.plan}`;
+  }
+  if (noteFormat === "narrative" && "clinicalOpening" in content) {
+    return `Clinical Opening: ${content.clinicalOpening}\nSession Body: ${content.sessionBody}\nClinical Synthesis & Risk: ${content.clinicalSynthesis}\nThe Path Forward: ${content.pathForward}`;
+  }
   if ("body" in content) {
     return content.body;
   }

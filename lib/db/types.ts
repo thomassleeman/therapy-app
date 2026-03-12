@@ -379,7 +379,13 @@ export const TRANSCRIPTION_STATUS_LABELS: Record<TranscriptionStatus, string> =
     failed: "Failed",
   };
 
-export const NOTE_FORMATS = ["soap", "dap", "progress", "freeform"] as const;
+export const NOTE_FORMATS = [
+  "soap",
+  "dap",
+  "birp",
+  "girp",
+  "narrative",
+] as const;
 export type NoteFormat = (typeof NOTE_FORMATS)[number];
 
 export const NOTE_STATUSES = ["draft", "reviewed", "finalised"] as const;
@@ -446,6 +452,28 @@ export interface DapNoteContent {
   plan: string;
 }
 
+export interface BirpNoteContent {
+  behaviour: string;
+  intervention: string;
+  response: string;
+  plan: string;
+}
+
+export interface GirpNoteContent {
+  goals: string;
+  intervention: string;
+  response: string;
+  plan: string;
+}
+
+export interface NarrativeNoteContent {
+  clinicalOpening: string;
+  sessionBody: string;
+  clinicalSynthesis: string;
+  pathForward: string;
+}
+
+/** Internal fallback type used when structured parsing fails */
 export interface FreeformNoteContent {
   body: string;
 }
@@ -453,6 +481,9 @@ export interface FreeformNoteContent {
 export type NoteContent =
   | SoapNoteContent
   | DapNoteContent
+  | BirpNoteContent
+  | GirpNoteContent
+  | NarrativeNoteContent
   | FreeformNoteContent;
 
 export interface ClinicalNote {

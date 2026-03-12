@@ -36,7 +36,10 @@ import type {
   ClinicalNoteWithSession,
   DapNoteContent,
   DeliveryMethod,
+  BirpNoteContent,
   FreeformNoteContent,
+  GirpNoteContent,
+  NarrativeNoteContent,
   NoteContent,
   NoteFormat,
   NoteStatus,
@@ -754,17 +757,18 @@ function DocumentRow({
 const FORMAT_COLORS: Record<NoteFormat, string> = {
   soap: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   dap: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  progress:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
-  freeform:
-    "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  birp: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  girp: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  narrative:
+    "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
 };
 
 const FORMAT_LABELS: Record<NoteFormat, string> = {
   soap: "SOAP",
   dap: "DAP",
-  progress: "Progress",
-  freeform: "Freeform",
+  birp: "BIRP",
+  girp: "GIRP",
+  narrative: "Narrative",
 };
 
 const STATUS_BADGE_COLORS: Record<NoteStatus, string> = {
@@ -782,6 +786,12 @@ function getNotePreview(note: ClinicalNoteWithSession): string {
     text = (content as SoapNoteContent).subjective;
   } else if (note.noteFormat === "dap" && "data" in content) {
     text = (content as DapNoteContent).data;
+  } else if (note.noteFormat === "birp" && "behaviour" in content) {
+    text = (content as BirpNoteContent).behaviour;
+  } else if (note.noteFormat === "girp" && "goals" in content) {
+    text = (content as GirpNoteContent).goals;
+  } else if (note.noteFormat === "narrative" && "clinicalOpening" in content) {
+    text = (content as NarrativeNoteContent).clinicalOpening;
   } else if ("body" in content) {
     text = (content as FreeformNoteContent).body;
   }
@@ -940,10 +950,10 @@ function NewNoteDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [format, setFormat] = useState<NoteFormat>("freeform");
+  const [format, setFormat] = useState<NoteFormat>("narrative");
   const [saving, setSaving] = useState(false);
 
-  // Freeform fields
+  // Freeform / fallback fields
   const [body, setBody] = useState("");
 
   // SOAP fields
@@ -957,6 +967,24 @@ function NewNoteDialog({
   const [dapAssessment, setDapAssessment] = useState("");
   const [dapPlan, setDapPlan] = useState("");
 
+  // BIRP fields
+  const [behaviour, setBehaviour] = useState("");
+  const [birpIntervention, setBirpIntervention] = useState("");
+  const [birpResponse, setBirpResponse] = useState("");
+  const [birpPlan, setBirpPlan] = useState("");
+
+  // GIRP fields
+  const [goals, setGoals] = useState("");
+  const [girpIntervention, setGirpIntervention] = useState("");
+  const [girpResponse, setGirpResponse] = useState("");
+  const [girpPlan, setGirpPlan] = useState("");
+
+  // Narrative fields
+  const [clinicalOpening, setClinicalOpening] = useState("");
+  const [sessionBody, setSessionBody] = useState("");
+  const [clinicalSynthesis, setClinicalSynthesis] = useState("");
+  const [pathForward, setPathForward] = useState("");
+
   function resetForm() {
     setBody("");
     setSubjective("");
@@ -966,6 +994,18 @@ function NewNoteDialog({
     setDapData("");
     setDapAssessment("");
     setDapPlan("");
+    setBehaviour("");
+    setBirpIntervention("");
+    setBirpResponse("");
+    setBirpPlan("");
+    setGoals("");
+    setGirpIntervention("");
+    setGirpResponse("");
+    setGirpPlan("");
+    setClinicalOpening("");
+    setSessionBody("");
+    setClinicalSynthesis("");
+    setPathForward("");
   }
 
   function buildContent(): NoteContent {
@@ -983,9 +1023,27 @@ function NewNoteDialog({
           assessment: dapAssessment,
           plan: dapPlan,
         };
-      case "progress":
-      case "freeform":
-        return { body };
+      case "birp":
+        return {
+          behaviour,
+          intervention: birpIntervention,
+          response: birpResponse,
+          plan: birpPlan,
+        };
+      case "girp":
+        return {
+          goals,
+          intervention: girpIntervention,
+          response: girpResponse,
+          plan: girpPlan,
+        };
+      case "narrative":
+        return {
+          clinicalOpening,
+          sessionBody,
+          clinicalSynthesis,
+          pathForward,
+        };
       default:
         return { body };
     }
@@ -1036,18 +1094,6 @@ function NewNoteDialog({
           </div>
 
           {/* Format-specific fields */}
-          {(format === "freeform" || format === "progress") && (
-            <div className="space-y-1.5">
-              <Label>Note</Label>
-              <Textarea
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write your note..."
-                rows={6}
-                value={body}
-              />
-            </div>
-          )}
-
           {format === "soap" && (
             <>
               <div className="space-y-1.5">
@@ -1116,6 +1162,129 @@ function NewNoteDialog({
                   placeholder="Next steps..."
                   rows={3}
                   value={dapPlan}
+                />
+              </div>
+            </>
+          )}
+
+          {format === "birp" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Behaviour</Label>
+                <Textarea
+                  onChange={(e) => setBehaviour(e.target.value)}
+                  placeholder="Observable behaviours during the session..."
+                  rows={3}
+                  value={behaviour}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Intervention</Label>
+                <Textarea
+                  onChange={(e) => setBirpIntervention(e.target.value)}
+                  placeholder="Therapeutic methods and techniques used..."
+                  rows={3}
+                  value={birpIntervention}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Response</Label>
+                <Textarea
+                  onChange={(e) => setBirpResponse(e.target.value)}
+                  placeholder="Client's reaction to interventions..."
+                  rows={3}
+                  value={birpResponse}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Plan</Label>
+                <Textarea
+                  onChange={(e) => setBirpPlan(e.target.value)}
+                  placeholder="Next steps for client and clinician..."
+                  rows={3}
+                  value={birpPlan}
+                />
+              </div>
+            </>
+          )}
+
+          {format === "girp" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Goals</Label>
+                <Textarea
+                  onChange={(e) => setGoals(e.target.value)}
+                  placeholder="Treatment plan goals addressed..."
+                  rows={3}
+                  value={goals}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Intervention</Label>
+                <Textarea
+                  onChange={(e) => setGirpIntervention(e.target.value)}
+                  placeholder="Therapeutic actions and techniques..."
+                  rows={3}
+                  value={girpIntervention}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Response</Label>
+                <Textarea
+                  onChange={(e) => setGirpResponse(e.target.value)}
+                  placeholder="Client's reaction and participation..."
+                  rows={3}
+                  value={girpResponse}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Plan</Label>
+                <Textarea
+                  onChange={(e) => setGirpPlan(e.target.value)}
+                  placeholder="Homework and future session focus..."
+                  rows={3}
+                  value={girpPlan}
+                />
+              </div>
+            </>
+          )}
+
+          {format === "narrative" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Clinical Opening</Label>
+                <Textarea
+                  onChange={(e) => setClinicalOpening(e.target.value)}
+                  placeholder="Session logistics, client's initial presentation..."
+                  rows={3}
+                  value={clinicalOpening}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Session Body</Label>
+                <Textarea
+                  onChange={(e) => setSessionBody(e.target.value)}
+                  placeholder="Chronological summary of session interactions..."
+                  rows={5}
+                  value={sessionBody}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Clinical Synthesis & Risk</Label>
+                <Textarea
+                  onChange={(e) => setClinicalSynthesis(e.target.value)}
+                  placeholder="Professional interpretation, progress, risk assessment..."
+                  rows={3}
+                  value={clinicalSynthesis}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>The Path Forward</Label>
+                <Textarea
+                  onChange={(e) => setPathForward(e.target.value)}
+                  placeholder="Homework, next session focus, appointment date..."
+                  rows={3}
+                  value={pathForward}
                 />
               </div>
             </>

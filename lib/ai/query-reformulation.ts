@@ -7,8 +7,7 @@
  * keeps going quiet" may not land near chunks about "therapeutic rupture" or
  * "metacommunication" via embedding alone.
  *
- * Cost when enabled: ~$0.0003 per search invocation (one gpt-4o-mini call).
- * Gate: ENABLE_QUERY_REFORMULATION=true
+ * Cost: ~$0.0003 per search invocation (one gpt-4o-mini call).
  */
 
 import { openai } from "@ai-sdk/openai";
@@ -21,9 +20,6 @@ import { z } from "zod";
  * Returns `[originalQuery, ...reformulations]` — the original is always included
  * so that the caller never searches with fewer than one query.
  *
- * When `ENABLE_QUERY_REFORMULATION` is not `"true"`, returns `[originalQuery]`
- * immediately (behaviour identical to pre-multi-query).
- *
  * If `generateObject` fails for any reason, logs the error and returns
  * `[originalQuery]` for graceful degradation.
  */
@@ -32,10 +28,6 @@ export async function reformulateQuery(
   category: string | null,
   modality: string | null
 ): Promise<string[]> {
-  if (process.env.ENABLE_QUERY_REFORMULATION !== "true") {
-    return [originalQuery];
-  }
-
   const start = performance.now();
 
   try {

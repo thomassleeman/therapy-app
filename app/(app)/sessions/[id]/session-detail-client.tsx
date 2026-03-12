@@ -37,9 +37,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
 import type {
+  BirpNoteContent,
   ClinicalNote,
   DapNoteContent,
   FreeformNoteContent,
+  GirpNoteContent,
+  NarrativeNoteContent,
   NoteContent,
   NoteFormat,
   SessionConsent,
@@ -101,10 +104,10 @@ function getSpeakerColor(speaker: string): string {
 const FORMAT_DESCRIPTIONS: Record<NoteFormat, string> = {
   soap: "Subjective, Objective, Assessment, Plan — the most widely used clinical note format.",
   dap: "Data, Assessment, Plan — a streamlined alternative to SOAP.",
-  progress:
-    "Narrative progress note in flowing prose covering themes, interventions, and plan.",
-  freeform:
-    "Open-format note for when structured formats don't fit the session.",
+  birp: "Behaviour, Intervention, Response, Plan — tracks observable behaviours and skills acquisition.",
+  girp: "Goals, Intervention, Response, Plan — goal-driven format linking sessions to treatment plans.",
+  narrative:
+    "Chronological narrative covering session opening, body, clinical synthesis, and path forward.",
 };
 
 function isSoapContent(
@@ -119,6 +122,27 @@ function isDapContent(
   format: NoteFormat
 ): content is DapNoteContent {
   return format === "dap" && "data" in content;
+}
+
+function isBirpContent(
+  content: NoteContent,
+  format: NoteFormat
+): content is BirpNoteContent {
+  return format === "birp" && "behaviour" in content;
+}
+
+function isGirpContent(
+  content: NoteContent,
+  format: NoteFormat
+): content is GirpNoteContent {
+  return format === "girp" && "goals" in content;
+}
+
+function isNarrativeContent(
+  content: NoteContent,
+  format: NoteFormat
+): content is NarrativeNoteContent {
+  return format === "narrative" && "clinicalOpening" in content;
 }
 
 function isFreeformContent(
@@ -292,6 +316,38 @@ function NotesTab({
               editedContent.assessment ?? activeNote.content.assessment,
             plan: editedContent.plan ?? activeNote.content.plan,
           };
+        } else if (isBirpContent(activeNote.content, activeNote.noteFormat)) {
+          updatedContent = {
+            behaviour:
+              editedContent.behaviour ?? activeNote.content.behaviour,
+            intervention:
+              editedContent.intervention ?? activeNote.content.intervention,
+            response: editedContent.response ?? activeNote.content.response,
+            plan: editedContent.plan ?? activeNote.content.plan,
+          };
+        } else if (isGirpContent(activeNote.content, activeNote.noteFormat)) {
+          updatedContent = {
+            goals: editedContent.goals ?? activeNote.content.goals,
+            intervention:
+              editedContent.intervention ?? activeNote.content.intervention,
+            response: editedContent.response ?? activeNote.content.response,
+            plan: editedContent.plan ?? activeNote.content.plan,
+          };
+        } else if (
+          isNarrativeContent(activeNote.content, activeNote.noteFormat)
+        ) {
+          updatedContent = {
+            clinicalOpening:
+              editedContent.clinicalOpening ??
+              activeNote.content.clinicalOpening,
+            sessionBody:
+              editedContent.sessionBody ?? activeNote.content.sessionBody,
+            clinicalSynthesis:
+              editedContent.clinicalSynthesis ??
+              activeNote.content.clinicalSynthesis,
+            pathForward:
+              editedContent.pathForward ?? activeNote.content.pathForward,
+          };
         } else if (isFreeformContent(activeNote.content)) {
           updatedContent = {
             body: editedContent.body ?? activeNote.content.body,
@@ -457,6 +513,51 @@ function NotesTab({
       { key: "data", label: "Data", value: noteContent.data },
       { key: "assessment", label: "Assessment", value: noteContent.assessment },
       { key: "plan", label: "Plan", value: noteContent.plan }
+    );
+  } else if (isBirpContent(noteContent, activeNote.noteFormat)) {
+    sections.push(
+      { key: "behaviour", label: "Behaviour", value: noteContent.behaviour },
+      {
+        key: "intervention",
+        label: "Intervention",
+        value: noteContent.intervention,
+      },
+      { key: "response", label: "Response", value: noteContent.response },
+      { key: "plan", label: "Plan", value: noteContent.plan }
+    );
+  } else if (isGirpContent(noteContent, activeNote.noteFormat)) {
+    sections.push(
+      { key: "goals", label: "Goals", value: noteContent.goals },
+      {
+        key: "intervention",
+        label: "Intervention",
+        value: noteContent.intervention,
+      },
+      { key: "response", label: "Response", value: noteContent.response },
+      { key: "plan", label: "Plan", value: noteContent.plan }
+    );
+  } else if (isNarrativeContent(noteContent, activeNote.noteFormat)) {
+    sections.push(
+      {
+        key: "clinicalOpening",
+        label: "Clinical Opening",
+        value: noteContent.clinicalOpening,
+      },
+      {
+        key: "sessionBody",
+        label: "Session Body",
+        value: noteContent.sessionBody,
+      },
+      {
+        key: "clinicalSynthesis",
+        label: "Clinical Synthesis & Risk",
+        value: noteContent.clinicalSynthesis,
+      },
+      {
+        key: "pathForward",
+        label: "The Path Forward",
+        value: noteContent.pathForward,
+      }
     );
   } else if (isFreeformContent(noteContent)) {
     sections.push({

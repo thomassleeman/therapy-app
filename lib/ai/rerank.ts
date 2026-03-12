@@ -12,15 +12,11 @@
  * are far more accurate. Research shows contextual retrieval + hybrid search +
  * reranking achieves 67% fewer retrieval failures than without reranking.
  *
- * GATE CONDITIONS
- * ───────────────
- * Reranking is opt-in to avoid unexpected Cohere API calls in environments
- * without credentials:
- *   - ENABLE_RERANKING must be "true"
- *   - COHERE_API_KEY must be set
- *
- * If either condition is not met, results are returned unchanged (degraded
- * but functional). If the Cohere API call fails at runtime, the error is
+ * GATE CONDITION
+ * ──────────────
+ * Reranking activates automatically when COHERE_API_KEY is set.
+ * If the key is missing, results are returned unchanged (degraded but
+ * functional). If the Cohere API call fails at runtime, the error is
  * logged and original results are returned.
  */
 
@@ -52,18 +48,12 @@ export async function rerankResults<T extends { content: string }>(
   results: T[],
   topN = 5
 ): Promise<{ results: T[]; wasReranked: boolean }> {
-  // Feature flag gate
-  if (process.env.ENABLE_RERANKING !== "true") {
-    return { results, wasReranked: false };
-  }
-
-  // API key gate
   const apiKey = process.env.COHERE_API_KEY;
   if (!apiKey) {
     if (!hasWarnedAboutKey) {
       console.warn(
         "[rerank] COHERE_API_KEY is not set — reranking skipped. " +
-          "Set COHERE_API_KEY and ENABLE_RERANKING=true to enable."
+          "Set COHERE_API_KEY to enable."
       );
       hasWarnedAboutKey = true;
     }
