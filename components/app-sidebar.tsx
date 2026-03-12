@@ -42,22 +42,22 @@ export function AppSidebar({ user }: { user: User | undefined }) {
       <SidebarHeader>
         <SidebarMenu>
           <div className="flex flex-row items-center justify-between">
-            <Link
+            {/* <Link
               className="flex flex-row items-center gap-3"
               href="/"
               onClick={() => {
                 setOpenMobile(false);
               }}
-            >
-              <span className="cursor-pointer rounded-md px-2 font-semibold text-lg hover:bg-muted">
-                <Image
-                  alt="Therapy Reflection Agent Logo"
-                  height={32}
-                  src={Logo}
-                  width={32}
-                />
-              </span>
-            </Link>
+            > */}
+            <span className=" rounded-md px-2">
+              <Image
+                alt="Therapy Reflection Agent Logo"
+                height={32}
+                src={Logo}
+                width={32}
+              />
+            </span>
+            {/* </Link> */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
