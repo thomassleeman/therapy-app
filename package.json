@@ -50,6 +50,7 @@
     "@vercel/functions": "^2.0.0",
     "@xyflow/react": "^12.10.0",
     "ai": "6.0.37",
+    "assemblyai": "^4.27.0",
     "class-variance-authority": "^0.7.1",
     "classnames": "^2.5.1",
     "clsx": "^2.1.1",

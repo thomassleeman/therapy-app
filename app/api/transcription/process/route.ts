@@ -9,6 +9,8 @@ import {
   updateTherapySession,
 } from "@/lib/db/queries";
 import type { SessionSegmentInsert } from "@/lib/db/types";
+import { decryptBuffer } from "@/lib/encryption/crypto";
+import { encryptSegments } from "@/lib/encryption/fields";
 import { transcribeAndDiarize } from "@/lib/transcription";
 
 export const maxDuration = 300; // 5 minutes — Whisper can be slow for long files
@@ -90,7 +92,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const audioBuffer = Buffer.from(await data.arrayBuffer());
+    // Decrypt audio from storage before sending to Whisper
+    const audioBuffer = await decryptBuffer(
+      Buffer.from(await data.arrayBuffer()),
+      sessionId
+    );
 
     // Run transcription + diarization pipeline
     const diarisedTranscript = await transcribeAndDiarize(audioBuffer, {
@@ -110,7 +116,10 @@ export async function POST(request: Request) {
         confidence: seg.confidence,
       }));
 
-    await insertSessionSegments(segmentInserts);
+    // Encrypt transcript content before storage
+    const encryptedSegments = await encryptSegments(segmentInserts, sessionId);
+
+    await insertSessionSegments(encryptedSegments);
 
     // Calculate duration and mark completed
     const durationMinutes = Math.ceil(diarisedTranscript.durationMs / 60_000);

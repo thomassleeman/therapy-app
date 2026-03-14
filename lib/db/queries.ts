@@ -1,10 +1,16 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import type { ArtifactKind } from "@/components/artifact";
 import type {
   ClinicalDocumentStatus,
   ClinicalDocumentType,
 } from "@/lib/documents/types";
+import {
+  decryptJsonb,
+  decryptSegments,
+  encryptJsonb,
+} from "@/lib/encryption/fields";
 import { createClient } from "@/utils/supabase/server";
 import { ChatSDKError } from "../errors";
 import type {
@@ -338,18 +344,19 @@ export async function getChatById({ id }: { id: string }) {
 export async function saveMessages({ messages }: { messages: DBMessage[] }) {
   try {
     const supabase = await createClient();
+    const encryptedMessages = await Promise.all(
+      messages.map(async (msg) => ({
+        id: msg.id,
+        chatId: msg.chatId,
+        role: msg.role,
+        parts: await encryptJsonb(msg.parts, msg.id),
+        attachments: msg.attachments,
+        createdAt: msg.createdAt,
+      }))
+    );
     const { data, error } = await supabase
       .from("Message_v2")
-      .insert(
-        messages.map((msg) => ({
-          id: msg.id,
-          chatId: msg.chatId,
-          role: msg.role,
-          parts: msg.parts,
-          attachments: msg.attachments,
-          createdAt: msg.createdAt,
-        }))
-      )
+      .insert(encryptedMessages)
       .select();
 
     if (error) {
@@ -373,9 +380,10 @@ export async function updateMessage({
 }) {
   try {
     const supabase = await createClient();
+    const encryptedParts = await encryptJsonb(parts, id);
     const { data, error } = await supabase
       .from("Message_v2")
-      .update({ parts })
+      .update({ parts: encryptedParts })
       .eq("id", id)
       .select();
 
@@ -403,7 +411,13 @@ export async function getMessagesByChatId({ id }: { id: string }) {
     if (error) {
       handleSupabaseError(error, "get messages by chat id");
     }
-    return data as DBMessage[];
+    const messages = (data ?? []) as DBMessage[];
+    return Promise.all(
+      messages.map(async (msg) => ({
+        ...msg,
+        parts: await decryptJsonb(msg.parts, msg.id),
+      }))
+    );
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -558,7 +572,13 @@ export async function getMessageById({ id }: { id: string }) {
     if (error) {
       handleSupabaseError(error, "get message by id");
     }
-    return data as DBMessage[];
+    const messages = (data ?? []) as DBMessage[];
+    return Promise.all(
+      messages.map(async (msg) => ({
+        ...msg,
+        parts: await decryptJsonb(msg.parts, msg.id),
+      }))
+    );
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -1684,7 +1704,11 @@ export async function getSessionSegments({
       handleSupabaseError(error, "get session segments");
     }
 
-    return (data || []).map(mapRowToSessionSegment);
+    const segments = (data || []).map(mapRowToSessionSegment);
+
+    // Option A: decrypt here so every caller gets plaintext automatically.
+    // sessionId is already available from the function parameter.
+    return decryptSegments(segments, sessionId);
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -1725,14 +1749,18 @@ export async function createClinicalNote(
 ): Promise<ClinicalNote> {
   try {
     const supabase = await createClient();
+    const noteId = randomUUID();
+    const encryptedContent = await encryptJsonb(note.content, noteId);
+
     const { data, error } = await supabase
       .from("clinical_notes")
       .insert({
+        id: noteId,
         session_id: note.sessionId ?? null,
         client_id: note.clientId ?? null,
         therapist_id: note.therapistId,
         note_format: note.noteFormat,
-        content: note.content,
+        content: encryptedContent,
         generated_by: note.generatedBy ?? "ai",
         model_used: note.modelUsed ?? null,
       })
@@ -1743,7 +1771,9 @@ export async function createClinicalNote(
       handleSupabaseError(error, "create clinical note");
     }
 
-    return mapRowToClinicalNote(data);
+    const mapped = mapRowToClinicalNote(data);
+    mapped.content = note.content;
+    return mapped;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -1772,7 +1802,13 @@ export async function getClinicalNotes({
       handleSupabaseError(error, "get clinical notes");
     }
 
-    return (data || []).map(mapRowToClinicalNote);
+    const notes = (data || []).map(mapRowToClinicalNote);
+    await Promise.all(
+      notes.map(async (note) => {
+        note.content = await decryptJsonb(note.content, note.id);
+      })
+    );
+    return notes;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -1803,7 +1839,7 @@ export async function updateClinicalNote({
     };
 
     if (content !== undefined) {
-      updatePayload.content = content;
+      updatePayload.content = await encryptJsonb(content, id);
     }
     if (status !== undefined) {
       updatePayload.status = status;
@@ -1823,7 +1859,9 @@ export async function updateClinicalNote({
       handleSupabaseError(error, "update clinical note");
     }
 
-    return mapRowToClinicalNote(data);
+    const mapped = mapRowToClinicalNote(data);
+    mapped.content = await decryptJsonb(mapped.content, mapped.id);
+    return mapped;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -2146,7 +2184,7 @@ export async function getClinicalNotesByClient({
       handleSupabaseError(error, "get clinical notes by client");
     }
 
-    return (data || []).map((row: any) => ({
+    const notes = (data || []).map((row: any) => ({
       id: row.id,
       sessionId: row.session_id ?? null,
       sessionDate: row.therapy_sessions?.session_date ?? null,
@@ -2156,6 +2194,12 @@ export async function getClinicalNotesByClient({
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
+    await Promise.all(
+      notes.map(async (note) => {
+        note.content = await decryptJsonb(note.content, note.id);
+      })
+    );
+    return notes;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -2180,14 +2224,18 @@ export async function createStandaloneClinicalNote({
 }): Promise<ClinicalNote> {
   try {
     const supabase = await createClient();
+    const noteId = randomUUID();
+    const encryptedContent = await encryptJsonb(content, noteId);
+
     const { data, error } = await supabase
       .from("clinical_notes")
       .insert({
+        id: noteId,
         session_id: null,
         client_id: clientId,
         therapist_id: therapistId,
         note_format: noteFormat,
-        content,
+        content: encryptedContent,
         generated_by: "manual",
         status: "draft",
       })
@@ -2198,7 +2246,9 @@ export async function createStandaloneClinicalNote({
       handleSupabaseError(error, "create standalone clinical note");
     }
 
-    return mapRowToClinicalNote(data);
+    const mapped = mapRowToClinicalNote(data);
+    mapped.content = content;
+    return mapped;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -2302,14 +2352,18 @@ export async function createClinicalDocument(
 ): Promise<ClinicalDocument> {
   try {
     const supabase = await createClient();
+    const documentId = randomUUID();
+    const encryptedContent = await encryptJsonb(doc.content, documentId);
+
     const { data, error } = await supabase
       .from("clinical_documents")
       .insert({
+        id: documentId,
         client_id: doc.clientId,
         therapist_id: doc.therapistId,
         document_type: doc.documentType,
         title: doc.title,
-        content: doc.content,
+        content: encryptedContent,
         status: doc.status ?? "draft",
         version: doc.version ?? 1,
         supersedes_id: doc.supersedesId ?? null,
@@ -2323,7 +2377,9 @@ export async function createClinicalDocument(
       handleSupabaseError(error, "create clinical document");
     }
 
-    return mapRowToClinicalDocument(data);
+    const mapped = mapRowToClinicalDocument(data);
+    mapped.content = await decryptJsonb(mapped.content, mapped.id);
+    return mapped;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -2368,8 +2424,11 @@ export async function getClinicalDocument({
       handleSupabaseError(refsError, "get clinical document references");
     }
 
+    const mapped = mapRowToClinicalDocument(docData);
+    mapped.content = await decryptJsonb(mapped.content, mapped.id);
+
     return {
-      ...mapRowToClinicalDocument(docData),
+      ...mapped,
       references: (refsData || []).map(mapRowToClinicalDocumentReference),
     };
   } catch (error) {
@@ -2478,7 +2537,7 @@ export async function updateClinicalDocument({
       updatePayload.title = updates.title;
     }
     if (updates.content !== undefined) {
-      updatePayload.content = updates.content;
+      updatePayload.content = await encryptJsonb(updates.content, id);
     }
     if (updates.status !== undefined) {
       updatePayload.status = updates.status;
@@ -2505,7 +2564,9 @@ export async function updateClinicalDocument({
       handleSupabaseError(error, "update clinical document");
     }
 
-    return mapRowToClinicalDocument(data);
+    const mapped = mapRowToClinicalDocument(data);
+    mapped.content = await decryptJsonb(mapped.content, mapped.id);
+    return mapped;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;
@@ -2610,7 +2671,9 @@ export async function getLatestDocumentByType({
       handleSupabaseError(error, "get latest document by type");
     }
 
-    return mapRowToClinicalDocument(data);
+    const mapped = mapRowToClinicalDocument(data);
+    mapped.content = await decryptJsonb(mapped.content, mapped.id);
+    return mapped;
   } catch (error) {
     if (error instanceof ChatSDKError) {
       throw error;

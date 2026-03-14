@@ -6,6 +6,7 @@ import {
   hasRequiredConsents,
   updateTherapySession,
 } from "@/lib/db/queries";
+import { encryptBuffer } from "@/lib/encryption/crypto";
 import { createClient } from "@/utils/supabase/server";
 
 const ACCEPTED_AUDIO_TYPES = new Set([
@@ -91,13 +92,16 @@ export async function POST(request: Request) {
     // Upload to Supabase Storage
     const extension = getExtension(baseType);
     const storagePath = `${session.user.id}/${sessionId}/audio.${extension}`;
-    const fileBuffer = await audioFile.arrayBuffer();
+    const fileBuffer = Buffer.from(await audioFile.arrayBuffer());
+
+    // Audio is encrypted at the application layer before storage
+    const encryptedAudio = await encryptBuffer(fileBuffer, sessionId);
 
     const supabase = await createClient();
     const { error: uploadError } = await supabase.storage
       .from("session-audio")
-      .upload(storagePath, fileBuffer, {
-        contentType: baseType,
+      .upload(storagePath, encryptedAudio, {
+        contentType: "application/octet-stream",
         upsert: true,
       });
 

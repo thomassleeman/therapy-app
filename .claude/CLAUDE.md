@@ -22,8 +22,8 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 | Auth | Supabase Auth (email/password + Google OAuth) |
 | AI / LLM | Vercel AI SDK v6, Anthropic Claude (via `@ai-sdk/anthropic`) |
 | Embeddings | Cohere Embed v4 at 512 dimensions via AWS Bedrock (`eu-west-1`), called through `@aws-sdk/client-bedrock-runtime` |
-| Transcription | OpenAI Whisper API (batch) |
-| Diarisation | Claude (linguistic pattern-based speaker identification) |
+| Transcription | AssemblyAI EU endpoint (`api.eu.assemblyai.com`, Dublin) — speech-to-text + speaker diarisation in a single call. Fallback to OpenAI Whisper + Claude diarisation via env vars. Provider abstraction in `lib/transcription/`. |
+| Encryption | AES-256-GCM with HKDF-SHA256 key derivation (Node.js `crypto`, zero dependencies) |
 | UI | Tailwind CSS, shadcn/ui, Tiptap editor |
 | Linting | Biome (via `ultracite` presets) |
 | Testing | Playwright (E2E), Vitest (unit) |
@@ -82,7 +82,11 @@ lib/
 │   └── faithfulness.ts # Faithfulness check persistence
 ├── dev/                # Dev-only RAG quality logging (behind DEV_LOGGING env var)
 ├── documents/          # Clinical documents system (types, context assembly, specs/)
-├── transcription/      # Transcription abstraction layer (Whisper + Claude diarisation)
+├── encryption/         # Application-level encryption (AES-256-GCM)
+│   ├── crypto.ts       # Core primitives: encrypt, decrypt, encryptBuffer, decryptBuffer, isEncrypted
+│   ├── fields.ts       # Field helpers: encryptField, decryptField, encryptJsonb, decryptJsonb, encryptSegments, decryptSegments
+│   └── __tests__/      # Vitest test suites for crypto.ts and fields.ts
+├── transcription/      # Transcription abstraction layer (AssemblyAI default, Whisper + Claude fallback)
 ├── types/
 │   └── knowledge.ts    # Single source of truth for RAG enums (categories, modalities, jurisdictions)
 ├── auth.ts             # Supabase auth wrapper
@@ -90,6 +94,12 @@ lib/
 
 scripts/
 ├── ingest-knowledge.ts # Knowledge base ingestion CLI (--dry-run, --with-context, --with-parents)
+├── encrypt-all.ts      # Run all encryption migration scripts in sequence
+├── encrypt-session-segments.ts  # Migrate plaintext session_segments to encrypted
+├── encrypt-clinical-notes.ts    # Migrate plaintext clinical_notes to encrypted
+├── encrypt-clinical-documents.ts # Migrate plaintext clinical_documents to encrypted
+├── encrypt-chat-messages.ts     # Migrate plaintext Message_v2 to encrypted
+├── encryption-migrate-utils.ts  # Shared helpers for migration scripts
 └── lib/                # Chunking strategies, contextual enrichment, parent-child chunker
 
 knowledge-base/         # Markdown content authored by Aaron (ingested, content authoring ongoing)
@@ -153,6 +163,34 @@ tests/                  # Playwright E2E + fixtures
 - Content authored by Aaron, not scraped or licensed
 - Chunking strategies are content-type-specific (legislation ≈ guidelines, therapeutic content uses semantic chunking)
 
+### Encryption
+
+- All sensitive clinical content is encrypted at the application layer before storage in Supabase
+- Algorithm: AES-256-GCM (authenticated encryption) with per-record keys derived via HKDF-SHA256
+- Implementation uses only Node.js built-in `crypto` module — zero external dependencies
+- Encryption boundary is the server: browser sends/receives plaintext over TLS, server encrypts before writing to Supabase and decrypts after reading
+- Master key stored as `ENCRYPTION_MASTER_KEY` environment variable (64-char hex, 32 bytes), never in the database
+- Per-record keys derived from master key + record UUID via HKDF — each record has a unique derived key
+- Envelope format: `[version (2 bytes "v1")] [IV (12 bytes)] [auth tag (16 bytes)] [ciphertext]`, stored as base64 in TEXT columns or raw bytes in Storage
+- JSONB columns use a `{ _encrypted: "base64..." }` wrapper to remain valid JSONB
+- Transcript segments use per-segment key derivation: `${sessionId}:segment:${index}`
+- `isEncrypted()` check enables plaintext passthrough during migration — reads handle both encrypted and plaintext data transparently
+- This is **not** end-to-end encryption: the server processes plaintext in memory (required for AI features). It is application-level encryption at rest, protecting against database breach, backup exposure, infrastructure provider access, and legal compulsion on Supabase
+
+#### Encrypted columns
+
+| Table | Column | Type | Key derivation context |
+|---|---|---|---|
+| `session_segments` | `content` | TEXT | `${sessionId}:segment:${segmentIndex}` |
+| `clinical_notes` | `content` | JSONB | Note UUID |
+| `clinical_documents` | `content` | JSONB | Document UUID |
+| `"Message_v2"` | `content` | JSONB | Message UUID |
+| `session-audio` bucket | file data | Binary | Session UUID |
+
+#### Not encrypted (metadata needed for queries)
+
+Session dates, statuses, document types, speaker labels, timestamps, IDs — these are needed for filtering and don't contain identifiable health content.
+
 ---
 
 ## RAG Pipeline
@@ -184,6 +222,8 @@ LLM generates cited response
 Optional: async faithfulness check (gpt-4o-mini, non-blocking)
     ↓
 Response streams to client
+    ↓
+Messages encrypted (AES-256-GCM) before persistence to database
 ```
 
 ### Search Tools (4 registered)
@@ -213,18 +253,22 @@ All tools share `executeHybridSearch` in `knowledge-search-tools.ts`.
 Browser (MediaRecorder or file upload)
     ↓
 Upload to Supabase Storage (session-audio bucket, private)
+  → Audio encrypted (AES-256-GCM) before upload — stored as ciphertext blob
     ↓
 POST /api/transcription/process
+  → Audio decrypted in memory before sending to transcription provider
     ↓
-Download audio → Whisper API (batch transcription) → Claude diarisation (speaker labelling)
+Download audio → AssemblyAI EU endpoint (transcription + speaker diarisation in one call, ~$0.0028/min)
+  → Fallback: Whisper API (batch transcription) → Claude diarisation (speaker labelling)
     ↓
-Segments stored in session_segments table
+Segments encrypted (per-segment keys) → stored in session_segments table
     ↓
 POST /api/notes/generate
+  → Segments decrypted for LLM context assembly
     ↓
 LLM generates structured clinical notes (SOAP, DAP, progress, freeform formats)
     ↓
-Stored in clinical_notes table (draft → reviewed → finalised lifecycle)
+Notes encrypted (AES-256-GCM) → stored in clinical_notes table (draft → reviewed → finalised lifecycle)
 ```
 
 Two recording modes: `full_session` (multi-speaker) and `therapist_summary` (single-speaker narrated summary).
@@ -239,6 +283,7 @@ Separate from session notes. Client-level documents spanning multiple sessions:
 - Generated via `/api/documents/generate` using context assembly from client record + session history + existing notes + prior documents
 - Format specs in `lib/documents/specs/*.md` (instructions to the LLM, not templates)
 - Stored in `clinical_documents` table with draft → reviewed → finalised lifecycle and versioning via `supersedes_id`
+- Document content encrypted at rest (AES-256-GCM) — decrypted in memory for context assembly and display
 
 ---
 
@@ -251,9 +296,13 @@ See `.env.example` for the full list. Key variables:
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Yes | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (server-side only) |
+| `ENCRYPTION_MASTER_KEY` | Yes | 64-char hex string (32 bytes). Application-level encryption key for clinical data. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Loss of this key means permanent loss of all encrypted data. |
 | `AI_GATEWAY_API_KEY` | Yes | Vercel AI Gateway key |
 | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Yes | For embedding generation via Cohere Embed v4 on AWS Bedrock (`eu-west-1`). See `lib/ai/embedding.ts` |
-| `OPENAI_API_KEY` | Yes | For Whisper transcription and contextual enrichment during ingestion (via AI Gateway) |
+| `ASSEMBLYAI_API_KEY` | Yes | For session transcription and speaker diarisation via AssemblyAI EU endpoint (Dublin). See `lib/transcription/providers/assemblyai.ts` |
+| `OPENAI_API_KEY` | Yes | For contextual enrichment during ingestion (via AI Gateway). Also used if `TRANSCRIPTION_PROVIDER=whisper` fallback is active |
+| `TRANSCRIPTION_PROVIDER` | No | `assemblyai` (default) or `whisper` — selects transcription backend |
+| `DIARIZATION_PROVIDER` | No | `assemblyai` (default) or `claude` — selects diarisation backend |
 | `ENABLE_TRANSCRIPTION` | No | Feature flag for transcription |
 | `ENABLE_QUERY_REFORMULATION` | No | Multi-query retrieval (~$0.0003/search) |
 | `COHERE_API_KEY` + `ENABLE_RERANKING` | No | Cross-encoder reranking |
@@ -278,6 +327,7 @@ pnpm ingest --dry-run # Preview ingestion without writing to DB
 pnpm ingest --with-context  # Include contextual enrichment (Anthropic API calls)
 pnpm ingest --with-parents  # Include parent-child chunking
 pnpm dev:logs         # CLI tool for reading/filtering RAG quality logs
+npx tsx scripts/encrypt-all.ts   # Encrypt all existing plaintext data (idempotent, safe to re-run)
 ```
 
 ---
@@ -305,7 +355,7 @@ tests/
 
 ### Unit tests
 
-- Located alongside source files in `__tests__/` directories (e.g., `lib/ai/__tests__/`)
+- Located alongside source files in `__tests__/` directories (e.g., `lib/ai/__tests__/`, `lib/encryption/__tests__/`)
 - Run with `pnpm test:unit` (Vitest)
 
 ---
@@ -317,7 +367,7 @@ tests/
 - Full RAG pipeline (database, ingestion script, hybrid search RPC, search tools, system prompt, confidence thresholds, no-results handling, sensitive content detection) — knowledge base has been ingested and content authoring is ongoing
 - Modality-jurisdiction wiring (4-level resolution chain)
 - Unified sidebar navigation shell (NavBar removed)
-- Session transcription pipeline (record + upload → Whisper → Claude diarisation → clinical notes)
+- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available)
 - Session summary recording mode (therapist-narrated summaries)
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
 - Therapist profile settings page (modality, jurisdiction)
@@ -327,18 +377,21 @@ tests/
 - Faithfulness checking (async, non-blocking)
 - System prompt surgery (search-first mandate, terminology preservation, citation rules, no-results disclosure, confidence handling)
 - Blank response bug fix (empty KB guard + fallback)
+- **Application-level encryption** (AES-256-GCM) on all sensitive clinical content: session transcripts, clinical notes, clinical documents, chat messages, and audio files. Per-record key derivation via HKDF-SHA256. Migration scripts for existing plaintext data.
 
 ### Not Yet Implemented / On the Horizon
 
 - **Confidence threshold integration into tool files** — `applyConfidenceThreshold` exists in `lib/ai/confidence.ts` but the wiring into `knowledge-search-tools.ts` and `search-knowledge-base.ts` may be incomplete. Verify the tool execute functions call it.
 - **Contextual enrichment prompt update** — Add situational vocabulary generation to `scripts/lib/contextual-enrichment.ts` (addresses semantic gap between therapist language and KB terminology). Requires re-running ingestion with `--with-context`.
-- **ICO registration** (~£40/year) and DPIA (Data Protection Impact Assessment) — compliance tasks.
+- **ICO registration** (~£40/year) and DPIA (Data Protection Impact Assessment) — compliance tasks. The DPIA should document the encryption architecture.
 - **LLM provider evaluation** — Anthropic Claude API directly was recommended over Vercel AI Gateway for EU data residency and strong DPA terms.
 - **Post-diarisation speaker confirmation UI** — Highest-impact improvement to diarisation accuracy. Proposed but not implemented.
 - **Vercel artifact/document system** — Legacy from the template. Coexists with the purpose-built clinical notes and clinical documents systems but shares no data, UI, or database. Decision pending on whether to remove, repurpose, or keep.
 - **Proposed pages implementation** — `proposed-pages-implementation-plan.md` contains 18 prompts for dashboard overhaul, client list enhancements, session detail improvements, sidebar enhancements, and template cleanup. Partially implemented (check individual pages for current state).
 - **Playwright `mockApi` fixture issue** — An `unknown parameter` error was being diagnosed. Check `tests/fixtures/index.ts` for correct `test.extend()` generic type, and verify no test files import from `@playwright/test` directly instead of the custom fixture.
 - **RAGAS evaluation framework** and golden test dataset — knowledge base now has content; evaluation can proceed when prioritised.
+- **Encryption key rotation procedure** — The module supports rotation via `ENCRYPTION_MASTER_KEY_OLD` + re-encryption, but no automated rotation script exists yet. Build when needed.
+- **`clients` table sensitive field encryption** — Fields like `presenting_issues`, `treatment_goals`, `risk_considerations`, and `background` contain clinical information but are not yet encrypted. Deferred to a second phase because these fields are read during context assembly for document generation.
 
 ---
 
@@ -348,7 +401,7 @@ tests/
 
 2. **KB-grounded for high confidence, general knowledge with labelling for gaps.** Rigid KB-exclusive enforcement during MVP (with an empty KB) kills adoption. The agreed approach: use KB content when available at high confidence, fall back to general clinical knowledge with explicit labelling, hard refusal only for safety-critical edge cases.
 
-3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`.
+3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`. **Transcription data residency** — all audio transcription and speaker diarisation uses AssemblyAI's EU endpoint (`api.eu.assemblyai.com`), processing data in Dublin (eu-west-1). No audio data leaves EU infrastructure. EU residency is controlled by the base URL in code — no dashboard configuration needed. AssemblyAI is SOC 2 Type 2, ISO 27001, and GDPR compliant. Configuration is in `lib/transcription/providers/assemblyai.ts`. **Encryption at rest** — all sensitive clinical content is encrypted at the application layer (AES-256-GCM) with keys managed separately from the database. Even a full database compromise yields only ciphertext.
 
 4. **Legislation as practitioner briefings.** Raw statutory text is inappropriate. All legislation content is practitioner-oriented, organised around therapeutic scenarios, written in therapist-friendly language with inline statutory citations.
 
@@ -357,3 +410,5 @@ tests/
 6. **Prompt-driven development.** Complex features are broken into sequenced, self-contained prompts for coding AIs. Each prompt must reference actual file paths, function signatures, and line numbers from the real codebase — not specification documents.
 
 7. **Codebase-first assessment.** Before producing plans or prompts, read the actual repository. Don't rely on specification documents or conversation history for current state.
+
+8. **Master key is irreplaceable.** Loss of `ENCRYPTION_MASTER_KEY` means permanent, unrecoverable loss of all encrypted clinical data. The key must be backed up in a password manager and stored in Vercel environment variables. It must never be committed to the repository or logged.
