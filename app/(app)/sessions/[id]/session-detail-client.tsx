@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { NoteDocumentEditor } from "@/components/notes/note-document-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -578,20 +579,12 @@ function NotesTab({
         </div>
       )}
 
-      {sections.map((section) => (
-        <div className="space-y-2" key={section.key}>
-          <Label className="text-sm font-semibold uppercase tracking-wide">
-            {section.label}
-          </Label>
-          <Textarea
-            className="resize-y"
-            disabled={activeNote.status === "finalised"}
-            onChange={(e) => updateField(section.key, e.target.value)}
-            rows={Math.max(4, Math.ceil(section.value.length / 80))}
-            value={editedContent[section.key] ?? section.value}
-          />
-        </div>
-      ))}
+      <NoteDocumentEditor
+        disabled={activeNote.status === "finalised"}
+        editedContent={editedContent}
+        onFieldChange={updateField}
+        sections={sections}
+      />
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         {activeNote.status !== "finalised" && (

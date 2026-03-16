@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
+import { RagLogDownloadButton } from "@/components/rag-log-download-button";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { auth } from "@/lib/auth";
 import {
@@ -72,6 +73,11 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
         isReadonly={session?.user?.id !== chat.userId}
       />
       <DataStreamHandler />
+      {process.env.RAG_LOGGING === "supabase" && (
+        <div className="fixed bottom-2 right-2 z-50">
+          <RagLogDownloadButton chatId={chat.id} />
+        </div>
+      )}
     </>
   );
 }

@@ -13,7 +13,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
-import { writeTurnEntry } from "./log-writer";
+import { dispatchWriteTurnEntry } from "./log-writer-dispatch";
 import type {
   ConfidenceAssessmentEntry,
   FilteredResultEntry,
@@ -172,7 +172,7 @@ class ActiveTurnLogger implements TurnLogger {
       durationMs: Date.now() - this.startTime,
     };
 
-    await writeTurnEntry(entry.metadata.chatId, entry);
+    await dispatchWriteTurnEntry(entry.metadata.chatId, entry);
   }
 }
 
@@ -188,6 +188,10 @@ class DevLogger {
   private readonly storage = new AsyncLocalStorage<LoggerContext>();
 
   isEnabled(): boolean {
+    const mode = process.env.RAG_LOGGING;
+    if (mode === "supabase" || mode === "local") {
+      return true;
+    }
     return process.env.DEV_LOGGING === "true";
   }
 

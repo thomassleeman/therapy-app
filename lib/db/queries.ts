@@ -2211,55 +2211,6 @@ export async function getClinicalNotesByClient({
   }
 }
 
-export async function createStandaloneClinicalNote({
-  clientId,
-  therapistId,
-  noteFormat,
-  content,
-}: {
-  clientId: string;
-  therapistId: string;
-  noteFormat: ClinicalNote["noteFormat"];
-  content: ClinicalNote["content"];
-}): Promise<ClinicalNote> {
-  try {
-    const supabase = await createClient();
-    const noteId = randomUUID();
-    const encryptedContent = await encryptJsonb(content, noteId);
-
-    const { data, error } = await supabase
-      .from("clinical_notes")
-      .insert({
-        id: noteId,
-        session_id: null,
-        client_id: clientId,
-        therapist_id: therapistId,
-        note_format: noteFormat,
-        content: encryptedContent,
-        generated_by: "manual",
-        status: "draft",
-      })
-      .select()
-      .single();
-
-    if (error) {
-      handleSupabaseError(error, "create standalone clinical note");
-    }
-
-    const mapped = mapRowToClinicalNote(data);
-    mapped.content = content;
-    return mapped;
-  } catch (error) {
-    if (error instanceof ChatSDKError) {
-      throw error;
-    }
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to create standalone clinical note"
-    );
-  }
-}
-
 export async function getRecentSessionsForSidebar({
   therapistId,
   limit = 5,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { createStandaloneNoteAction } from "@/app/(app)/clients/actions";
+
 import { ClientDialog } from "@/components/client-dialog";
 import { FabNewChat } from "@/components/fab-new-chat";
 import { PencilEditIcon } from "@/components/icons";
@@ -16,17 +16,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+
 import type {
   AgeBracket,
   Chat,
@@ -40,7 +33,6 @@ import type {
   FreeformNoteContent,
   GirpNoteContent,
   NarrativeNoteContent,
-  NoteContent,
   NoteFormat,
   NoteStatus,
   SessionFrequency,
@@ -239,7 +231,7 @@ export function ClientHubPage({
 
           {/* Clinical Notes Tab */}
           <TabsContent className="mt-4" value="clinical-notes">
-            <ClinicalNotesTab clientId={client.id} notes={clinicalNotes} />
+            <ClinicalNotesTab notes={clinicalNotes} />
           </TabsContent>
 
           {/* Chats Tab */}
@@ -805,13 +797,10 @@ type FilterFormat = "all" | NoteFormat;
 
 function ClinicalNotesTab({
   notes,
-  clientId,
 }: {
   notes: ClinicalNoteWithSession[];
-  clientId: string;
 }) {
   const [filter, setFilter] = useState<FilterFormat>("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const filteredNotes =
     filter === "all" ? notes : notes.filter((n) => n.noteFormat === filter);
@@ -821,26 +810,16 @@ function ClinicalNotesTab({
     ...NOTE_FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] })),
   ];
 
-  if (notes.length === 0 && !dialogOpen) {
+  if (notes.length === 0) {
     return (
-      <div className="space-y-2">
-        <div className="flex justify-end">
-          <NewNoteDialog
-            clientId={clientId}
-            onCreated={() => setDialogOpen(false)}
-            onOpenChange={setDialogOpen}
-            open={dialogOpen}
-          />
-        </div>
-        <Card>
-          <CardContent className="flex flex-col items-center py-8">
-            <CardDescription className="text-center">
-              No clinical notes yet. Notes are generated from session
-              transcripts, or you can create standalone notes.
-            </CardDescription>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center py-8">
+          <CardDescription className="text-center">
+            No clinical notes yet. Notes are generated from session
+            transcripts.
+          </CardDescription>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -861,12 +840,6 @@ function ClinicalNotesTab({
             </Button>
           ))}
         </div>
-        <NewNoteDialog
-          clientId={clientId}
-          onCreated={() => setDialogOpen(false)}
-          onOpenChange={setDialogOpen}
-          open={dialogOpen}
-        />
       </div>
 
       {/* Notes list */}
@@ -937,366 +910,6 @@ function NoteRow({ note }: { note: ClinicalNoteWithSession }) {
   }
 
   return inner;
-}
-
-function NewNoteDialog({
-  clientId,
-  onCreated,
-  open,
-  onOpenChange,
-}: {
-  clientId: string;
-  onCreated: () => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [format, setFormat] = useState<NoteFormat>("narrative");
-  const [saving, setSaving] = useState(false);
-
-  // Freeform / fallback fields
-  const [body, setBody] = useState("");
-
-  // SOAP fields
-  const [subjective, setSubjective] = useState("");
-  const [objective, setObjective] = useState("");
-  const [soapAssessment, setSoapAssessment] = useState("");
-  const [soapPlan, setSoapPlan] = useState("");
-
-  // DAP fields
-  const [dapData, setDapData] = useState("");
-  const [dapAssessment, setDapAssessment] = useState("");
-  const [dapPlan, setDapPlan] = useState("");
-
-  // BIRP fields
-  const [behaviour, setBehaviour] = useState("");
-  const [birpIntervention, setBirpIntervention] = useState("");
-  const [birpResponse, setBirpResponse] = useState("");
-  const [birpPlan, setBirpPlan] = useState("");
-
-  // GIRP fields
-  const [goals, setGoals] = useState("");
-  const [girpIntervention, setGirpIntervention] = useState("");
-  const [girpResponse, setGirpResponse] = useState("");
-  const [girpPlan, setGirpPlan] = useState("");
-
-  // Narrative fields
-  const [clinicalOpening, setClinicalOpening] = useState("");
-  const [sessionBody, setSessionBody] = useState("");
-  const [clinicalSynthesis, setClinicalSynthesis] = useState("");
-  const [pathForward, setPathForward] = useState("");
-
-  function resetForm() {
-    setBody("");
-    setSubjective("");
-    setObjective("");
-    setSoapAssessment("");
-    setSoapPlan("");
-    setDapData("");
-    setDapAssessment("");
-    setDapPlan("");
-    setBehaviour("");
-    setBirpIntervention("");
-    setBirpResponse("");
-    setBirpPlan("");
-    setGoals("");
-    setGirpIntervention("");
-    setGirpResponse("");
-    setGirpPlan("");
-    setClinicalOpening("");
-    setSessionBody("");
-    setClinicalSynthesis("");
-    setPathForward("");
-  }
-
-  function buildContent(): NoteContent {
-    switch (format) {
-      case "soap":
-        return {
-          subjective,
-          objective,
-          assessment: soapAssessment,
-          plan: soapPlan,
-        };
-      case "dap":
-        return {
-          data: dapData,
-          assessment: dapAssessment,
-          plan: dapPlan,
-        };
-      case "birp":
-        return {
-          behaviour,
-          intervention: birpIntervention,
-          response: birpResponse,
-          plan: birpPlan,
-        };
-      case "girp":
-        return {
-          goals,
-          intervention: girpIntervention,
-          response: girpResponse,
-          plan: girpPlan,
-        };
-      case "narrative":
-        return {
-          clinicalOpening,
-          sessionBody,
-          clinicalSynthesis,
-          pathForward,
-        };
-      default:
-        return { body };
-    }
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await createStandaloneNoteAction({
-        clientId,
-        noteFormat: format,
-        content: buildContent(),
-      });
-      resetForm();
-      onCreated();
-      onOpenChange(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogTrigger asChild>
-        <Button size="sm">+ New Note</Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>New Clinical Note</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {/* Format selector */}
-          <div className="space-y-1.5">
-            <Label>Format</Label>
-            <div className="flex flex-wrap gap-1">
-              {NOTE_FORMATS.map((f) => (
-                <Button
-                  className="h-7 px-2.5 text-xs"
-                  key={f}
-                  onClick={() => setFormat(f)}
-                  size="sm"
-                  variant={format === f ? "default" : "outline"}
-                >
-                  {FORMAT_LABELS[f]}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Format-specific fields */}
-          {format === "soap" && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Subjective</Label>
-                <Textarea
-                  onChange={(e) => setSubjective(e.target.value)}
-                  placeholder="Client's reported experience..."
-                  rows={3}
-                  value={subjective}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Objective</Label>
-                <Textarea
-                  onChange={(e) => setObjective(e.target.value)}
-                  placeholder="Observable data and clinical observations..."
-                  rows={3}
-                  value={objective}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Assessment</Label>
-                <Textarea
-                  onChange={(e) => setSoapAssessment(e.target.value)}
-                  placeholder="Clinical interpretation..."
-                  rows={3}
-                  value={soapAssessment}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Plan</Label>
-                <Textarea
-                  onChange={(e) => setSoapPlan(e.target.value)}
-                  placeholder="Next steps and treatment plan..."
-                  rows={3}
-                  value={soapPlan}
-                />
-              </div>
-            </>
-          )}
-
-          {format === "dap" && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Data</Label>
-                <Textarea
-                  onChange={(e) => setDapData(e.target.value)}
-                  placeholder="Session data and observations..."
-                  rows={3}
-                  value={dapData}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Assessment</Label>
-                <Textarea
-                  onChange={(e) => setDapAssessment(e.target.value)}
-                  placeholder="Clinical assessment..."
-                  rows={3}
-                  value={dapAssessment}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Plan</Label>
-                <Textarea
-                  onChange={(e) => setDapPlan(e.target.value)}
-                  placeholder="Next steps..."
-                  rows={3}
-                  value={dapPlan}
-                />
-              </div>
-            </>
-          )}
-
-          {format === "birp" && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Behaviour</Label>
-                <Textarea
-                  onChange={(e) => setBehaviour(e.target.value)}
-                  placeholder="Observable behaviours during the session..."
-                  rows={3}
-                  value={behaviour}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Intervention</Label>
-                <Textarea
-                  onChange={(e) => setBirpIntervention(e.target.value)}
-                  placeholder="Therapeutic methods and techniques used..."
-                  rows={3}
-                  value={birpIntervention}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Response</Label>
-                <Textarea
-                  onChange={(e) => setBirpResponse(e.target.value)}
-                  placeholder="Client's reaction to interventions..."
-                  rows={3}
-                  value={birpResponse}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Plan</Label>
-                <Textarea
-                  onChange={(e) => setBirpPlan(e.target.value)}
-                  placeholder="Next steps for client and clinician..."
-                  rows={3}
-                  value={birpPlan}
-                />
-              </div>
-            </>
-          )}
-
-          {format === "girp" && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Goals</Label>
-                <Textarea
-                  onChange={(e) => setGoals(e.target.value)}
-                  placeholder="Treatment plan goals addressed..."
-                  rows={3}
-                  value={goals}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Intervention</Label>
-                <Textarea
-                  onChange={(e) => setGirpIntervention(e.target.value)}
-                  placeholder="Therapeutic actions and techniques..."
-                  rows={3}
-                  value={girpIntervention}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Response</Label>
-                <Textarea
-                  onChange={(e) => setGirpResponse(e.target.value)}
-                  placeholder="Client's reaction and participation..."
-                  rows={3}
-                  value={girpResponse}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Plan</Label>
-                <Textarea
-                  onChange={(e) => setGirpPlan(e.target.value)}
-                  placeholder="Homework and future session focus..."
-                  rows={3}
-                  value={girpPlan}
-                />
-              </div>
-            </>
-          )}
-
-          {format === "narrative" && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Clinical Opening</Label>
-                <Textarea
-                  onChange={(e) => setClinicalOpening(e.target.value)}
-                  placeholder="Session logistics, client's initial presentation..."
-                  rows={3}
-                  value={clinicalOpening}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Session Body</Label>
-                <Textarea
-                  onChange={(e) => setSessionBody(e.target.value)}
-                  placeholder="Chronological summary of session interactions..."
-                  rows={5}
-                  value={sessionBody}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Clinical Synthesis & Risk</Label>
-                <Textarea
-                  onChange={(e) => setClinicalSynthesis(e.target.value)}
-                  placeholder="Professional interpretation, progress, risk assessment..."
-                  rows={3}
-                  value={clinicalSynthesis}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>The Path Forward</Label>
-                <Textarea
-                  onChange={(e) => setPathForward(e.target.value)}
-                  placeholder="Homework, next session focus, appointment date..."
-                  rows={3}
-                  value={pathForward}
-                />
-              </div>
-            </>
-          )}
-
-          <Button className="w-full" disabled={saving} onClick={handleSave}>
-            {saving ? "Saving..." : "Save Note"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 function formatShortDate(dateStr: string): string {
