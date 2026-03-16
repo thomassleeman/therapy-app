@@ -9,10 +9,10 @@ import { CLIENT_STATUS_LABELS } from "@/lib/db/types";
 import { ChevronDownIcon, MessageIcon, PlusIcon, UserIcon } from "./icons";
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
-  active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  paused: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-  waitlisted: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  active: "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
+  paused: "bg-amber-600 text-white dark:bg-amber-900 dark:text-amber-200",
+  discharged: "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-200",
+  waitlisted: "bg-blue-600 text-white dark:bg-blue-900 dark:text-blue-200",
 };
 
 function PickerStatusBadge({ status }: { status: ClientStatus }) {

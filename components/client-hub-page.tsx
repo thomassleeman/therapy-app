@@ -65,10 +65,10 @@ import {
 import { formatDate } from "@/lib/utils";
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
-  active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  paused: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-  waitlisted: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  active: "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
+  paused: "bg-amber-600 text-white dark:bg-amber-900 dark:text-amber-200",
+  discharged: "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-200",
+  waitlisted: "bg-blue-600 text-white dark:bg-blue-900 dark:text-blue-200",
 };
 
 function StatusBadge({ status }: { status: ClientStatus }) {
@@ -552,30 +552,30 @@ function SupervisionTab({ client }: { client: Client }) {
 
 const DOC_TYPE_COLORS: Record<ClinicalDocumentType, string> = {
   comprehensive_assessment:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    "bg-blue-600 text-white dark:bg-blue-900 dark:text-blue-200",
   case_formulation:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+    "bg-purple-600 text-white dark:bg-purple-900 dark:text-purple-200",
   treatment_plan:
-    "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
   risk_assessment:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    "bg-amber-600 text-white dark:bg-amber-900 dark:text-amber-200",
   risk_safety_plan:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    "bg-amber-600 text-white dark:bg-amber-900 dark:text-amber-200",
   supervision_notes:
-    "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200",
+    "bg-slate-600 text-white dark:bg-slate-900 dark:text-slate-200",
   discharge_summary:
-    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+    "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-200",
 };
 
 const DOC_STATUS_COLORS: Record<ClinicalDocumentStatus, string> = {
   generating:
-    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+    "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-200",
   draft:
-    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+    "bg-yellow-600 text-white dark:bg-yellow-900 dark:text-yellow-200",
   reviewed:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    "bg-blue-600 text-white dark:bg-blue-900 dark:text-blue-200",
   finalised:
-    "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
 };
 
 type DocFilterType = "all" | ClinicalDocumentType;

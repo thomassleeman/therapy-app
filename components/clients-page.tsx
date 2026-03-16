@@ -67,12 +67,12 @@ function formatRelativeDate(dateStr: string): string {
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
   active:
-    "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300",
+    "bg-green-600 text-white dark:bg-green-900/50 dark:text-green-300",
   paused:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
-  discharged: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+    "bg-amber-600 text-white dark:bg-amber-900/50 dark:text-amber-300",
+  discharged: "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-300",
   waitlisted:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300",
+    "bg-blue-600 text-white dark:bg-blue-900/50 dark:text-blue-300",
 };
 
 const CLIENT_FILTER_OPTIONS = CLIENT_STATUSES.map((status) => ({

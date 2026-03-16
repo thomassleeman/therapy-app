@@ -16,20 +16,20 @@ function TranscriptionBadge({ status }: { status: string }) {
   switch (status) {
     case "completed":
       return (
-        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100">
+        <Badge className="bg-green-600 text-white dark:bg-green-900/30 dark:text-green-400 hover:bg-green-600">
           Completed
         </Badge>
       );
     case "transcribing":
     case "labelling":
       return (
-        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 animate-pulse">
+        <Badge className="bg-blue-600 text-white dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-600 animate-pulse">
           Transcribing
         </Badge>
       );
     case "failed":
       return (
-        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100">
+        <Badge className="bg-red-600 text-white dark:bg-red-900/30 dark:text-red-400 hover:bg-red-600">
           Failed
         </Badge>
       );
@@ -46,25 +46,25 @@ function NotesBadge({ status }: { status: string }) {
   switch (status) {
     case "draft":
       return (
-        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100">
+        <Badge className="bg-amber-600 text-white dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-600">
           Draft
         </Badge>
       );
     case "reviewed":
       return (
-        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100">
+        <Badge className="bg-blue-600 text-white dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-600">
           Reviewed
         </Badge>
       );
     case "finalised":
       return (
-        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100">
+        <Badge className="bg-green-600 text-white dark:bg-green-900/30 dark:text-green-400 hover:bg-green-600">
           Finalised
         </Badge>
       );
     case "generating":
       return (
-        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 animate-pulse">
+        <Badge className="bg-blue-600 text-white dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-600 animate-pulse">
           Generating
         </Badge>
       );
