@@ -10,8 +10,8 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AudioUpload } from "@/components/transcription/audio-upload";
 import { SessionRecorder } from "@/components/transcription/session-recorder";
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,23 @@ function getTodayString(): string {
 }
 
 export default function NewSessionPage() {
+  const searchParams = useSearchParams();
+  // Key forces full remount (fresh useState) on every client-side navigation to this page.
+  // searchParams.toString() covers query-param changes; the pathname listener below
+  // covers navigating away and back with the same (or no) query string.
+  const pathname = usePathname();
+  const visitRef = useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — increment on every pathname change to force remount
+  useEffect(() => {
+    visitRef.current += 1;
+  }, [pathname]);
+
+  const formKey = `${pathname}-${searchParams.toString()}-${visitRef.current}`;
+
+  return <NewSessionForm key={formKey} />;
+}
+
+function NewSessionForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle, Check, FileAudio, Loader2, Upload } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -239,11 +239,13 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
     return phase;
   })();
 
-  // Call onComplete when transcription finishes
-  if (currentPhase === "completed" && phase !== "completed") {
-    setPhase("completed");
-    onComplete();
-  }
+  // Call onComplete when transcription finishes (in useEffect to avoid setState during render)
+  useEffect(() => {
+    if (currentPhase === "completed" && phase !== "completed") {
+      setPhase("completed");
+      onComplete();
+    }
+  }, [currentPhase, phase, onComplete]);
 
   const displayError = errorMessage ?? transcriptionError;
 

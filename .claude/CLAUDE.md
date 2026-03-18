@@ -128,6 +128,7 @@ tests/                  # Playwright E2E + fixtures
 - Kebab-case filenames (`use-audio-recorder.ts`, not `useAudioRecorder.ts`)
 - `for...of` loops preferred over `.forEach()` (Biome rule)
 - Non-null assertions (`!`) replaced with `?? ""` fallbacks (Biome rule)
+- **Key-based remount for stateful pages:** Client component pages that accumulate state across a multi-step flow (e.g. `sessions/new`) must use a wrapper + keyed inner component pattern to guarantee fresh `useState` on every client-side navigation. Next.js App Router may reuse component instances when navigating back to the same route, preserving stale state. Pattern: default export renders `<InnerForm key={formKey} />` where `formKey` changes per visit (see `app/(app)/sessions/new/page.tsx`).
 
 ### Database
 
