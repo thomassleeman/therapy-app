@@ -10,7 +10,7 @@ import { decrypt, encrypt, isEncrypted } from "./crypto";
  */
 export async function encryptField(
   value: string | null | undefined,
-  recordId: string,
+  recordId: string
 ): Promise<string | null> {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -25,7 +25,7 @@ export async function encryptField(
  */
 export async function decryptField(
   value: string | null | undefined,
-  recordId: string,
+  recordId: string
 ): Promise<string | null> {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -47,7 +47,7 @@ export async function decryptField(
  */
 export async function encryptJsonb<T>(
   value: T,
-  recordId: string,
+  recordId: string
 ): Promise<{ _encrypted: string }> {
   const json = JSON.stringify(value);
   const ciphertext = await encrypt(json, recordId);
@@ -61,7 +61,7 @@ export async function encryptJsonb<T>(
  */
 export async function decryptJsonb<T>(
   value: unknown,
-  recordId: string,
+  recordId: string
 ): Promise<T> {
   if (
     typeof value === "object" &&
@@ -71,7 +71,7 @@ export async function decryptJsonb<T>(
   ) {
     const json = await decrypt(
       (value as { _encrypted: string })._encrypted,
-      recordId,
+      recordId
     );
     return JSON.parse(json) as T;
   }
@@ -89,16 +89,13 @@ export async function decryptJsonb<T>(
  */
 export async function encryptSegments<T extends { content: string }>(
   segments: T[],
-  sessionId: string,
+  sessionId: string
 ): Promise<T[]> {
   return Promise.all(
     segments.map(async (segment, index) => ({
       ...segment,
-      content: await encrypt(
-        segment.content,
-        `${sessionId}:segment:${index}`,
-      ),
-    })),
+      content: await encrypt(segment.content, `${sessionId}:segment:${index}`),
+    }))
   );
 }
 
@@ -108,7 +105,7 @@ export async function encryptSegments<T extends { content: string }>(
  */
 export async function decryptSegments<T extends { content: string }>(
   segments: T[],
-  sessionId: string,
+  sessionId: string
 ): Promise<T[]> {
   return Promise.all(
     segments.map(async (segment, index) => {
@@ -119,9 +116,9 @@ export async function decryptSegments<T extends { content: string }>(
         ...segment,
         content: await decrypt(
           segment.content,
-          `${sessionId}:segment:${index}`,
+          `${sessionId}:segment:${index}`
         ),
       };
-    }),
+    })
   );
 }

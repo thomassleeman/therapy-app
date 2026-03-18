@@ -93,7 +93,7 @@ function mapRowToClient(row: any): Client {
     sessionDurationMinutes: row.session_duration_minutes ?? null,
     contractedSessions: row.contracted_sessions ?? null,
     feePerSession:
-      row.fee_per_session != null ? Number(row.fee_per_session) : null,
+      row.fee_per_session == null ? null : Number(row.fee_per_session),
     supervisorNotes: row.supervisor_notes ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

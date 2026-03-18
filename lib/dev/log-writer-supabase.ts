@@ -14,7 +14,7 @@ import type { TurnEntry } from "./types";
 
 export async function writeTurnEntryToSupabase(
   chatId: string,
-  entry: TurnEntry,
+  entry: TurnEntry
 ): Promise<void> {
   try {
     const supabase = await createClient();
@@ -27,7 +27,7 @@ export async function writeTurnEntryToSupabase(
     if (error) {
       console.warn(
         "[rag-logger] Failed to write log to Supabase:",
-        error.message,
+        error.message
       );
     }
   } catch (err) {

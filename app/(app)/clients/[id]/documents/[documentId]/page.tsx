@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { DocumentViewer } from "@/components/documents/document-viewer";
 import { auth } from "@/lib/auth";
-import { getClinicalDocument, getClientById } from "@/lib/db/queries";
+import { getClientById, getClinicalDocument } from "@/lib/db/queries";
 import { DOCUMENT_TYPE_REGISTRY } from "@/lib/documents/types";
 
 export default async function Page({
@@ -26,7 +26,10 @@ export default async function Page({
     notFound();
   }
 
-  if (document.clientId !== clientId || client.therapistId !== session.user.id) {
+  if (
+    document.clientId !== clientId ||
+    client.therapistId !== session.user.id
+  ) {
     notFound();
   }
 

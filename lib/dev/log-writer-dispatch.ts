@@ -31,7 +31,7 @@ export function getLoggingMode(): LoggingMode {
 
 export async function dispatchWriteTurnEntry(
   chatId: string,
-  entry: TurnEntry,
+  entry: TurnEntry
 ): Promise<void> {
   const mode = getLoggingMode();
 

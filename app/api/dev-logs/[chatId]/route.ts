@@ -4,12 +4,12 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ chatId: string }> },
+  { params }: { params: Promise<{ chatId: string }> }
 ) {
   if (process.env.RAG_LOGGING !== "supabase") {
     return Response.json(
       { error: "RAG logging is not enabled" },
-      { status: 404 },
+      { status: 404 }
     );
   }
 

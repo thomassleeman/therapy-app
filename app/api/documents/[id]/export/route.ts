@@ -1,5 +1,6 @@
 import {
   AlignmentType,
+  convertMillimetersToTwip,
   Document,
   Footer,
   Header,
@@ -11,15 +12,14 @@ import {
   TabStopPosition,
   TabStopType,
   TextRun,
-  convertMillimetersToTwip,
 } from "docx";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getClinicalDocument } from "@/lib/db/queries";
 import {
-  DOCUMENT_TYPE_REGISTRY,
   type ClinicalDocumentType,
+  DOCUMENT_TYPE_REGISTRY,
 } from "@/lib/documents/types";
 
 function formatDateUK(dateStr: string): string {

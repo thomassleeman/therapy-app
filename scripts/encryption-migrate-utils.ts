@@ -5,7 +5,7 @@ export function getServiceClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
     );
   }
   return createClient(url, key);
@@ -17,9 +17,9 @@ export function logProgress(
   table: string,
   processed: number,
   migrated: number,
-  skipped: number,
+  skipped: number
 ) {
   console.log(
-    `[${table}] Processed: ${processed}, Migrated: ${migrated}, Skipped (already encrypted): ${skipped}`,
+    `[${table}] Processed: ${processed}, Migrated: ${migrated}, Skipped (already encrypted): ${skipped}`
   );
 }

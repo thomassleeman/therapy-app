@@ -82,13 +82,13 @@ describe("encryptSegments / decryptSegments", () => {
     {
       content: "Hello from segment 2",
       speaker: "therapist",
-      startTimeMs: 10000,
+      startTimeMs: 10_000,
     },
-    { content: "Hello from segment 3", speaker: "client", startTimeMs: 15000 },
+    { content: "Hello from segment 3", speaker: "client", startTimeMs: 15_000 },
     {
       content: "Hello from segment 4",
       speaker: "therapist",
-      startTimeMs: 20000,
+      startTimeMs: 20_000,
     },
   ];
 
@@ -127,14 +127,11 @@ describe("encryptSegments / decryptSegments", () => {
           const { encrypt } = await import("../crypto");
           return {
             ...seg,
-            content: await encrypt(
-              seg.content,
-              `${sessionId}:segment:${i}`,
-            ),
+            content: await encrypt(seg.content, `${sessionId}:segment:${i}`),
           };
         }
         return seg;
-      }),
+      })
     );
 
     const decrypted = await decryptSegments(mixed, sessionId);

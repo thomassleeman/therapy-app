@@ -1,5 +1,8 @@
-# CLAUDE.md — Soundboard (Therapy Reflection Platform)
+# CLAUDE.md — Pasu Health
 
+> **Platform:** Pasu Health (`pasuhealth.com`)
+> **Contact:** `contact@pasuhealth.com`
+> **Registered address:** 167-169 Great Portland Street, 5th Floor, London, W1W 5PF
 > **Repository:** `thomassleeman/therapy-app`
 > **Primary developer:** Tom (TypeScript / Next.js)
 > **Clinical collaborator:** Aaron (practicing therapist, content author)
@@ -22,7 +25,7 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 | Auth | Supabase Auth (email/password + Google OAuth) |
 | AI / LLM | Vercel AI SDK v6, Anthropic Claude (via `@ai-sdk/anthropic`) |
 | Embeddings | Cohere Embed v4 at 512 dimensions via AWS Bedrock (`eu-west-1`), called through `@aws-sdk/client-bedrock-runtime` |
-| Transcription | AssemblyAI EU endpoint (`api.eu.assemblyai.com`, Dublin) — speech-to-text + speaker diarisation in a single call. Fallback to OpenAI Whisper + Claude diarisation via env vars. Provider abstraction in `lib/transcription/`. |
+| Transcription | AssemblyAI EU endpoint (`api.eu.assemblyai.com`, Dublin) — speech-to-text + speaker diarisation in a single call using `speech_models: ["universal-3-pro", "universal-2"]`. Fallback to OpenAI Whisper + Claude diarisation via env vars. Provider abstraction in `lib/transcription/`. |
 | Encryption | AES-256-GCM with HKDF-SHA256 key derivation (Node.js `crypto`, zero dependencies) |
 | UI | Tailwind CSS, shadcn/ui, Tiptap editor |
 | Linting | Biome (via `ultracite` presets) |
@@ -40,7 +43,7 @@ app/
 │   ├── page.tsx                    # Dashboard
 │   ├── clients/                    # Client list, client hub, clinical documents
 │   ├── sessions/                   # Session list, new session, session detail
-│   └── settings/profile/          # Therapist profile settings (modality, jurisdiction)
+│   └── settings/                   # Settings area (profile, account, privacy, about)
 ├── (auth-pages)/       # Sign-in, sign-up, password reset (no sidebar)
 ├── (chat)/             # Chat interface (own layout with DataStreamProvider)
 │   ├── api/chat/                   # Chat route + stream resumption
@@ -254,11 +257,17 @@ Browser (MediaRecorder or file upload)
     ↓
 Upload to Supabase Storage (session-audio bucket, private)
   → Audio encrypted (AES-256-GCM) before upload — stored as ciphertext blob
+  → contentType must be the original audio MIME type (e.g. audio/webm), not application/octet-stream,
+    because the Supabase bucket restricts allowed MIME types to audio formats
     ↓
 POST /api/transcription/process
   → Audio decrypted in memory before sending to transcription provider
     ↓
-Download audio → AssemblyAI EU endpoint (transcription + speaker diarisation in one call, ~$0.0028/min)
+Upload to AssemblyAI via custom uploadAudio() helper (bypasses SDK upload)
+  → The AssemblyAI Node SDK hardcodes Content-Type: application/octet-stream when uploading,
+    which causes their transcoder to misidentify Chrome's WebM audio as video/webm.
+    The uploadAudio() helper in assemblyai.ts sends Content-Type: audio/webm directly.
+  → AssemblyAI EU endpoint (transcription + speaker diarisation in one call, ~$0.0028/min)
   → Fallback: Whisper API (batch transcription) → Claude diarisation (speaker labelling)
     ↓
 Segments encrypted (per-segment keys) → stored in session_segments table
@@ -266,12 +275,26 @@ Segments encrypted (per-segment keys) → stored in session_segments table
 POST /api/notes/generate
   → Segments decrypted for LLM context assembly
     ↓
-LLM generates structured clinical notes (SOAP, DAP, progress, freeform formats)
+LLM generates structured clinical notes (SOAP, DAP, BIRP, GIRP, Narrative formats)
     ↓
 Notes encrypted (AES-256-GCM) → stored in clinical_notes table (draft → reviewed → finalised lifecycle)
 ```
 
 Two recording modes: `full_session` (multi-speaker) and `therapist_summary` (single-speaker narrated summary).
+
+### Clinical Note Formats
+
+Five note formats, each with full-session and therapist-summary prompt variants. Format specifications authored by Aaron (clinical lead) in `.claude/note-taking-prompts.md`.
+
+| Format | Sections | Use Case |
+|---|---|---|
+| **SOAP** | Subjective (CC, HPI/OLDCARTS, HEADSS), Objective, Assessment (problem list, differential), Plan | Most widely used clinical format |
+| **DAP** | Data (events, interventions, homework review), Assessment (grounded in Data), Plan (goal-aligned) | Streamlined alternative to SOAP |
+| **BIRP** | Behaviour (observable only), Intervention (clinical verbs), Response (verbal + non-verbal), Plan (client + clinician actions) | Behavioural focus, skills acquisition tracking |
+| **GIRP** | Goals (treatment plan linked), Intervention (precise clinical terms), Response (progress evaluation), Plan (homework, future focus) | Goal-driven, "golden thread" to treatment plan |
+| **Narrative** | Clinical Opening, Session Body (chronological), Clinical Synthesis & Risk, The Path Forward | Chronological narrative with thematic integration |
+
+All formats are governed by universal clinical documentation standards (accuracy, defensibility, GDPR audience awareness, treatment alignment) prepended to every system prompt. Prompts are in `app/api/notes/generate/route.ts`. Parsers extract structured sections via regex with freeform fallback on parse failure.
 
 ---
 
@@ -284,6 +307,37 @@ Separate from session notes. Client-level documents spanning multiple sessions:
 - Format specs in `lib/documents/specs/*.md` (instructions to the LLM, not templates)
 - Stored in `clinical_documents` table with draft → reviewed → finalised lifecycle and versioning via `supersedes_id`
 - Document content encrypted at rest (AES-256-GCM) — decrypted in memory for context assembly and display
+
+---
+
+## Legal & Compliance
+
+### Lawful Basis
+
+- General processing: contract (Art 6(1)(b))
+- Health data (special category): explicit consent (Art 9(2)(a))
+
+### Sub-processors
+
+| Provider | Purpose | Data Residency |
+|---|---|---|
+| Anthropic | AI chat (Claude) | EU |
+| Cohere via AWS Bedrock | Embeddings | `eu-west-1` (Ireland) |
+| OpenAI | Transcription fallback | EU |
+| Supabase | Database, auth, storage | EU |
+| Vercel | Hosting | EU |
+
+No AI provider trains on user data.
+
+### Legal Documents
+
+Privacy policy and terms of service drafted as Word documents:
+- Privacy policy: 30-day deletion window after account deletion request
+- Terms: sole clinical responsibility on the therapist, require client data anonymisation, liability capped at 12 months' fees or £100
+
+### Chat Retention
+
+Indefinite retention with user-controlled deletion. Therapists can delete individual chats, delete all chats (via Data & Privacy settings), or delete their entire account. No automatic expiry.
 
 ---
 
@@ -369,8 +423,15 @@ tests/
 - Unified sidebar navigation shell (NavBar removed)
 - Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available)
 - Session summary recording mode (therapist-narrated summaries)
+- **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
-- Therapist profile settings page (modality, jurisdiction)
+- **Settings area** at `app/(app)/settings/` with four sections:
+  - `/settings/profile` — Professional Profile (jurisdiction, default modality, professional body). Feeds agent system prompt and search filtering.
+  - `/settings/account` — Account & Security (account info, password change, session management placeholder)
+  - `/settings/privacy` — Data & Privacy (data handling info, GDPR rights, data export, account deletion request, delete-all-chats with type-to-confirm, sub-processor table, legal document links)
+  - `/settings/about` — Platform info, professional body references, data protection summary
+  - Theme selection remains in the sidebar user nav dropdown — no dedicated settings page
+  - Delete All Chats button removed from sidebar header; now lives on the Data & Privacy page with type-to-confirm safety flow
 - Client hub with tabs (Overview, Chats, Sessions, Notes, Documents)
 - Dev-only RAG quality logging system
 - Query reformulation + parallel search + Cohere reranking (all optional, feature-flagged)
@@ -378,12 +439,13 @@ tests/
 - System prompt surgery (search-first mandate, terminology preservation, citation rules, no-results disclosure, confidence handling)
 - Blank response bug fix (empty KB guard + fallback)
 - **Application-level encryption** (AES-256-GCM) on all sensitive clinical content: session transcripts, clinical notes, clinical documents, chat messages, and audio files. Per-record key derivation via HKDF-SHA256. Migration scripts for existing plaintext data.
+- **Privacy policy and terms of service** drafted as Word documents. Privacy policy states 30-day deletion window after account deletion request.
+- **Chat retention policy:** indefinite retention with user-controlled deletion. Therapists can delete individual chats, delete all chats (via settings), or delete their entire account. No automatic expiry.
 
 ### Not Yet Implemented / On the Horizon
 
 - **Confidence threshold integration into tool files** — `applyConfidenceThreshold` exists in `lib/ai/confidence.ts` but the wiring into `knowledge-search-tools.ts` and `search-knowledge-base.ts` may be incomplete. Verify the tool execute functions call it.
 - **Contextual enrichment prompt update** — Add situational vocabulary generation to `scripts/lib/contextual-enrichment.ts` (addresses semantic gap between therapist language and KB terminology). Requires re-running ingestion with `--with-context`.
-- **ICO registration** (~£40/year) and DPIA (Data Protection Impact Assessment) — compliance tasks. The DPIA should document the encryption architecture.
 - **LLM provider evaluation** — Anthropic Claude API directly was recommended over Vercel AI Gateway for EU data residency and strong DPA terms.
 - **Post-diarisation speaker confirmation UI** — Highest-impact improvement to diarisation accuracy. Proposed but not implemented.
 - **Vercel artifact/document system** — Legacy from the template. Coexists with the purpose-built clinical notes and clinical documents systems but shares no data, UI, or database. Decision pending on whether to remove, repurpose, or keep.
@@ -392,6 +454,26 @@ tests/
 - **RAGAS evaluation framework** and golden test dataset — knowledge base now has content; evaluation can proceed when prioritised.
 - **Encryption key rotation procedure** — The module supports rotation via `ENCRYPTION_MASTER_KEY_OLD` + re-encryption, but no automated rotation script exists yet. Build when needed.
 - **`clients` table sensitive field encryption** — Fields like `presenting_issues`, `treatment_goals`, `risk_considerations`, and `background` contain clinical information but are not yet encrypted. Deferred to a second phase because these fields are read during context assembly for document generation.
+- **PII detection** — Pre-submission flagging of personally identifiable information before it reaches the LLM.
+
+### Outstanding Compliance Items
+
+- **ICO registration** — Administrative task, ico.org.uk, ~£40/year
+- **DPIA** (Data Protection Impact Assessment) — document (not a filing), should cover encryption architecture
+- **Aaron review** of Data & Privacy page copy and privacy policy before production
+- **Account deletion cascade pipeline** — Implementation plan exists (`account-deletion-cascade-pipeline.md`) for GDPR Article 17 (right to erasure). PROMPTs A, B, C in the plan. Architecture:
+  - Server action inserts row into `account_deletion_requests` table and signs user out
+  - Supabase Edge Function (triggered by pg_cron every 15 minutes) picks up pending requests and cascades deletion
+  - Deletion order exploits verified FK CASCADE chains — only 4 explicit DELETEs needed:
+    1. Audio files from Supabase Storage (`session-audio` bucket)
+    2. `therapy_sessions` (cascades: session_segments, session_consents, clinical_notes)
+    3. `"Chat"` (cascades: Message_v2, Stream, Vote_v2)
+    4. `clients` (cascades: client_tag_assignments, clinical_documents → clinical_document_references)
+    5. `therapist_profiles`
+    6. `auth.admin.deleteUser()`
+  - No table has ON DELETE CASCADE from `auth.users` — every user-owned table requires explicit deletion
+  - Supabase free plan supports both Edge Functions and pg_cron — no upgrade required
+  - The `account_deletion_requests` table has no FK to `auth.users` (intentional — audit record survives user deletion)
 
 ---
 

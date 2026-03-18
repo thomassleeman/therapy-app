@@ -301,9 +301,9 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
               <p className="text-xs text-muted-foreground">
                 {isCapped
                   ? "Finishing up..."
-                  : estimatedRemainingSeconds !== null
-                    ? formatRemainingTime(estimatedRemainingSeconds)
-                    : null}
+                  : estimatedRemainingSeconds === null
+                    ? null
+                    : formatRemainingTime(estimatedRemainingSeconds)}
               </p>
             </div>
           </div>

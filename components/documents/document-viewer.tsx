@@ -17,7 +17,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import { toast } from "@/components/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,6 @@ import {
 } from "@/components/ui/tooltip";
 import type { ClinicalDocumentWithReferences } from "@/lib/db/types";
 import type { DocumentTypeConfig } from "@/lib/documents/types";
-import { toast } from "@/components/toast";
 
 interface Props {
   document: ClinicalDocumentWithReferences;
@@ -66,12 +65,9 @@ function formatDateTime(dateStr: string): string {
 }
 
 const STATUS_BADGE_STYLES: Record<string, string> = {
-  draft:
-    "bg-amber-600 text-white dark:bg-amber-900/30 dark:text-amber-400",
-  reviewed:
-    "bg-blue-600 text-white dark:bg-blue-900/30 dark:text-blue-400",
-  finalised:
-    "bg-green-600 text-white dark:bg-green-900/30 dark:text-green-400",
+  draft: "bg-amber-600 text-white dark:bg-amber-900/30 dark:text-amber-400",
+  reviewed: "bg-blue-600 text-white dark:bg-blue-900/30 dark:text-blue-400",
+  finalised: "bg-green-600 text-white dark:bg-green-900/30 dark:text-green-400",
 };
 
 function ReferenceIcon({ type }: { type: string }) {
@@ -119,10 +115,10 @@ function AutoResizeTextarea({
 
   return (
     <Textarea
-      ref={textareaRef}
       className="resize-none overflow-hidden"
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
+      ref={textareaRef}
       rows={3}
       value={value}
     />
@@ -150,8 +146,7 @@ export function DocumentViewer({
 
   const isEditable =
     document.status === "draft" || document.status === "reviewed";
-  const isDirty =
-    Object.keys(editedContent).length > 0 || editedTitle !== null;
+  const isDirty = Object.keys(editedContent).length > 0 || editedTitle !== null;
 
   const updateField = (key: string, value: string) => {
     setEditedContent((prev) => ({ ...prev, [key]: value }));
@@ -263,10 +258,7 @@ export function DocumentViewer({
               </h1>
             )}
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Badge
-                className="hover:bg-inherit"
-                variant="outline"
-              >
+              <Badge className="hover:bg-inherit" variant="outline">
                 {typeConfig.label}
               </Badge>
               <Badge
@@ -286,16 +278,20 @@ export function DocumentViewer({
             </p>
           </div>
 
-          {(document.status === "reviewed" || document.status === "finalised") && (
+          {(document.status === "reviewed" ||
+            document.status === "finalised") && (
             <Button
               className="shrink-0"
               onClick={async () => {
                 try {
-                  const res = await fetch(`/api/documents/${document.id}/export`);
+                  const res = await fetch(
+                    `/api/documents/${document.id}/export`
+                  );
                   if (!res.ok) {
                     toast({
                       type: "error",
-                      description: "Failed to export document. Please try again.",
+                      description:
+                        "Failed to export document. Please try again.",
                     });
                     return;
                   }
@@ -346,7 +342,10 @@ export function DocumentViewer({
               onClick={() => setReferencesOpen(!referencesOpen)}
               type="button"
             >
-              <span>Based on {document.references.length} source{document.references.length !== 1 ? "s" : ""}</span>
+              <span>
+                Based on {document.references.length} source
+                {document.references.length === 1 ? "" : "s"}
+              </span>
               {referencesOpen ? (
                 <ChevronDown className="size-4" />
               ) : (
@@ -384,10 +383,7 @@ export function DocumentViewer({
                       {content}
                     </Link>
                   ) : (
-                    <div
-                      className="rounded-md px-2 py-1.5"
-                      key={ref.id}
-                    >
+                    <div className="rounded-md px-2 py-1.5" key={ref.id}>
                       {content}
                     </div>
                   );
@@ -522,15 +518,12 @@ export function DocumentViewer({
           <DialogHeader>
             <DialogTitle>Finalise Document</DialogTitle>
             <DialogDescription>
-              Finalising this document will lock it for editing. You can create a
-              new version if changes are needed later. Are you sure?
+              Finalising this document will lock it for editing. You can create
+              a new version if changes are needed later. Are you sure?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              onClick={() => setConfirmFinalise(false)}
-              variant="outline"
-            >
+            <Button onClick={() => setConfirmFinalise(false)} variant="outline">
               Cancel
             </Button>
             <Button
@@ -589,10 +582,7 @@ export function DocumentViewer({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              onClick={() => setConfirmDelete(false)}
-              variant="outline"
-            >
+            <Button onClick={() => setConfirmDelete(false)} variant="outline">
               Cancel
             </Button>
             <Button

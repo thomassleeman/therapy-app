@@ -169,7 +169,7 @@ function TranscriptTab({
   );
 
   const effectiveStatus =
-    polledStatus !== "idle" ? polledStatus : session.transcriptionStatus;
+    polledStatus === "idle" ? session.transcriptionStatus : polledStatus;
 
   if (effectiveStatus !== "completed" && effectiveStatus !== "failed") {
     return (
@@ -319,8 +319,7 @@ function NotesTab({
           };
         } else if (isBirpContent(activeNote.content, activeNote.noteFormat)) {
           updatedContent = {
-            behaviour:
-              editedContent.behaviour ?? activeNote.content.behaviour,
+            behaviour: editedContent.behaviour ?? activeNote.content.behaviour,
             intervention:
               editedContent.intervention ?? activeNote.content.intervention,
             response: editedContent.response ?? activeNote.content.response,
@@ -984,7 +983,7 @@ export function SessionDetailClient({
 
           {session.chatId ? (
             <Link
-              className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
+              className="flex w-full items-center justify-between rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
               href={`/chat/${session.chatId}`}
             >
               <span>Chat About This Session</span>
@@ -992,10 +991,10 @@ export function SessionDetailClient({
             </Link>
           ) : session.transcriptionStatus === "completed" ? (
             <Link
-              className="flex w-full items-center justify-between rounded-lg border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
+              className="flex w-full items-center justify-between rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
               href={`/chat/new?clientId=${session.clientId ?? "general"}&sessionId=${session.id}`}
             >
-              <span>Chat About This Session</span>
+              <span>Chat About this Session</span>
               <ArrowRight className="size-4" />
             </Link>
           ) : (

@@ -48,7 +48,7 @@ export function RagStatusIndicator({ data }: RagStatusIndicatorProps) {
         >
           <BookOpenIcon size={14} />
           <span>
-            Based on {count} knowledge base document{count !== 1 ? "s" : ""}
+            Based on {count} knowledge base document{count === 1 ? "" : "s"}
           </span>
         </div>
       );

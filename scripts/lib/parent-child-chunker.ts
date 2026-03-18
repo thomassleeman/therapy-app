@@ -181,16 +181,16 @@ function findChunkOffsets(sourceText: string, chunkTexts: string[]): number[] {
 
   for (const chunk of chunkTexts) {
     const idx = sourceText.indexOf(chunk, searchFrom);
-    if (idx !== -1) {
+    if (idx === -1) {
+      // Chunk was modified by the splitter (trimmed whitespace, etc.) —
+      // try from the beginning as a last resort
+      const fallbackIdx = sourceText.indexOf(chunk);
+      offsets.push(fallbackIdx === -1 ? 0 : fallbackIdx);
+    } else {
       offsets.push(idx);
       // Advance past the start of this chunk, but not past it entirely —
       // overlapping chunks may start before the end of the previous one
       searchFrom = idx + 1;
-    } else {
-      // Chunk was modified by the splitter (trimmed whitespace, etc.) —
-      // try from the beginning as a last resort
-      const fallbackIdx = sourceText.indexOf(chunk);
-      offsets.push(fallbackIdx !== -1 ? fallbackIdx : 0);
     }
   }
 

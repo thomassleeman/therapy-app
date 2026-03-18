@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     const { error: uploadError } = await supabase.storage
       .from("session-audio")
       .upload(storagePath, encryptedAudio, {
-        contentType: "application/octet-stream",
+        contentType: baseType,
         upsert: true,
       });
 

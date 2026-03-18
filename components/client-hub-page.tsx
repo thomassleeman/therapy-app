@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import type {
   AgeBracket,
+  BirpNoteContent,
   Chat,
   Client,
   ClientStatus,
@@ -29,7 +30,6 @@ import type {
   ClinicalNoteWithSession,
   DapNoteContent,
   DeliveryMethod,
-  BirpNoteContent,
   FreeformNoteContent,
   GirpNoteContent,
   NarrativeNoteContent,
@@ -223,10 +223,7 @@ export function ClientHubPage({
 
           {/* Documents Tab */}
           <TabsContent className="mt-4" value="documents">
-            <DocumentsTab
-              clientId={client.id}
-              documents={clinicalDocuments}
-            />
+            <DocumentsTab clientId={client.id} documents={clinicalDocuments} />
           </TabsContent>
 
           {/* Clinical Notes Tab */}
@@ -348,9 +345,9 @@ function PracticeCard({ client }: { client: Client }) {
         <DetailRow
           label="Fee per Session"
           value={
-            client.feePerSession !== null
-              ? `\u00A3${client.feePerSession}`
-              : null
+            client.feePerSession === null
+              ? null
+              : `\u00A3${client.feePerSession}`
           }
         />
       </CardContent>
@@ -560,14 +557,10 @@ const DOC_TYPE_COLORS: Record<ClinicalDocumentType, string> = {
 };
 
 const DOC_STATUS_COLORS: Record<ClinicalDocumentStatus, string> = {
-  generating:
-    "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-200",
-  draft:
-    "bg-yellow-600 text-white dark:bg-yellow-900 dark:text-yellow-200",
-  reviewed:
-    "bg-blue-600 text-white dark:bg-blue-900 dark:text-blue-200",
-  finalised:
-    "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
+  generating: "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-200",
+  draft: "bg-yellow-600 text-white dark:bg-yellow-900 dark:text-yellow-200",
+  reviewed: "bg-blue-600 text-white dark:bg-blue-900 dark:text-blue-200",
+  finalised: "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
 };
 
 type DocFilterType = "all" | ClinicalDocumentType;
@@ -651,8 +644,8 @@ function DocumentsTab({
         <Card>
           <CardContent className="flex flex-col items-center py-8">
             <CardDescription>
-              No {filter !== "all" ? getDocumentTypeLabel(filter) : ""} documents
-              found.
+              No {filter === "all" ? "" : getDocumentTypeLabel(filter)}{" "}
+              documents found.
             </CardDescription>
           </CardContent>
         </Card>
@@ -751,8 +744,7 @@ const FORMAT_COLORS: Record<NoteFormat, string> = {
   dap: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   birp: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
   girp: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-  narrative:
-    "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
+  narrative: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
 };
 
 const FORMAT_LABELS: Record<NoteFormat, string> = {
@@ -795,11 +787,7 @@ function getNotePreview(note: ClinicalNoteWithSession): string {
 
 type FilterFormat = "all" | NoteFormat;
 
-function ClinicalNotesTab({
-  notes,
-}: {
-  notes: ClinicalNoteWithSession[];
-}) {
+function ClinicalNotesTab({ notes }: { notes: ClinicalNoteWithSession[] }) {
   const [filter, setFilter] = useState<FilterFormat>("all");
 
   const filteredNotes =
@@ -815,8 +803,7 @@ function ClinicalNotesTab({
       <Card>
         <CardContent className="flex flex-col items-center py-8">
           <CardDescription className="text-center">
-            No clinical notes yet. Notes are generated from session
-            transcripts.
+            No clinical notes yet. Notes are generated from session transcripts.
           </CardDescription>
         </CardContent>
       </Card>
@@ -847,7 +834,7 @@ function ClinicalNotesTab({
         <Card>
           <CardContent className="flex flex-col items-center py-8">
             <CardDescription>
-              No {filter !== "all" ? FORMAT_LABELS[filter] : ""} notes found.
+              No {filter === "all" ? "" : FORMAT_LABELS[filter]} notes found.
             </CardDescription>
           </CardContent>
         </Card>
@@ -961,11 +948,11 @@ function SummaryStatsLine({
   if (therapyStartDate) {
     parts.push(`In therapy since ${formatShortDate(therapyStartDate)}`);
   }
-  parts.push(`${sessionsCount} session${sessionsCount !== 1 ? "s" : ""}`);
+  parts.push(`${sessionsCount} session${sessionsCount === 1 ? "" : "s"}`);
   parts.push(
-    `${clinicalNotesCount} note${clinicalNotesCount !== 1 ? "s" : ""}`
+    `${clinicalNotesCount} note${clinicalNotesCount === 1 ? "" : "s"}`
   );
-  parts.push(`${chatsCount} reflective chat${chatsCount !== 1 ? "s" : ""}`);
+  parts.push(`${chatsCount} reflective chat${chatsCount === 1 ? "" : "s"}`);
 
   return (
     <p className="mt-2 text-sm text-muted-foreground">

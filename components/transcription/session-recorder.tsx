@@ -9,7 +9,7 @@ import {
   Play,
   Square,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -166,11 +166,13 @@ export function SessionRecorder({
     return phase;
   })();
 
-  // Call onComplete when transcription finishes
-  if (currentPhase === "completed" && phase !== "completed") {
-    setPhase("completed");
-    onComplete();
-  }
+  // Call onComplete when transcription finishes (in useEffect to avoid setState during render)
+  useEffect(() => {
+    if (currentPhase === "completed" && phase !== "completed") {
+      setPhase("completed");
+      onComplete();
+    }
+  }, [currentPhase, phase, onComplete]);
 
   // Sync transcription errors
   const displayError = errorMessage ?? transcriptionError ?? recorderError;
@@ -229,9 +231,9 @@ export function SessionRecorder({
               <p className="text-xs text-muted-foreground">
                 {isCapped
                   ? "Finishing up..."
-                  : estimatedRemainingSeconds !== null
-                    ? formatRemainingTime(estimatedRemainingSeconds)
-                    : null}
+                  : estimatedRemainingSeconds === null
+                    ? null
+                    : formatRemainingTime(estimatedRemainingSeconds)}
               </p>
             </div>
           </div>

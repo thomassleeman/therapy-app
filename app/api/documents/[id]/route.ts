@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
-import { deleteClinicalDocument, updateClinicalDocument } from "@/lib/db/queries";
+import {
+  deleteClinicalDocument,
+  updateClinicalDocument,
+} from "@/lib/db/queries";
 import type { ClinicalDocumentStatus } from "@/lib/documents/types";
 import { CLINICAL_DOCUMENT_STATUSES } from "@/lib/documents/types";
 
@@ -29,10 +32,7 @@ export async function PATCH(
     reviewedAt?: string;
   } = body;
 
-  if (
-    status !== undefined &&
-    !CLINICAL_DOCUMENT_STATUSES.includes(status)
-  ) {
+  if (status !== undefined && !CLINICAL_DOCUMENT_STATUSES.includes(status)) {
     return NextResponse.json(
       { error: "Invalid status value" },
       { status: 400 }

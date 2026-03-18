@@ -3,12 +3,12 @@
 export function RagLogDownloadButton({ chatId }: { chatId: string }) {
   return (
     <button
-      type="button"
+      className="text-xs text-muted-foreground hover:text-foreground underline"
       onClick={() => {
         window.open(`/api/dev-logs/${chatId}`, "_blank");
       }}
-      className="text-xs text-muted-foreground hover:text-foreground underline"
       title="Download RAG quality logs for this chat"
+      type="button"
     >
       Download RAG Logs
     </button>

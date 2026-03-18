@@ -110,7 +110,7 @@ describe("missing master key", () => {
   it("throws a descriptive error when ENCRYPTION_MASTER_KEY is unset", async () => {
     process.env.ENCRYPTION_MASTER_KEY = "";
     await expect(encrypt("test", "record-nokey")).rejects.toThrow(
-      "ENCRYPTION_MASTER_KEY",
+      "ENCRYPTION_MASTER_KEY"
     );
   });
 });

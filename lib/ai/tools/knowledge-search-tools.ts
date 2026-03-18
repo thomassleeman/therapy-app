@@ -22,12 +22,12 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { applyConfidenceThreshold } from "@/lib/ai/confidence";
-import { generateEmbedding } from "@/lib/ai/embedding";
 import {
   buildGracefulDeclineMessage,
   GENERAL_KNOWLEDGE_DISCLAIMER,
   routeByConfidence,
 } from "@/lib/ai/confidence-router";
+import { generateEmbedding } from "@/lib/ai/embedding";
 import { parallelSearchAndMerge } from "@/lib/ai/parallel-search";
 import { reformulateQuery } from "@/lib/ai/query-reformulation";
 import { rerankResults } from "@/lib/ai/rerank";

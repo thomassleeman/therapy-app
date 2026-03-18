@@ -434,10 +434,10 @@ async function prepareParentChildChunks(
   // Add child chunks with references to their parent's local index
   for (const child of children) {
     const parentLocalIdx =
-      child.parentIndex !== null
-        ? (parentIndexMap.get(pcChunks[child.parentIndex]?.chunkIndex ?? -1) ??
-          null)
-        : null;
+      child.parentIndex === null
+        ? null
+        : (parentIndexMap.get(pcChunks[child.parentIndex]?.chunkIndex ?? -1) ??
+          null);
 
     const childCharStart =
       typeof child.metadata.charStart === "number"
@@ -549,7 +549,10 @@ async function embedChunks(
       `    Embedding batch ${batch + 1}/${totalBatches} (${batchTexts.length} chunks)`
     );
 
-    const batchEmbeddings = await generateRawEmbeddings(batchTexts, "search_document");
+    const batchEmbeddings = await generateRawEmbeddings(
+      batchTexts,
+      "search_document"
+    );
 
     // Map embeddings back to their original positions
     for (let i = 0; i < batchItems.length; i++) {
@@ -707,9 +710,9 @@ async function upsertDocument(
         section_path: chunk.sectionPath,
         metadata: chunk.metadata,
         parent_chunk_id:
-          chunk.parentLocalIndex !== null
-            ? (parentDbIds.get(chunk.parentLocalIndex) ?? null)
-            : null,
+          chunk.parentLocalIndex === null
+            ? null
+            : (parentDbIds.get(chunk.parentLocalIndex) ?? null),
       }));
 
       const { error: chunkError } = await supabase

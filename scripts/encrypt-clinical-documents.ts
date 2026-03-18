@@ -71,7 +71,7 @@ export async function migrateClinicalDocuments() {
         if (updateError) {
           console.error(
             `[${table}] Update error for document ${doc.id}:`,
-            updateError.message,
+            updateError.message
           );
           continue;
         }
@@ -80,7 +80,7 @@ export async function migrateClinicalDocuments() {
       } catch (err) {
         console.error(
           `[${table}] Encryption error for document ${doc.id}:`,
-          err instanceof Error ? err.message : err,
+          err instanceof Error ? err.message : err
         );
       }
     }
@@ -89,7 +89,9 @@ export async function migrateClinicalDocuments() {
     logProgress(table, processed, migrated, skipped);
   }
 
-  console.log(`[${table}] Complete — Processed: ${processed}, Migrated: ${migrated}, Skipped: ${skipped}`);
+  console.log(
+    `[${table}] Complete — Processed: ${processed}, Migrated: ${migrated}, Skipped: ${skipped}`
+  );
 }
 
 if (require.main === module) {

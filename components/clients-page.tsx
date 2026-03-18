@@ -61,18 +61,15 @@ function formatRelativeDate(dateStr: string): string {
   return date.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
-    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
   });
 }
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
-  active:
-    "bg-green-600 text-white dark:bg-green-900/50 dark:text-green-300",
-  paused:
-    "bg-amber-600 text-white dark:bg-amber-900/50 dark:text-amber-300",
+  active: "bg-green-600 text-white dark:bg-green-900/50 dark:text-green-300",
+  paused: "bg-amber-600 text-white dark:bg-amber-900/50 dark:text-amber-300",
   discharged: "bg-gray-600 text-white dark:bg-gray-600 dark:text-gray-300",
-  waitlisted:
-    "bg-blue-600 text-white dark:bg-blue-900/50 dark:text-blue-300",
+  waitlisted: "bg-blue-600 text-white dark:bg-blue-900/50 dark:text-blue-300",
 };
 
 const CLIENT_FILTER_OPTIONS = CLIENT_STATUSES.map((status) => ({
@@ -335,8 +332,8 @@ export function ClientsPage() {
                             <td className="hidden px-3 py-4 sm:table-cell">
                               <span className="text-sm text-muted-foreground">
                                 {sessionCount} session
-                                {sessionCount !== 1 ? "s" : ""} &middot;{" "}
-                                {chatCount} chat{chatCount !== 1 ? "s" : ""}
+                                {sessionCount === 1 ? "" : "s"} &middot;{" "}
+                                {chatCount} chat{chatCount === 1 ? "" : "s"}
                               </span>
                             </td>
 

@@ -1,5 +1,4 @@
-import { isEncrypted } from "@/lib/encryption/crypto";
-import { encrypt } from "@/lib/encryption/crypto";
+import { encrypt, isEncrypted } from "@/lib/encryption/crypto";
 import {
   BATCH_SIZE,
   getServiceClient,
@@ -64,7 +63,7 @@ export async function migrateSessionSegments() {
         if (updateError) {
           console.error(
             `[${table}] Update error for segment ${segment.id}:`,
-            updateError.message,
+            updateError.message
           );
           continue;
         }
@@ -73,7 +72,7 @@ export async function migrateSessionSegments() {
       } catch (err) {
         console.error(
           `[${table}] Encryption error for segment ${segment.id}:`,
-          err instanceof Error ? err.message : err,
+          err instanceof Error ? err.message : err
         );
       }
     }
@@ -82,7 +81,9 @@ export async function migrateSessionSegments() {
     logProgress(table, processed, migrated, skipped);
   }
 
-  console.log(`[${table}] Complete — Processed: ${processed}, Migrated: ${migrated}, Skipped: ${skipped}`);
+  console.log(
+    `[${table}] Complete — Processed: ${processed}, Migrated: ${migrated}, Skipped: ${skipped}`
+  );
 }
 
 if (require.main === module) {

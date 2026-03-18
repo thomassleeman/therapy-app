@@ -47,7 +47,7 @@ function hasSubstantiveRiskConsiderations(value: string | null): boolean {
 }
 
 export function buildDataAvailability(
-  input: BuildDataAvailabilityInput,
+  input: BuildDataAvailabilityInput
 ): DataAvailability {
   const existingDocumentStatuses: Partial<
     Record<ClinicalDocumentType, string>
@@ -60,11 +60,11 @@ export function buildDataAvailability(
     hasPresentingIssues: isSubstantiveText(input.client.presentingIssues),
     hasTreatmentGoals: isSubstantiveText(input.client.treatmentGoals),
     hasRiskConsiderations: hasSubstantiveRiskConsiderations(
-      input.client.riskConsiderations,
+      input.client.riskConsiderations
     ),
     sessionCount: input.sessions.length,
     completedSessionCount: input.sessions.filter(
-      (s) => s.transcriptionStatus === "completed",
+      (s) => s.transcriptionStatus === "completed"
     ).length,
     noteCount: input.notes.length,
     finalisedNoteCount: input.notes.filter((n) => n.status === "finalised")

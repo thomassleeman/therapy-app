@@ -22,7 +22,7 @@ export function getTranscriptionProvider(): TranscriptionProvider {
       return new WhisperApiProvider();
     default:
       console.warn(
-        `[transcription] Unknown provider "${provider}", falling back to assemblyai`,
+        `[transcription] Unknown provider "${provider}", falling back to assemblyai`
       );
       return new AssemblyAIProvider();
   }
@@ -41,7 +41,7 @@ export function getDiarizationProvider(): DiarizationProvider {
       return new ClaudeDiarizationProvider();
     default:
       console.warn(
-        `[transcription] Unknown diarization provider "${provider}", falling back to assemblyai`,
+        `[transcription] Unknown diarization provider "${provider}", falling back to assemblyai`
       );
       return new AssemblyAIProvider();
   }
@@ -61,7 +61,7 @@ export async function transcribeAndDiarize(
     transcribe?: TranscribeOptions;
     diarize?: DiarizeOptions;
     skipDiarization?: boolean;
-  },
+  }
 ): Promise<DiarisedTranscript> {
   const transcriptionProvider =
     process.env.TRANSCRIPTION_PROVIDER ?? "assemblyai";
@@ -75,14 +75,14 @@ export async function transcribeAndDiarize(
   ) {
     const provider = new AssemblyAIProvider();
     console.log(
-      "[transcription] Using AssemblyAI combined transcription + diarisation...",
+      "[transcription] Using AssemblyAI combined transcription + diarisation..."
     );
     const { diarised } = await provider.transcribeWithDiarization(audioBuffer, {
       language: options?.transcribe?.language,
       expectedSpeakers: options?.diarize?.expectedSpeakers,
     });
     console.log(
-      `[transcription] Complete: ${diarised.segments.length} segments, speakers: ${diarised.speakers.join(", ")}`,
+      `[transcription] Complete: ${diarised.segments.length} segments, speakers: ${diarised.speakers.join(", ")}`
     );
     return diarised;
   }
@@ -93,15 +93,15 @@ export async function transcribeAndDiarize(
   console.log("[transcription] Starting transcription...");
   const rawTranscript = await transcriber.transcribe(
     audioBuffer,
-    options?.transcribe ?? {},
+    options?.transcribe ?? {}
   );
   console.log(
-    `[transcription] Raw transcript: ${rawTranscript.segments.length} segments, ${Math.round(rawTranscript.durationMs / 1000)}s`,
+    `[transcription] Raw transcript: ${rawTranscript.segments.length} segments, ${Math.round(rawTranscript.durationMs / 1000)}s`
   );
 
   if (options?.skipDiarization) {
     console.log(
-      "[transcription] Skipping diarization (single-speaker summary recording)",
+      "[transcription] Skipping diarization (single-speaker summary recording)"
     );
     return {
       segments: rawTranscript.segments.map((seg) => ({
@@ -122,10 +122,10 @@ export async function transcribeAndDiarize(
   const diarisedTranscript = await diarizer.diarize(
     rawTranscript,
     options?.diarize ?? {},
-    audioBuffer,
+    audioBuffer
   );
   console.log(
-    `[transcription] Diarised: ${diarisedTranscript.segments.length} segments, speakers: ${diarisedTranscript.speakers.join(", ")}`,
+    `[transcription] Diarised: ${diarisedTranscript.segments.length} segments, speakers: ${diarisedTranscript.speakers.join(", ")}`
   );
 
   return diarisedTranscript;

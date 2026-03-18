@@ -43,11 +43,11 @@ export interface TurnLogger {
 }
 
 export type {
+  ConfidenceAssessmentEntry,
+  FilteredResultEntry,
+  RawSearchResultEntry,
   ToolCallEntry,
   ToolCallTiming,
-  RawSearchResultEntry,
-  FilteredResultEntry,
-  ConfidenceAssessmentEntry,
 };
 
 // ─── No-op implementation (production / logging disabled) ────────────────────

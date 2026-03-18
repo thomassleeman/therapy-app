@@ -2,15 +2,11 @@
 
 import { Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
+
+import { saveProfileAction } from "@/app/(app)/settings/actions";
 import { toast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -25,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TherapistProfile } from "@/lib/db/types";
-import { saveProfileAction } from "../actions";
 
 const MODALITIES = [
   { value: "integrative", label: "Integrative / Pluralistic" },
@@ -39,35 +34,34 @@ const MODALITIES = [
 const UK_BODIES = ["BACP", "UKCP", "HCPC", "BPS", "NCPS"] as const;
 const EU_BODIES = ["IACP", "CORU", "ICP"] as const;
 
-interface ProfileFormProps {
-  profile: TherapistProfile | null;
+interface ProfileSettingsFormProps {
+  existingProfile: TherapistProfile | null;
 }
 
-export function ProfileForm({ profile }: ProfileFormProps) {
+export function ProfileSettingsForm({
+  existingProfile,
+}: ProfileSettingsFormProps) {
   const [isPending, startTransition] = useTransition();
   const [jurisdiction, setJurisdiction] = useState<"UK" | "EU" | "">(
-    profile?.jurisdiction ?? ""
+    existingProfile?.jurisdiction ?? ""
   );
   const [modality, setModality] = useState<string>(
-    profile?.defaultModality ?? "integrative"
+    existingProfile?.defaultModality ?? "integrative"
   );
   const [professionalBody, setProfessionalBody] = useState<string>(
-    profile?.professionalBody ?? ""
+    existingProfile?.professionalBody ?? ""
   );
-  const [showOtherInput, setShowOtherInput] = useState(
-    profile?.professionalBody
-      ? ![...UK_BODIES, ...EU_BODIES].includes(
-          profile.professionalBody as (typeof UK_BODIES)[number]
-        )
-      : false
-  );
+  const [jurisdictionError, setJurisdictionError] = useState(false);
+
+  const isOtherBody =
+    existingProfile?.professionalBody != null &&
+    ![...UK_BODIES, ...EU_BODIES].includes(
+      existingProfile.professionalBody as (typeof UK_BODIES)[number]
+    );
+
+  const [showOtherInput, setShowOtherInput] = useState(isOtherBody);
   const [otherBody, setOtherBody] = useState(
-    profile?.professionalBody &&
-      ![...UK_BODIES, ...EU_BODIES].includes(
-        profile.professionalBody as (typeof UK_BODIES)[number]
-      )
-      ? profile.professionalBody
-      : ""
+    isOtherBody ? (existingProfile?.professionalBody ?? "") : ""
   );
 
   function handleProfessionalBodyChange(value: string) {
@@ -89,10 +83,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     e.preventDefault();
 
     if (!jurisdiction) {
-      toast({ type: "error", description: "Please select a jurisdiction." });
+      setJurisdictionError(true);
       return;
     }
 
+    setJurisdictionError(false);
     const finalBody = showOtherInput ? otherBody.trim() : professionalBody;
 
     startTransition(async () => {
@@ -117,20 +112,17 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   return (
     <form onSubmit={handleSubmit}>
       <Card>
-        <CardHeader>
-          <CardTitle>Professional Profile</CardTitle>
-          <CardDescription>
-            These settings help the AI tailor its responses to your practice.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-8">
+        <CardContent className="space-y-8 pt-6">
           {/* Jurisdiction */}
           <div className="space-y-3">
             <Label>
               Jurisdiction <span className="text-destructive">*</span>
             </Label>
             <RadioGroup
-              onValueChange={(v) => setJurisdiction(v as "UK" | "EU")}
+              onValueChange={(v) => {
+                setJurisdiction(v as "UK" | "EU");
+                setJurisdictionError(false);
+              }}
               value={jurisdiction}
             >
               <div className="flex items-center space-x-2">
@@ -146,6 +138,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                 </Label>
               </div>
             </RadioGroup>
+            {jurisdictionError && (
+              <p className="text-sm text-destructive">
+                Please select a jurisdiction.
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               Determines which legislation and professional guidelines are
               surfaced. UK covers England, Wales, Scotland, and Northern
@@ -153,9 +150,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             </p>
           </div>
 
-          {/* Default Modality */}
+          {/* Default Therapeutic Approach */}
           <div className="space-y-3">
-            <Label>Default therapeutic approach</Label>
+            <Label>Default Therapeutic Approach</Label>
             <RadioGroup onValueChange={setModality} value={modality}>
               {MODALITIES.map((m) => (
                 <div className="flex items-center space-x-2" key={m.value}>
@@ -174,13 +171,13 @@ export function ProfileForm({ profile }: ProfileFormProps) {
               searches to your approach by default. Choose
               &lsquo;Integrative&rsquo; if you draw from multiple frameworks
               &mdash; you&rsquo;ll see content from all modalities. You can
-              always override this per client or per conversation.
+              override this per client or per conversation.
             </p>
           </div>
 
           {/* Professional Body */}
           <div className="space-y-3">
-            <Label>Professional body</Label>
+            <Label>Professional Body</Label>
             <Select
               onValueChange={handleProfessionalBodyChange}
               value={selectValue}
@@ -192,7 +189,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                 <SelectItem value="none">None selected</SelectItem>
                 <SelectSeparator />
                 <SelectGroup>
-                  <SelectLabel>UK</SelectLabel>
+                  <SelectLabel>United Kingdom</SelectLabel>
                   {UK_BODIES.map((body) => (
                     <SelectItem key={body} value={body}>
                       {body}
@@ -223,16 +220,18 @@ export function ProfileForm({ profile }: ProfileFormProps) {
               />
             )}
             <p className="text-sm text-muted-foreground">
-              Your primary professional body. This helps prioritise relevant
-              ethical guidelines.
+              Your primary professional body. This will help prioritise relevant
+              ethical guidelines in future.
             </p>
           </div>
 
           {/* Submit */}
-          <Button disabled={isPending} type="submit">
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save
-          </Button>
+          <div className="flex justify-end">
+            <Button disabled={isPending} type="submit">
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </form>

@@ -11,7 +11,6 @@ import {
   systemPrompt,
   type TherapeuticOrientation,
 } from "@/lib/ai/prompts";
-import { ARTIFACTS_ENABLED } from "@/lib/features";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
@@ -19,6 +18,7 @@ import { searchKnowledgeBase } from "@/lib/ai/tools/search-knowledge-base";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import type { Session } from "@/lib/auth";
 import { isProductionEnvironment } from "@/lib/constants";
+import { ARTIFACTS_ENABLED } from "@/lib/features";
 
 const callOptionsSchema = z.object({
   // Therapeutic context

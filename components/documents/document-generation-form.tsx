@@ -23,18 +23,24 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { checkDocumentSufficiency } from "@/lib/documents/sufficiency";
-import type { DataAvailability, SufficiencyResult } from "@/lib/documents/sufficiency";
-import {
-  CLINICAL_DOCUMENT_TYPES,
-  DOCUMENT_TYPE_REGISTRY,
-} from "@/lib/documents/types";
-import type { ClinicalDocumentType, DocumentTypeConfig } from "@/lib/documents/types";
 import type {
   ClinicalDocumentSummary,
   ClinicalNoteWithSession,
   TherapySessionWithClient,
 } from "@/lib/db/types";
+import type {
+  DataAvailability,
+  SufficiencyResult,
+} from "@/lib/documents/sufficiency";
+import { checkDocumentSufficiency } from "@/lib/documents/sufficiency";
+import type {
+  ClinicalDocumentType,
+  DocumentTypeConfig,
+} from "@/lib/documents/types";
+import {
+  CLINICAL_DOCUMENT_TYPES,
+  DOCUMENT_TYPE_REGISTRY,
+} from "@/lib/documents/types";
 
 interface DocumentGenerationFormProps {
   clientId: string;
@@ -76,7 +82,9 @@ export function DocumentGenerationForm({
     : null;
 
   // Sufficiency check for the selected type
-  const [sufficiency, setSufficiency] = useState<SufficiencyResult | null>(null);
+  const [sufficiency, setSufficiency] = useState<SufficiencyResult | null>(
+    null
+  );
 
   useEffect(() => {
     if (selectedType) {
@@ -89,7 +97,8 @@ export function DocumentGenerationForm({
 
   // Pre-compute sufficiency for all types (for card indicators)
   const sufficiencyByType = useMemo(() => {
-    const results: Partial<Record<ClinicalDocumentType, SufficiencyResult>> = {};
+    const results: Partial<Record<ClinicalDocumentType, SufficiencyResult>> =
+      {};
     for (const type of CLINICAL_DOCUMENT_TYPES) {
       results[type] = checkDocumentSufficiency(type, dataAvailability);
     }
@@ -205,7 +214,9 @@ export function DocumentGenerationForm({
       });
 
       if (res.status === 422) {
-        const errorData = await res.json().catch(() => ({ blockers: [], warnings: [] }));
+        const errorData = await res
+          .json()
+          .catch(() => ({ blockers: [], warnings: [] }));
         setSufficiency({
           canGenerate: false,
           blockers: errorData.blockers || [],
@@ -218,9 +229,7 @@ export function DocumentGenerationForm({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(
-          data.error ?? `Generation failed (${res.status})`
-        );
+        throw new Error(data.error ?? `Generation failed (${res.status})`);
       }
 
       const result = await res.json();
@@ -246,15 +255,13 @@ export function DocumentGenerationForm({
       {/* Header */}
       <div className="mb-8">
         <Link
-          href={`/clients/${clientId}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+          href={`/clients/${clientId}`}
         >
           <ArrowLeft className="size-4" />
           Back to {clientName}
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          New Document
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight">New Document</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Generate a clinical document for {clientName}.
         </p>
@@ -284,27 +291,23 @@ export function DocumentGenerationForm({
 
             return (
               <button
-                key={type}
-                type="button"
-                onClick={() => handleTypeSelect(type)}
                 className={`flex flex-col items-start rounded-lg border p-4 text-left transition-colors ${
                   isSelected
                     ? "border-primary bg-primary/5 ring-1 ring-primary"
                     : "hover:bg-muted/50"
                 }`}
+                key={type}
+                onClick={() => handleTypeSelect(type)}
+                type="button"
               >
                 <div className="flex items-start gap-3 w-full">
                   <FileText
                     className={`size-5 mt-0.5 shrink-0 ${
-                      isSelected
-                        ? "text-primary"
-                        : "text-muted-foreground"
+                      isSelected ? "text-primary" : "text-muted-foreground"
                     }`}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">
-                      {config.label}
-                    </div>
+                    <div className="font-medium text-sm">{config.label}</div>
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                       {config.shortDescription}
                     </p>
@@ -318,18 +321,22 @@ export function DocumentGenerationForm({
                         Insufficient data
                       </p>
                     )}
-                    {typeSufficiency && typeSufficiency.blockers.length === 0 && typeSufficiency.warnings.length > 0 && (
-                      <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mt-1.5">
-                        <AlertTriangle className="size-3.5 shrink-0" />
-                        Limited data available
-                      </p>
-                    )}
-                    {typeSufficiency && typeSufficiency.blockers.length === 0 && typeSufficiency.warnings.length === 0 && (
-                      <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-1.5">
-                        <CircleCheck className="size-3.5 shrink-0" />
-                        Ready to generate
-                      </p>
-                    )}
+                    {typeSufficiency &&
+                      typeSufficiency.blockers.length === 0 &&
+                      typeSufficiency.warnings.length > 0 && (
+                        <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+                          <AlertTriangle className="size-3.5 shrink-0" />
+                          Limited data available
+                        </p>
+                      )}
+                    {typeSufficiency &&
+                      typeSufficiency.blockers.length === 0 &&
+                      typeSufficiency.warnings.length === 0 && (
+                        <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-1.5">
+                          <CircleCheck className="size-3.5 shrink-0" />
+                          Ready to generate
+                        </p>
+                      )}
                   </div>
                   {isSelected && (
                     <CheckCircle2 className="size-5 text-primary shrink-0" />
@@ -342,8 +349,7 @@ export function DocumentGenerationForm({
                       {missing
                         .map((m) => DOCUMENT_TYPE_REGISTRY[m].label)
                         .join(", ")}{" "}
-                      — not yet created for this client. You can still
-                      proceed.
+                      — not yet created for this client. You can still proceed.
                     </p>
                   </div>
                 )}
@@ -365,59 +371,63 @@ export function DocumentGenerationForm({
 
           {/* Sufficiency alerts */}
           {sufficiency && sufficiency.blockers.length > 0 && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert className="mb-4" variant="destructive">
               <CircleX className="size-4" />
               <AlertTitle>Cannot generate — insufficient data</AlertTitle>
               <AlertDescription>
                 {sufficiency.blockers.map((blocker) => (
-                  <p key={blocker} className="mt-1">{blocker}</p>
+                  <p className="mt-1" key={blocker}>
+                    {blocker}
+                  </p>
                 ))}
               </AlertDescription>
             </Alert>
           )}
 
-          {sufficiency && sufficiency.blockers.length === 0 && sufficiency.warnings.length > 0 && (
-            <Alert className="mb-4 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-500">
-              <AlertTriangle className="size-4" />
-              <AlertTitle>Limited source data</AlertTitle>
-              <AlertDescription className="text-amber-800 dark:text-amber-300">
-                {sufficiency.warnings.map((warning) => (
-                  <p key={warning} className="mt-1">{warning}</p>
-                ))}
-                <p className="mt-2 text-xs">
-                  You can still generate this document, but the output may be incomplete. Consider addressing the gaps above first.
-                </p>
-              </AlertDescription>
-            </Alert>
-          )}
+          {sufficiency &&
+            sufficiency.blockers.length === 0 &&
+            sufficiency.warnings.length > 0 && (
+              <Alert className="mb-4 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-500">
+                <AlertTriangle className="size-4" />
+                <AlertTitle>Limited source data</AlertTitle>
+                <AlertDescription className="text-amber-800 dark:text-amber-300">
+                  {sufficiency.warnings.map((warning) => (
+                    <p className="mt-1" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                  <p className="mt-2 text-xs">
+                    You can still generate this document, but the output may be
+                    incomplete. Consider addressing the gaps above first.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {sufficiency && sufficiency.blockers.length === 0 && sufficiency.warnings.length === 0 && (
-            <Alert className="mb-4 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 text-green-900 dark:text-green-200 [&>svg]:text-green-600 dark:[&>svg]:text-green-500">
-              <CircleCheck className="size-4" />
-              <AlertTitle>Ready to generate</AlertTitle>
-              <AlertDescription className="text-green-800 dark:text-green-300">
-                All recommended source data is available. The document should generate with good clinical detail.
-              </AlertDescription>
-            </Alert>
-          )}
+          {sufficiency &&
+            sufficiency.blockers.length === 0 &&
+            sufficiency.warnings.length === 0 && (
+              <Alert className="mb-4 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 text-green-900 dark:text-green-200 [&>svg]:text-green-600 dark:[&>svg]:text-green-500">
+                <CircleCheck className="size-4" />
+                <AlertTitle>Ready to generate</AlertTitle>
+                <AlertDescription className="text-green-800 dark:text-green-300">
+                  All recommended source data is available. The document should
+                  generate with good clinical detail.
+                </AlertDescription>
+              </Alert>
+            )}
 
           <Card>
             <CardContent className="py-4 space-y-3">
               {typeDataSummary.hasClientRecord && (
-                <DataRow
-                  label="Client record"
-                  value="Available"
-                  status="ok"
-                />
+                <DataRow label="Client record" status="ok" value="Available" />
               )}
 
               {typeDataSummary.usesSessions && (
                 <DataRow
                   label="Sessions"
-                  value={`${typeDataSummary.sessionCount} session${typeDataSummary.sessionCount !== 1 ? "s" : ""} available`}
-                  status={
-                    typeDataSummary.sessionCount === 0 ? "warning" : "ok"
-                  }
+                  status={typeDataSummary.sessionCount === 0 ? "warning" : "ok"}
+                  value={`${typeDataSummary.sessionCount} session${typeDataSummary.sessionCount === 1 ? "" : "s"} available`}
                   warningText="No sessions available — the generated document will have limited clinical detail."
                 />
               )}
@@ -425,10 +435,8 @@ export function DocumentGenerationForm({
               {typeDataSummary.usesNotes && (
                 <DataRow
                   label="Clinical notes"
-                  value={`${typeDataSummary.noteCount} note${typeDataSummary.noteCount !== 1 ? "s" : ""} available`}
-                  status={
-                    typeDataSummary.noteCount === 0 ? "warning" : "ok"
-                  }
+                  status={typeDataSummary.noteCount === 0 ? "warning" : "ok"}
+                  value={`${typeDataSummary.noteCount} note${typeDataSummary.noteCount === 1 ? "" : "s"} available`}
                   warningText="No clinical notes available — the generated document will have limited clinical detail."
                 />
               )}
@@ -444,8 +452,8 @@ export function DocumentGenerationForm({
                       <div className="ml-6 space-y-1">
                         {typeDataSummary.relevantDocuments.map((doc) => (
                           <p
-                            key={doc.id}
                             className="text-xs text-muted-foreground"
+                            key={doc.id}
                           >
                             {doc.title} (
                             {DOCUMENT_TYPE_REGISTRY[doc.documentType].label})
@@ -456,8 +464,8 @@ export function DocumentGenerationForm({
                   ) : (
                     <DataRow
                       label="Prior documents"
-                      value="None available"
                       status="warning"
+                      value="None available"
                       warningText="No prior documents available to reference."
                     />
                   )}
@@ -472,16 +480,14 @@ export function DocumentGenerationForm({
       {selectedType && typeConfig && (
         <section className="mb-10">
           <button
-            type="button"
-            onClick={() => setConfigExpanded(!configExpanded)}
             className="flex items-center gap-2 mb-4 group"
+            onClick={() => setConfigExpanded(!configExpanded)}
+            type="button"
           >
             <div className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-medium">
               3
             </div>
-            <h2 className="text-lg font-medium">
-              Configuration
-            </h2>
+            <h2 className="text-lg font-medium">Configuration</h2>
             <span className="text-xs text-muted-foreground ml-1">
               (optional)
             </span>
@@ -512,7 +518,7 @@ export function DocumentGenerationForm({
                           selected
                         </span>
                         <button
-                          type="button"
+                          className="text-xs text-primary hover:underline"
                           onClick={() =>
                             setSelectedSessionIds(
                               selectedSessionIds.length === sessions.length
@@ -520,7 +526,7 @@ export function DocumentGenerationForm({
                                 : sessions.map((s) => s.id)
                             )
                           }
-                          className="text-xs text-primary hover:underline"
+                          type="button"
                         >
                           {selectedSessionIds.length === sessions.length
                             ? "Deselect all"
@@ -529,8 +535,8 @@ export function DocumentGenerationForm({
                       </div>
                       {sessions.map((session) => (
                         <label
-                          key={session.id}
                           className="flex items-center gap-3 cursor-pointer py-1"
+                          key={session.id}
                         >
                           <Checkbox
                             checked={selectedSessionIds.includes(session.id)}
@@ -565,8 +571,8 @@ export function DocumentGenerationForm({
                     <div className="rounded-md border p-3 space-y-2">
                       {existingDocuments.map((doc) => (
                         <label
-                          key={doc.id}
                           className="flex items-center gap-3 cursor-pointer py-1"
+                          key={doc.id}
                         >
                           <Checkbox
                             checked={selectedDocumentIds.includes(doc.id)}
@@ -586,29 +592,32 @@ export function DocumentGenerationForm({
 
               {/* Additional instructions */}
               <div className="space-y-2">
-                <Label htmlFor="additional-instructions" className="text-sm font-medium">
+                <Label
+                  className="text-sm font-medium"
+                  htmlFor="additional-instructions"
+                >
                   Additional instructions
                 </Label>
                 <Textarea
-                  id="additional-instructions"
-                  placeholder='e.g., "Focus on the anxiety presentation rather than the relationship difficulties"'
-                  value={additionalInstructions}
-                  onChange={(e) => setAdditionalInstructions(e.target.value)}
-                  rows={3}
                   className="resize-none"
+                  id="additional-instructions"
+                  onChange={(e) => setAdditionalInstructions(e.target.value)}
+                  placeholder='e.g., "Focus on the anxiety presentation rather than the relationship difficulties"'
+                  rows={3}
+                  value={additionalInstructions}
                 />
               </div>
 
               {/* Custom title */}
               <div className="space-y-2">
-                <Label htmlFor="custom-title" className="text-sm font-medium">
+                <Label className="text-sm font-medium" htmlFor="custom-title">
                   Custom title
                 </Label>
                 <Input
                   id="custom-title"
+                  onChange={(e) => setCustomTitle(e.target.value)}
                   placeholder={`${typeConfig.label} — ${clientName}`}
                   value={customTitle}
-                  onChange={(e) => setCustomTitle(e.target.value)}
                 />
               </div>
             </div>
@@ -634,25 +643,22 @@ export function DocumentGenerationForm({
                   <p className="text-sm font-medium text-destructive">
                     Generation failed
                   </p>
-                  <p className="text-sm text-destructive/80 mt-1">
-                    {error}
-                  </p>
+                  <p className="text-sm text-destructive/80 mt-1">{error}</p>
                 </div>
               </div>
             </div>
           )}
 
           <Button
-            size="lg"
             className="w-full min-h-12 text-base"
             disabled={isGenerating || sufficiency?.canGenerate === false}
             onClick={handleGenerate}
+            size="lg"
           >
             {isGenerating ? (
               <>
                 <Loader2 className="size-5 animate-spin" />
-                Generating {typeConfig?.label}... This may take up to 3
-                minutes.
+                Generating {typeConfig?.label}... This may take up to 3 minutes.
               </>
             ) : sufficiency?.canGenerate === false ? (
               "Cannot generate"

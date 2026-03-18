@@ -72,7 +72,7 @@ export async function migrateChatMessages() {
         if (updateError) {
           console.error(
             `[${table}] Update error for message ${message.id}:`,
-            updateError.message,
+            updateError.message
           );
           continue;
         }
@@ -81,16 +81,19 @@ export async function migrateChatMessages() {
       } catch (err) {
         console.error(
           `[${table}] Encryption error for message ${message.id}:`,
-          err instanceof Error ? err.message : err,
+          err instanceof Error ? err.message : err
         );
       }
     }
 
-    lastCreatedAt = (messages[messages.length - 1] as { createdAt: string }).createdAt;
+    lastCreatedAt = (messages[messages.length - 1] as { createdAt: string })
+      .createdAt;
     logProgress(table, processed, migrated, skipped);
   }
 
-  console.log(`[${table}] Complete — Processed: ${processed}, Migrated: ${migrated}, Skipped: ${skipped}`);
+  console.log(
+    `[${table}] Complete — Processed: ${processed}, Migrated: ${migrated}, Skipped: ${skipped}`
+  );
 }
 
 if (require.main === module) {

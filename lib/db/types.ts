@@ -629,6 +629,18 @@ export interface ClinicalDocumentWithReferences extends ClinicalDocument {
 }
 
 /** Lightweight type for document lists in the client hub */
+export interface AccountDeletionRequest {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
+  requestedAt: string;
+  executeAfter: string;
+  completedAt: string | null;
+  errorMessage: string | null;
+  auditLog: Array<{ action: string; timestamp: string; details?: string }>;
+}
+
 export interface ClinicalDocumentSummary {
   id: string;
   documentType: ClinicalDocumentType;

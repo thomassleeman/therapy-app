@@ -25,7 +25,13 @@ import type {
 
 export const maxDuration = 120;
 
-const VALID_FORMATS: NoteFormat[] = ["soap", "dap", "birp", "girp", "narrative"];
+const VALID_FORMATS: NoteFormat[] = [
+  "soap",
+  "dap",
+  "birp",
+  "girp",
+  "narrative",
+];
 
 // ── Universal Clinical Documentation Standards ─────────────────────────
 // Derived from Aaron's clinical documentation specifications.
@@ -424,17 +430,10 @@ function parseBirpNote(text: string): BirpNoteContent | null {
   const interventionMatch = text.match(
     /## Intervention\s*\n([\s\S]*?)(?=## Response|$)/i
   );
-  const responseMatch = text.match(
-    /## Response\s*\n([\s\S]*?)(?=## Plan|$)/i
-  );
+  const responseMatch = text.match(/## Response\s*\n([\s\S]*?)(?=## Plan|$)/i);
   const planMatch = text.match(/## Plan\s*\n([\s\S]*?)$/i);
 
-  if (
-    !behaviourMatch ||
-    !interventionMatch ||
-    !responseMatch ||
-    !planMatch
-  ) {
+  if (!behaviourMatch || !interventionMatch || !responseMatch || !planMatch) {
     return null;
   }
 
@@ -453,17 +452,10 @@ function parseGirpNote(text: string): GirpNoteContent | null {
   const interventionMatch = text.match(
     /## Intervention\s*\n([\s\S]*?)(?=## Response|$)/i
   );
-  const responseMatch = text.match(
-    /## Response\s*\n([\s\S]*?)(?=## Plan|$)/i
-  );
+  const responseMatch = text.match(/## Response\s*\n([\s\S]*?)(?=## Plan|$)/i);
   const planMatch = text.match(/## Plan\s*\n([\s\S]*?)$/i);
 
-  if (
-    !goalsMatch ||
-    !interventionMatch ||
-    !responseMatch ||
-    !planMatch
-  ) {
+  if (!goalsMatch || !interventionMatch || !responseMatch || !planMatch) {
     return null;
   }
 
