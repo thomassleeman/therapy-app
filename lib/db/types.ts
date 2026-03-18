@@ -361,8 +361,10 @@ export interface KnowledgeChunkInsert {
 export const SESSION_TRANSCRIPTION_STATUSES = [
   "pending",
   "uploading",
+  "preparing",
   "transcribing",
   "labelling",
+  "saving",
   "completed",
   "failed",
 ] as const;
@@ -372,10 +374,12 @@ export type TranscriptionStatus =
 export const TRANSCRIPTION_STATUS_LABELS: Record<TranscriptionStatus, string> =
   {
     pending: "Pending",
-    uploading: "Uploading",
-    transcribing: "Transcribing",
-    labelling: "Labelling",
-    completed: "Completed",
+    uploading: "Uploading audio...",
+    preparing: "Preparing audio...",
+    transcribing: "Transcribing audio...",
+    labelling: "Labelling speakers...",
+    saving: "Saving transcript...",
+    completed: "Complete",
     failed: "Failed",
   };
 

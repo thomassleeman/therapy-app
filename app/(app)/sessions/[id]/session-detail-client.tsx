@@ -37,19 +37,20 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
-import type {
-  BirpNoteContent,
-  ClinicalNote,
-  DapNoteContent,
-  FreeformNoteContent,
-  GirpNoteContent,
-  NarrativeNoteContent,
-  NoteContent,
-  NoteFormat,
-  SessionConsent,
-  SessionSegment,
-  SoapNoteContent,
-  TherapySession,
+import {
+  type BirpNoteContent,
+  type ClinicalNote,
+  type DapNoteContent,
+  type FreeformNoteContent,
+  type GirpNoteContent,
+  type NarrativeNoteContent,
+  type NoteContent,
+  type NoteFormat,
+  type SessionConsent,
+  type SessionSegment,
+  type SoapNoteContent,
+  type TherapySession,
+  TRANSCRIPTION_STATUS_LABELS,
 } from "@/lib/db/types";
 
 interface Props {
@@ -169,7 +170,7 @@ function TranscriptTab({
   );
 
   const effectiveStatus =
-    polledStatus === "idle" ? session.transcriptionStatus : polledStatus;
+    polledStatus === "pending" ? session.transcriptionStatus : polledStatus;
 
   if (effectiveStatus !== "completed" && effectiveStatus !== "failed") {
     return (
@@ -177,12 +178,7 @@ function TranscriptTab({
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
         <div className="text-center space-y-1">
           <p className="text-sm font-medium">
-            {effectiveStatus === "transcribing" ||
-            effectiveStatus === "processing"
-              ? "Transcribing session..."
-              : effectiveStatus === "uploading"
-                ? "Uploading audio..."
-                : "Waiting for transcription..."}
+            {TRANSCRIPTION_STATUS_LABELS[effectiveStatus]}
           </p>
           <p className="text-xs text-muted-foreground">
             This usually takes 2-4 minutes for a 50-minute session.

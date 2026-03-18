@@ -7,10 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDuration } from "@/hooks/use-audio-recorder";
-import {
-  formatRemainingTime,
-  useTranscriptionProgress,
-} from "@/hooks/use-transcription-progress";
+import { useTranscriptionProgress } from "@/hooks/use-transcription-progress";
 
 const ACCEPTED_TYPES = [".wav", ".mp3", ".m4a", ".webm", ".ogg"];
 const ACCEPTED_MIME_TYPES = [
@@ -71,19 +68,15 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [audioDurationSeconds, setAudioDurationSeconds] = useState<
-    number | null
-  >(null);
+  const [processSessionId, setProcessSessionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     progress: transcriptionProgress,
     status: transcriptionStatus,
+    label: transcriptionLabel,
     error: transcriptionError,
-    estimatedRemainingSeconds,
-    startPolling,
-    reset: resetTranscription,
-  } = useTranscriptionProgress(sessionId, audioDurationSeconds);
+  } = useTranscriptionProgress(processSessionId);
 
   const handleFileSelect = useCallback(async (file: File) => {
     setErrorMessage(null);
@@ -102,8 +95,7 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
       return;
     }
 
-    const { formatted, seconds } = await getAudioDuration(file);
-    setAudioDurationSeconds(seconds);
+    const { formatted } = await getAudioDuration(file);
 
     setSelectedFile({
       file,
@@ -191,51 +183,49 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
         xhr.send(formData);
       });
 
-      if (!uploaded) return;
-
-      setPhase("processing");
-
-      const processResponse = await fetch("/api/transcription/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
-      });
-
-      if (!processResponse.ok) {
-        const data = await processResponse.json().catch(() => ({}));
-        setErrorMessage(
-          data.error ?? "Failed to start transcription processing"
-        );
-        setPhase("error");
+      if (!uploaded) {
         return;
       }
 
-      startPolling();
+      // Fire and forget — polling will track real progress via DB status
+      setPhase("processing");
+      setProcessSessionId(sessionId);
+
+      fetch("/api/transcription/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      }).catch((err) => {
+        console.error("[transcription] Process request failed:", err);
+      });
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "An unexpected error occurred"
       );
       setPhase("error");
     }
-  }, [selectedFile, sessionId, startPolling]);
+  }, [selectedFile, sessionId]);
 
   const handleReset = useCallback(() => {
-    resetTranscription();
+    setProcessSessionId(null);
     setPhase("idle");
     setSelectedFile(null);
     setErrorMessage(null);
     setUploadProgress(0);
     setIsDragOver(false);
-    setAudioDurationSeconds(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, [resetTranscription]);
+  }, []);
 
   // Sync transcription status with phase
   const currentPhase = (() => {
-    if (transcriptionStatus === "completed") return "completed";
-    if (transcriptionStatus === "failed") return "error";
+    if (transcriptionStatus === "completed") {
+      return "completed";
+    }
+    if (transcriptionStatus === "failed") {
+      return "error";
+    }
     return phase;
   })();
 
@@ -287,27 +277,14 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
   }
 
   if (currentPhase === "processing") {
-    const isCapped = transcriptionProgress >= 90;
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8">
           <div className="w-full max-w-xs space-y-3">
-            <p className="text-sm font-medium text-center">
-              Transcribing session...
-            </p>
             <Progress value={transcriptionProgress} />
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                {Math.round(transcriptionProgress)}%
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isCapped
-                  ? "Finishing up..."
-                  : estimatedRemainingSeconds === null
-                    ? null
-                    : formatRemainingTime(estimatedRemainingSeconds)}
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              {transcriptionLabel}
+            </p>
           </div>
         </CardContent>
       </Card>

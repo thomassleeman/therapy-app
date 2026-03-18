@@ -261,7 +261,9 @@ Upload to Supabase Storage (session-audio bucket, private)
   → contentType must be the original audio MIME type (e.g. audio/webm), not application/octet-stream,
     because the Supabase bucket restricts allowed MIME types to audio formats
     ↓
-POST /api/transcription/process
+POST /api/transcription/process (fire-and-forget from client; server blocks with maxDuration: 300)
+  → Writes real phase transitions to DB: preparing → transcribing → saving → completed
+  → Client polls GET /api/sessions/{id} every 5s to observe phase changes
   → Audio decrypted in memory before sending to transcription provider
     ↓
 Upload to AssemblyAI via custom uploadAudio() helper (bypasses SDK upload)
@@ -422,7 +424,7 @@ tests/
 - Full RAG pipeline (database, ingestion script, hybrid search RPC, search tools, system prompt, confidence thresholds, no-results handling, sensitive content detection) — knowledge base has been ingested and content authoring is ongoing
 - Modality-jurisdiction wiring (4-level resolution chain)
 - Unified sidebar navigation shell (NavBar removed)
-- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available)
+- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available). **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES`, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
 - Session summary recording mode (therapist-narrated summaries)
 - **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)

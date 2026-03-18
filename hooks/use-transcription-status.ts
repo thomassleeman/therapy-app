@@ -2,18 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type TranscriptionStatus =
-  | "idle"
-  | "uploading"
-  | "processing"
-  | "completed"
-  | "failed";
+import type { TranscriptionStatus } from "@/lib/db/types";
 
 interface UseTranscriptionStatusReturn {
   status: TranscriptionStatus;
   error: string | null;
   isPolling: boolean;
-  startPolling: () => void;
   reset: () => void;
 }
 
@@ -22,7 +16,7 @@ const POLL_INTERVAL = 5000;
 export function useTranscriptionStatus(
   sessionId: string | null
 ): UseTranscriptionStatusReturn {
-  const [status, setStatus] = useState<TranscriptionStatus>("idle");
+  const [status, setStatus] = useState<TranscriptionStatus>("pending");
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,45 +41,37 @@ export function useTranscriptionStatus(
       }
 
       const data = await response.json();
-      const transcriptionStatus = data.session?.transcriptionStatus as string;
+      const transcriptionStatus = data.session
+        ?.transcriptionStatus as TranscriptionStatus;
 
-      if (transcriptionStatus === "completed") {
-        setStatus("completed");
-        stopPolling();
-      } else if (transcriptionStatus === "failed") {
-        setStatus("failed");
-        setError(data.session?.errorMessage ?? "Transcription failed");
+      if (transcriptionStatus) {
+        setStatus(transcriptionStatus);
+      }
+
+      if (
+        transcriptionStatus === "completed" ||
+        transcriptionStatus === "failed"
+      ) {
+        if (transcriptionStatus === "failed") {
+          setError(data.session?.errorMessage ?? "Transcription failed");
+        }
         stopPolling();
       }
     } catch (err) {
-      setStatus("failed");
       setError(err instanceof Error ? err.message : "Failed to check status");
       stopPolling();
     }
   }, [sessionId, stopPolling]);
 
-  const startPolling = useCallback(() => {
-    if (!sessionId) {
-      return;
-    }
-    setStatus("processing");
-    setIsPolling(true);
-
-    // Poll immediately, then on interval
-    poll();
-    intervalRef.current = setInterval(poll, POLL_INTERVAL);
-  }, [sessionId, poll]);
-
   const reset = useCallback(() => {
     stopPolling();
-    setStatus("idle");
+    setStatus("pending");
     setError(null);
   }, [stopPolling]);
 
   // Auto-start polling when a sessionId is provided
   useEffect(() => {
     if (sessionId) {
-      setStatus("processing");
       setIsPolling(true);
       poll();
       intervalRef.current = setInterval(poll, POLL_INTERVAL);
@@ -93,5 +79,5 @@ export function useTranscriptionStatus(
     return stopPolling;
   }, [sessionId, poll, stopPolling]);
 
-  return { status, error, isPolling, startPolling, reset };
+  return { status, error, isPolling, reset };
 }

@@ -63,10 +63,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update status to transcribing
+    // Update status to preparing (downloading audio)
     await updateTherapySession({
       id: sessionId,
-      transcriptionStatus: "transcribing",
+      transcriptionStatus: "preparing",
     });
 
     // Download audio from Supabase Storage using service role
@@ -98,10 +98,22 @@ export async function POST(request: Request) {
       sessionId
     );
 
+    // Update status to transcribing
+    await updateTherapySession({
+      id: sessionId,
+      transcriptionStatus: "transcribing",
+    });
+
     // Run transcription + diarization pipeline
     const diarisedTranscript = await transcribeAndDiarize(audioBuffer, {
       diarize: isSummary ? undefined : { expectedSpeakers },
       skipDiarization: isSummary,
+    });
+
+    // Update status to saving
+    await updateTherapySession({
+      id: sessionId,
+      transcriptionStatus: "saving",
     });
 
     // Map segments to DB insert format
