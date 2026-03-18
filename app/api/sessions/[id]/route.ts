@@ -59,7 +59,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Delete audio from storage if it exists
+  // Delete audio from storage if it still exists (normally auto-deleted after transcription)
   if (therapySession.audioStoragePath) {
     const supabase = await createClient();
     const { error: storageError } = await supabase.storage

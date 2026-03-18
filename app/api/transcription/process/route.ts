@@ -141,6 +141,30 @@ export async function POST(request: Request) {
       durationMinutes,
     });
 
+    // Clean up audio from storage — no longer needed after successful transcription.
+    // Best-effort: log on failure but don't fail the request.
+    try {
+      await serviceClient.storage
+        .from("session-audio")
+        .remove([therapySession.audioStoragePath]);
+
+      await updateTherapySession({
+        id: sessionId,
+        audioStoragePath: null,
+      });
+
+      console.log(
+        `[transcription] Audio deleted from storage for session ${sessionId}`
+      );
+    } catch (cleanupError) {
+      console.warn(
+        `[transcription] Failed to delete audio for session ${sessionId}:`,
+        cleanupError
+      );
+      // Audio remains in storage but transcription succeeded — not a critical failure.
+      // A future cleanup job could sweep orphaned audio.
+    }
+
     return NextResponse.json({
       success: true,
       segmentCount: diarisedTranscript.segments.length,

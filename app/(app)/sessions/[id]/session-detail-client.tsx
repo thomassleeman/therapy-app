@@ -668,25 +668,8 @@ function DetailsTab({
   consents: SessionConsent[];
 }) {
   const router = useRouter();
-  const [confirmDeleteAudio, setConfirmDeleteAudio] = useState(false);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const handleDeleteAudio = useCallback(async () => {
-    setDeleting(true);
-    try {
-      // Delete audio by updating the session
-      await fetch(`/api/sessions/${session.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deleteAudio: true }),
-      });
-      router.refresh();
-    } finally {
-      setDeleting(false);
-      setConfirmDeleteAudio(false);
-    }
-  }, [session.id, router]);
 
   const handleDeleteSession = useCallback(async () => {
     setDeleting(true);
@@ -793,30 +776,6 @@ function DetailsTab({
 
       <Separator />
 
-      {/* Audio storage */}
-      {session.audioStoragePath && (
-        <>
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Audio
-            </h3>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <p className="text-sm">Audio file stored</p>
-              <Button
-                className="text-destructive hover:text-destructive"
-                onClick={() => setConfirmDeleteAudio(true)}
-                size="sm"
-                variant="outline"
-              >
-                <Trash2 className="size-4" />
-                Delete Audio
-              </Button>
-            </div>
-          </div>
-          <Separator />
-        </>
-      )}
-
       {/* Danger zone */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-destructive">
@@ -843,37 +802,6 @@ function DetailsTab({
         </div>
       </div>
 
-      {/* Delete Audio Dialog */}
-      <Dialog onOpenChange={setConfirmDeleteAudio} open={confirmDeleteAudio}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Audio</DialogTitle>
-            <DialogDescription>
-              Deleting the audio is permanent. The transcript will be preserved.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              onClick={() => setConfirmDeleteAudio(false)}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={deleting}
-              onClick={handleDeleteAudio}
-              variant="destructive"
-            >
-              {deleting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                "Delete Audio"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Delete Session Dialog */}
       <Dialog
         onOpenChange={setConfirmDeleteSession}
@@ -884,7 +812,7 @@ function DetailsTab({
             <DialogTitle>Delete Session</DialogTitle>
             <DialogDescription>
               This will permanently delete the session record, transcript,
-              notes, and audio. This cannot be undone.
+              and notes. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

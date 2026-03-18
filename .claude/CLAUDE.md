@@ -189,7 +189,7 @@ tests/                  # Playwright E2E + fixtures
 | `clinical_notes` | `content` | JSONB | Note UUID |
 | `clinical_documents` | `content` | JSONB | Document UUID |
 | `"Message_v2"` | `content` | JSONB | Message UUID |
-| `session-audio` bucket | file data | Binary | Session UUID |
+| `session-audio` bucket | file data | Binary | Session UUID | *(transient — auto-deleted after transcription)* |
 
 #### Not encrypted (metadata needed for queries)
 
@@ -274,6 +274,9 @@ Upload to AssemblyAI via custom uploadAudio() helper (bypasses SDK upload)
   → Fallback: Whisper API (batch transcription) → Claude diarisation (speaker labelling)
     ↓
 Segments encrypted (per-segment keys) → stored in session_segments table
+    ↓
+Audio deleted from Supabase Storage + audioStoragePath nulled on therapy_sessions
+  → Automatic cleanup on success path — audio serves no purpose after segments are saved
     ↓
 POST /api/notes/generate
   → Segments decrypted for LLM context assembly
@@ -424,7 +427,7 @@ tests/
 - Full RAG pipeline (database, ingestion script, hybrid search RPC, search tools, system prompt, confidence thresholds, no-results handling, sensitive content detection) — knowledge base has been ingested and content authoring is ongoing
 - Modality-jurisdiction wiring (4-level resolution chain)
 - Unified sidebar navigation shell (NavBar removed)
-- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available). **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES`, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
+- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available). **Audio auto-deleted** from Supabase Storage after successful transcription (segments stored separately in Postgres); `audioStoragePath` nulled on `therapy_sessions`. Session DELETE route handles the case where audio is already gone. **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES`, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
 - Session summary recording mode (therapist-narrated summaries)
 - **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
@@ -468,7 +471,7 @@ tests/
   - Server action inserts row into `account_deletion_requests` table and signs user out
   - Supabase Edge Function (triggered by pg_cron every 15 minutes) picks up pending requests and cascades deletion
   - Deletion order exploits verified FK CASCADE chains — only 4 explicit DELETEs needed:
-    1. Audio files from Supabase Storage (`session-audio` bucket)
+    1. Audio files from Supabase Storage (`session-audio` bucket) — usually already deleted after transcription; this is a defensive sweep
     2. `therapy_sessions` (cascades: session_segments, session_consents, clinical_notes)
     3. `"Chat"` (cascades: Message_v2, Stream, Vote_v2)
     4. `clients` (cascades: client_tag_assignments, clinical_documents → clinical_document_references)
