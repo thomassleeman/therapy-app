@@ -286,11 +286,11 @@ LLM generates structured clinical notes (SOAP, DAP, BIRP, GIRP, Narrative format
 Notes encrypted (AES-256-GCM) → stored in clinical_notes table (draft → reviewed → finalised lifecycle)
 ```
 
-Two recording modes: `full_session` (multi-speaker) and `therapist_summary` (single-speaker narrated summary).
+Three session creation modes: `full_session` (multi-speaker audio recording), `therapist_summary` (single-speaker narrated summary), and `written_notes` (therapist types/pastes brief unformatted notes — no audio, no transcription, no consent required). Written notes sessions set `transcriptionStatus` to `'not_applicable'` and store the therapist's original text in the `written_notes` column on `therapy_sessions`. The note generation route uses this text as source material (with `SUMMARY_FORMAT_INSTRUCTIONS`) instead of fetching a transcript.
 
 ### Clinical Note Formats
 
-Five note formats, each with full-session and therapist-summary prompt variants. Format specifications authored by Aaron (clinical lead) in `.claude/note-taking-prompts.md`.
+Five note formats, each with full-session and therapist-summary/written-notes prompt variants. Format specifications authored by Aaron (clinical lead) in `.claude/note-taking-prompts.md`.
 
 | Format | Sections | Use Case |
 |---|---|---|
@@ -427,9 +427,10 @@ tests/
 - Full RAG pipeline (database, ingestion script, hybrid search RPC, search tools, system prompt, confidence thresholds, no-results handling, sensitive content detection) — knowledge base has been ingested and content authoring is ongoing
 - Modality-jurisdiction wiring (4-level resolution chain)
 - Unified sidebar navigation shell (NavBar removed)
-- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available). **Audio auto-deleted** from Supabase Storage after successful transcription (segments stored separately in Postgres); `audioStoragePath` nulled on `therapy_sessions`. Session DELETE route handles the case where audio is already gone. **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES`, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
+- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available). **Audio auto-deleted** from Supabase Storage after successful transcription (segments stored separately in Postgres); `audioStoragePath` nulled on `therapy_sessions`. Session DELETE route handles the case where audio is already gone. **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES` includes `'not_applicable'` for written notes, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
 - Session summary recording mode (therapist-narrated summaries)
-- **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
+- **Written notes session creation path** — therapist types or pastes brief unformatted session notes on `/sessions/new`, AI expands into structured clinical notes. No audio recording, transcription, or consent flow. Uses `written_notes` recording type with `not_applicable` transcription status. Original text stored in `written_notes` column on `therapy_sessions`.
+- **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary/written-notes prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
 - **Settings area** at `app/(app)/settings/` with four sections:
   - `/settings/profile` — Professional Profile (jurisdiction, default modality, professional body). Feeds agent system prompt and search filtering.

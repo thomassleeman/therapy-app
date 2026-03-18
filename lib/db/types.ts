@@ -367,6 +367,7 @@ export const SESSION_TRANSCRIPTION_STATUSES = [
   "saving",
   "completed",
   "failed",
+  "not_applicable",
 ] as const;
 export type TranscriptionStatus =
   (typeof SESSION_TRANSCRIPTION_STATUSES)[number];
@@ -381,6 +382,7 @@ export const TRANSCRIPTION_STATUS_LABELS: Record<TranscriptionStatus, string> =
     saving: "Saving transcript...",
     completed: "Complete",
     failed: "Failed",
+    not_applicable: "Not applicable",
   };
 
 export const NOTE_FORMATS = [
@@ -406,7 +408,11 @@ export type ConsentType = (typeof CONSENT_TYPES)[number];
 export const CONSENTING_PARTIES = ["therapist", "client"] as const;
 export type ConsentingParty = (typeof CONSENTING_PARTIES)[number];
 
-export const RECORDING_TYPES = ["full_session", "therapist_summary"] as const;
+export const RECORDING_TYPES = [
+  "full_session",
+  "therapist_summary",
+  "written_notes",
+] as const;
 export type RecordingType = (typeof RECORDING_TYPES)[number];
 
 export interface TherapySession {

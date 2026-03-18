@@ -15,6 +15,7 @@ const PHASE_STEPS: Record<TranscriptionStatus, number> = {
   saving: 4,
   completed: 5,
   failed: -1,
+  not_applicable: -1,
 };
 
 const TOTAL_STEPS = 5;
