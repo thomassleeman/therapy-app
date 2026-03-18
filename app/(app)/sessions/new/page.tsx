@@ -7,6 +7,7 @@ import {
   Loader2,
   MessageSquare,
   Mic,
+  PenLine,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
@@ -28,13 +29,15 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import type { RecordingType } from "@/lib/db/types";
 
 interface ClientOption {
   id: string;
   name: string;
 }
 
-type Step = "details" | "consent" | "record";
+type Step = "details" | "consent" | "record" | "write";
 
 const DELIVERY_METHODS = [
   { value: "in-person", label: "In-person" },
@@ -103,7 +106,7 @@ function createEmptyConsents(): ConsentState {
 
 function allConsented(
   consents: ConsentState,
-  recordingType: "full_session" | "therapist_summary"
+  recordingType: RecordingType
 ): boolean {
   if (recordingType === "therapist_summary") {
     return Object.values(consents.therapist).every(Boolean);
@@ -149,12 +152,16 @@ function NewSessionForm() {
   const [deliveryMethod, setDeliveryMethod] = useState("in-person");
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
-  const [recordingType, setRecordingType] = useState<
-    "full_session" | "therapist_summary"
-  >("full_session");
+  const [recordingType, setRecordingType] =
+    useState<RecordingType>("full_session");
   const [creatingSession, setCreatingSession] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [clientFromUrl, setClientFromUrl] = useState(false);
+  const [noteFormat, setNoteFormat] = useState<
+    "soap" | "dap" | "progress" | "freeform"
+  >("soap");
+  const [writtenNotes, setWrittenNotes] = useState("");
+  const [generatingNotes, setGeneratingNotes] = useState(false);
 
   // Step 2 state
   const [consents, setConsents] = useState<ConsentState>(createEmptyConsents());
@@ -215,13 +222,52 @@ function NewSessionForm() {
 
       const session = await res.json();
       setSessionId(session.id);
-      setStep("consent");
+      setStep(recordingType === "written_notes" ? "write" : "consent");
     } catch (err) {
       console.error("Failed to create session:", err);
     } finally {
       setCreatingSession(false);
     }
   }, [sessionDate, clientId, deliveryMethod, recordingType]);
+
+  // Written notes: save + generate
+  const handleGenerateFromWrittenNotes = useCallback(async () => {
+    if (!sessionId || !writtenNotes.trim()) {
+      return;
+    }
+    setGeneratingNotes(true);
+    try {
+      // Save latest written notes to the session
+      const patchRes = await fetch(`/api/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ writtenNotes }),
+      });
+      if (!patchRes.ok) {
+        throw new Error("Failed to save written notes");
+      }
+
+      // Generate clinical notes
+      const genRes = await fetch("/api/notes/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          noteFormat,
+        }),
+      });
+      if (!genRes.ok) {
+        const data = await genRes.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to generate notes");
+      }
+
+      router.push(`/sessions/${sessionId}`);
+    } catch (err) {
+      console.error("Failed to generate notes:", err);
+    } finally {
+      setGeneratingNotes(false);
+    }
+  }, [sessionId, writtenNotes, noteFormat, router]);
 
   // Step 2: Save consents
   const handleSaveConsents = useCallback(async () => {
@@ -293,11 +339,17 @@ function NewSessionForm() {
   };
 
   // Step indicators
-  const steps = [
-    { key: "details", label: "Session Details", number: 1 },
-    { key: "consent", label: "Consent", number: 2 },
-    { key: "record", label: "Record / Upload", number: 3 },
-  ] as const;
+  const steps =
+    recordingType === "written_notes"
+      ? ([
+          { key: "details", label: "Session Details", number: 1 },
+          { key: "write", label: "Write Notes", number: 2 },
+        ] as const)
+      : ([
+          { key: "details", label: "Session Details", number: 1 },
+          { key: "consent", label: "Consent", number: 2 },
+          { key: "record", label: "Record / Upload", number: 3 },
+        ] as const);
 
   const currentStepIndex = steps.findIndex((s) => s.key === step);
 
@@ -495,8 +547,76 @@ function NewSessionForm() {
                     </div>
                   </div>
                 </button>
+                <button
+                  className={`flex items-start gap-4 rounded-lg border px-4 py-4 text-left transition-colors ${
+                    recordingType === "written_notes"
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted"
+                  }`}
+                  onClick={() => setRecordingType("written_notes")}
+                  type="button"
+                >
+                  <PenLine className="size-5 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium">
+                      Write session notes
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Type or paste brief notes. The AI will expand them into
+                      full clinical notes.
+                    </div>
+                  </div>
+                </button>
               </div>
             </div>
+
+            {recordingType === "written_notes" && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <Label>Note format</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {(
+                      [
+                        { value: "soap", label: "SOAP" },
+                        { value: "dap", label: "DAP" },
+                        { value: "progress", label: "Progress" },
+                        { value: "freeform", label: "Freeform" },
+                      ] as const
+                    ).map((fmt) => (
+                      <label
+                        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                          noteFormat === fmt.value
+                            ? "border-primary bg-primary/5"
+                            : "hover:bg-muted"
+                        }`}
+                        key={fmt.value}
+                      >
+                        <input
+                          checked={noteFormat === fmt.value}
+                          className="sr-only"
+                          name="note-format"
+                          onChange={() => setNoteFormat(fmt.value)}
+                          type="radio"
+                        />
+                        <div
+                          className={`size-4 rounded-full border-2 ${
+                            noteFormat === fmt.value
+                              ? "border-primary bg-primary"
+                              : "border-muted-foreground/40"
+                          }`}
+                        >
+                          {noteFormat === fmt.value && (
+                            <div className="mt-[3px] ml-[3px] size-[6px] rounded-full bg-white" />
+                          )}
+                        </div>
+                        {fmt.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             <Button
               className="w-full min-h-12"
@@ -640,6 +760,47 @@ function NewSessionForm() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Step: Written Notes */}
+      {step === "write" && sessionId && (
+        <Card className="max-w-lg">
+          <CardHeader>
+            <CardTitle>Session Notes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              className="min-h-[200px] resize-y"
+              onChange={(e) => setWrittenNotes(e.target.value)}
+              placeholder="Enter unformatted notes"
+              rows={12}
+              value={writtenNotes}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                className="min-h-11"
+                onClick={() => setStep("details")}
+                variant="outline"
+              >
+                Back
+              </Button>
+              <Button
+                className="min-h-11"
+                disabled={!writtenNotes.trim() || generatingNotes}
+                onClick={handleGenerateFromWrittenNotes}
+              >
+                {generatingNotes ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Generating notes...
+                  </>
+                ) : (
+                  "Generate Notes"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Step 3: Record or Upload */}

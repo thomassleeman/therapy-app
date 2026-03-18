@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
-import { createTherapySession, getTherapySessions } from "@/lib/db/queries";
+import {
+  createTherapySession,
+  getTherapySessions,
+  updateTherapySession,
+} from "@/lib/db/queries";
 import type { RecordingType } from "@/lib/db/types";
 import { RECORDING_TYPES } from "@/lib/db/types";
 
@@ -37,12 +41,14 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { sessionDate, clientId, deliveryMethod, recordingType } = body as {
-    sessionDate: string;
-    clientId?: string;
-    deliveryMethod?: string;
-    recordingType?: string;
-  };
+  const { sessionDate, clientId, deliveryMethod, recordingType, writtenNotes } =
+    body as {
+      sessionDate: string;
+      clientId?: string;
+      deliveryMethod?: string;
+      recordingType?: string;
+      writtenNotes?: string;
+    };
 
   if (!sessionDate) {
     return NextResponse.json(
@@ -56,7 +62,10 @@ export async function POST(request: Request) {
     !RECORDING_TYPES.includes(recordingType as RecordingType)
   ) {
     return NextResponse.json(
-      { error: "recordingType must be 'full_session' or 'therapist_summary'" },
+      {
+        error:
+          "recordingType must be 'full_session', 'therapist_summary', or 'written_notes'",
+      },
       { status: 400 }
     );
   }
@@ -67,7 +76,15 @@ export async function POST(request: Request) {
     clientId: clientId || null,
     deliveryMethod: deliveryMethod || null,
     ...(recordingType ? { recordingType: recordingType as RecordingType } : {}),
+    ...(writtenNotes ? { writtenNotes } : {}),
   });
+
+  if (recordingType === "written_notes") {
+    await updateTherapySession({
+      id: therapySession.id,
+      transcriptionStatus: "not_applicable",
+    });
+  }
 
   return NextResponse.json(therapySession, { status: 201 });
 }

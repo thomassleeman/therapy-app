@@ -51,7 +51,7 @@ app/
 │   └── chat/                       # Chat pages (new, [id])
 ├── api/                # Standalone API routes
 │   ├── documents/                  # Clinical document generation + CRUD
-│   ├── notes/generate/             # Clinical note generation from transcripts
+│   ├── notes/generate/             # Clinical note generation from transcripts or written notes
 │   ├── sessions/                   # Session CRUD + transcript retrieval
 │   └── transcription/              # Audio upload + processing pipeline
 └── auth/               # OAuth callback routes
