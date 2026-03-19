@@ -114,6 +114,12 @@ function TranscriptionBadge({ status }: { status: string }) {
           Completed
         </Badge>
       );
+    case "not_applicable":
+      return (
+        <Badge variant="secondary">
+          Written Notes
+        </Badge>
+      );
     case "transcribing":
     case "labelling":
       return (
@@ -194,7 +200,8 @@ function computeSummaryCounts(
       transcribing++;
     }
     if (
-      s.transcriptionStatus === "completed" &&
+      (s.transcriptionStatus === "completed" ||
+        s.transcriptionStatus === "not_applicable") &&
       (s.notesStatus === "none" ||
         s.notesStatus === "" ||
         s.notesStatus === "draft")

@@ -325,13 +325,29 @@ function buildSystemPrompt({
   additionalContext?: string;
   recordingType?: RecordingType;
 }): string {
-  const isSummary = recordingType === "therapist_summary";
-  const formatInstructions = isSummary
+  const isSummaryStyle =
+    recordingType === "therapist_summary" ||
+    recordingType === "written_notes";
+  const formatInstructions = isSummaryStyle
     ? SUMMARY_FORMAT_INSTRUCTIONS[noteFormat]
     : FORMAT_INSTRUCTIONS[noteFormat];
 
-  const transcriptSourcePreamble = isSummary
-    ? `TRANSCRIPT SOURCE:
+  const transcriptSourcePreamble =
+    recordingType === "written_notes"
+      ? `SOURCE MATERIAL:
+These are brief, unformatted notes written by the therapist after the session. They are not a transcript — they are the therapist's own summary of key points from the session.
+
+When generating notes from these written notes:
+- Expand the brief notes into full, professionally structured clinical documentation
+- Attribute observations to the therapist's account: use "The therapist reported that the client..." rather than "The client stated..."
+- Where the therapist quotes or paraphrases the client, note it as reported speech
+- Recognise that this is a post-session recollection. Use language like "the therapist noted...", "the therapist recalled..."
+- Do not fabricate direct client quotes
+- Do not invent details not present in the original notes
+
+`
+      : recordingType === "therapist_summary"
+        ? `TRANSCRIPT SOURCE:
 This transcript is a therapist's spoken summary of a therapy session, recorded after the session ended. It is a single-speaker account — the therapist describing what happened during the session from their own perspective and recollection. There is no verbatim client dialogue.
 
 When generating notes from this summary:
@@ -341,7 +357,7 @@ When generating notes from this summary:
 - Do not fabricate direct client quotes
 
 `
-    : "";
+        : "";
 
   const parts = [
     `You are a clinical documentation assistant for qualified therapists in the UK and Ireland. You generate draft session notes from therapy session transcripts. The therapist will review and edit these notes before finalising them.
@@ -350,12 +366,13 @@ ${UNIVERSAL_STANDARDS}
 
 ADDITIONAL RULES:
 - Use your search tools to reference relevant clinical frameworks or guidelines where applicable. Cite the source when you do.
-- Base the notes ONLY on what is in the transcript. Do not infer or add clinical observations that aren't supported by the conversation.
+- Base the notes ONLY on what is in the ${recordingType === "written_notes" ? "written notes" : "transcript"}. Do not infer or add clinical observations that aren't supported by the ${recordingType === "written_notes" ? "notes" : "conversation"}.
+- Plain text only: do NOT use inline markdown formatting within section bodies. No bold (**), no italics (*), no other markdown syntax. Sub-section labels should be written as plain text (e.g. "Chief Complaint (CC): ..." not "**Chief Complaint (CC):**"). The output is rendered in a plain text field.
 
 ${transcriptSourcePreamble}FORMAT-SPECIFIC INSTRUCTIONS:
 ${formatInstructions}
 
-SESSION TRANSCRIPT:
+${recordingType === "written_notes" ? "THERAPIST'S WRITTEN NOTES" : "SESSION TRANSCRIPT"}:
 ---
 ${transcript}
 ---`,
@@ -611,7 +628,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (therapySession.transcriptionStatus !== "completed") {
+    if (
+      therapySession.transcriptionStatus !== "completed" &&
+      therapySession.transcriptionStatus !== "not_applicable"
+    ) {
       return NextResponse.json(
         { error: "Session transcription is not yet completed" },
         { status: 400 }
@@ -622,6 +642,7 @@ export async function POST(request: Request) {
     const transcript = await getSessionTranscriptText({
       sessionId,
       recordingType: therapySession.recordingType,
+      writtenNotes: therapySession.writtenNotes,
     });
 
     if (!transcript) {

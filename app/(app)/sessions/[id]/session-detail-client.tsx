@@ -407,7 +407,10 @@ function NotesTab({
 
   // No notes yet — show generation form
   if (!activeNote) {
-    if (session.transcriptionStatus !== "completed") {
+    if (
+      session.transcriptionStatus !== "completed" &&
+      session.transcriptionStatus !== "not_applicable"
+    ) {
       return (
         <div className="flex flex-col items-center gap-4 py-12">
           <FileText className="size-8 text-muted-foreground" />
@@ -854,7 +857,9 @@ export function SessionDetailClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
-  const activeTab = searchParams.get("tab") ?? "transcript";
+  const isWrittenNotes = session.recordingType === "written_notes";
+  const defaultTab = isWrittenNotes ? "notes" : "transcript";
+  const activeTab = searchParams.get("tab") ?? defaultTab;
 
   const backHref =
     from === "client" && clientId ? `/clients/${clientId}` : "/sessions";
@@ -913,7 +918,8 @@ export function SessionDetailClient({
               <span>Chat About This Session</span>
               <ArrowRight className="size-4" />
             </Link>
-          ) : session.transcriptionStatus === "completed" ? (
+          ) : session.transcriptionStatus === "completed" ||
+            session.transcriptionStatus === "not_applicable" ? (
             <Link
               className="flex w-full items-center justify-between rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900 sm:w-auto sm:justify-start sm:gap-2"
               href={`/chat/new?clientId=${session.clientId ?? "general"}&sessionId=${session.id}`}
@@ -946,14 +952,18 @@ export function SessionDetailClient({
       <div className="flex-1 px-4 py-4 md:px-6">
         <Tabs onValueChange={handleTabChange} value={activeTab}>
           <TabsList>
-            <TabsTrigger value="transcript">Transcript</TabsTrigger>
+            {!isWrittenNotes && (
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
+            )}
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="details">Details</TabsTrigger>
           </TabsList>
 
-          <TabsContent className="mt-4" value="transcript">
-            <TranscriptTab segments={segments} session={session} />
-          </TabsContent>
+          {!isWrittenNotes && (
+            <TabsContent className="mt-4" value="transcript">
+              <TranscriptTab segments={segments} session={session} />
+            </TabsContent>
+          )}
 
           <TabsContent className="mt-4" value="notes">
             <NotesTab notes={notes} session={session} />

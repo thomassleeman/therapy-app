@@ -43,6 +43,7 @@ export const mockSession: TherapySession = {
   notesStatus: "draft",
   deliveryMethod: "in-person",
   recordingType: "therapist_summary",
+  writtenNotes: null,
   errorMessage: null,
   createdAt: "2025-12-10T09:00:00Z",
   updatedAt: "2025-12-10T10:05:00Z",

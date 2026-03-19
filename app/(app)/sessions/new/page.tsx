@@ -158,7 +158,7 @@ function NewSessionForm() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [clientFromUrl, setClientFromUrl] = useState(false);
   const [noteFormat, setNoteFormat] = useState<
-    "soap" | "dap" | "progress" | "freeform"
+    "soap" | "dap" | "birp" | "girp" | "narrative"
   >("soap");
   const [writtenNotes, setWrittenNotes] = useState("");
   const [generatingNotes, setGeneratingNotes] = useState(false);
@@ -580,8 +580,9 @@ function NewSessionForm() {
                       [
                         { value: "soap", label: "SOAP" },
                         { value: "dap", label: "DAP" },
-                        { value: "progress", label: "Progress" },
-                        { value: "freeform", label: "Freeform" },
+                        { value: "birp", label: "BIRP" },
+                        { value: "girp", label: "GIRP" },
+                        { value: "narrative", label: "Narrative" },
                       ] as const
                     ).map((fmt) => (
                       <label

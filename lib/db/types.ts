@@ -428,6 +428,7 @@ export interface TherapySession {
   notesStatus: string;
   deliveryMethod: string | null;
   recordingType: RecordingType;
+  writtenNotes: string | null;
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;

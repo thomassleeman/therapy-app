@@ -1393,6 +1393,7 @@ function mapRowToTherapySession(row: any): TherapySession {
     notesStatus: row.notes_status,
     deliveryMethod: row.delivery_method ?? null,
     recordingType: row.recording_type ?? "full_session",
+    writtenNotes: row.written_notes ?? null,
     errorMessage: row.error_message ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1590,6 +1591,7 @@ export async function updateTherapySession({
       ["notesStatus", "notes_status", fields.notesStatus],
       ["deliveryMethod", "delivery_method", fields.deliveryMethod],
       ["recordingType", "recording_type", fields.recordingType],
+      ["writtenNotes", "written_notes", fields.writtenNotes],
       ["errorMessage", "error_message", fields.errorMessage],
     ];
 
@@ -1727,10 +1729,15 @@ function titleCase(str: string): string {
 export async function getSessionTranscriptText({
   sessionId,
   recordingType,
+  writtenNotes,
 }: {
   sessionId: string;
   recordingType?: RecordingType;
+  writtenNotes?: string | null;
 }): Promise<string> {
+  if (recordingType === "written_notes") {
+    return writtenNotes ?? "";
+  }
   const segments = await getSessionSegments({ sessionId });
   if (recordingType === "therapist_summary") {
     return segments.map((s) => s.content).join("\n\n");
