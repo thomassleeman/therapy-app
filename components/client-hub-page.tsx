@@ -354,7 +354,7 @@ function ChatsTab({
 }: {
   chats: Chat[];
   clientId: string;
-  sessions: TherapySession[];
+  sessions: TherapySessionWithClient[];
 }) {
   // Build a map from chatId → session date for session-linked chats
   const chatSessionMap = new Map<string, string>();
