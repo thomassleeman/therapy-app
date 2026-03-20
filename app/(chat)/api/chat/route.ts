@@ -11,9 +11,14 @@ import { therapyReflectionAgent } from "@/lib/ai/agents/therapy-reflection-agent
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { checkFaithfulness } from "@/lib/ai/faithfulness-check";
 import { resolveModality } from "@/lib/ai/modality";
-import type { RequestHints, TherapeuticOrientation } from "@/lib/ai/prompts";
+import {
+  getClientContextPrompt,
+  type RequestHints,
+  type TherapeuticOrientation,
+} from "@/lib/ai/prompts";
 import { detectSensitiveContent } from "@/lib/ai/sensitive-content";
 import { auth, type UserType } from "@/lib/auth";
+import { assembleChatClientContext } from "@/lib/chat/context-assembly";
 import { saveFaithfulnessCheck } from "@/lib/db/faithfulness";
 import {
   createStreamId,
@@ -22,13 +27,14 @@ import {
   getClientById,
   getMessageCountByUserId,
   getMessagesByChatId,
-  getSessionSegments,
+  getSessionTranscriptText,
   getTherapistProfile,
   getTherapySession,
   saveChat,
   saveMessages,
   updateChatTitleById,
   updateMessage,
+  updateTherapySession,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/types";
 import { devLogger } from "@/lib/dev/logger";
@@ -112,6 +118,12 @@ export async function POST(request: Request) {
           sessionId: selectedSessionId ?? null,
         });
         titlePromise = generateTitleFromUserMessage({ message });
+        // Bidirectional link: store chatId back on the session
+        if (selectedSessionId) {
+          updateTherapySession({ id: selectedSessionId, chatId: id }).catch(
+            (err) => console.warn("[chat] Failed to link chat to session:", err)
+          );
+        }
       }
 
       const uiMessages = isToolApprovalFlow
@@ -160,41 +172,54 @@ export async function POST(request: Request) {
 
       // Build session transcript context for the system prompt
       let sessionContextPrompt = "";
-      if (
-        therapySession &&
-        therapySession.therapistId === session.user.id &&
-        therapySession.transcriptionStatus === "completed"
-      ) {
-        const segments = await getSessionSegments({
-          sessionId: therapySession.id,
+      if (therapySession && therapySession.therapistId === session.user.id) {
+        const sessionDate = new Date(
+          therapySession.sessionDate
+        ).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
         });
-        if (segments.length > 0) {
-          const transcriptLines = segments.map(
-            (s) => `[${s.speaker}]: ${s.content}`
-          );
-          // Truncate to ~2000 chars to avoid token bloat
-          let transcriptText = "";
-          for (const line of transcriptLines) {
-            if (transcriptText.length + line.length > 2000) {
-              transcriptText += "\n[transcript truncated]";
-              break;
-            }
-            transcriptText += `${transcriptText ? "\n" : ""}${line}`;
-          }
+        const durationPart = therapySession.durationMinutes
+          ? `, ${therapySession.durationMinutes}min`
+          : "";
 
-          const sessionDate = new Date(
-            therapySession.sessionDate
-          ).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
+        const hasTranscript =
+          therapySession.transcriptionStatus === "completed" ||
+          therapySession.transcriptionStatus === "not_applicable";
+
+        if (hasTranscript) {
+          const rawTranscript = await getSessionTranscriptText({
+            sessionId: therapySession.id,
+            recordingType: therapySession.recordingType ?? undefined,
+            writtenNotes: therapySession.writtenNotes ?? null,
           });
-          const clientLabel = client?.name ?? "their client";
-          const duration = therapySession.durationMinutes
-            ? ` (${therapySession.durationMinutes} minutes)`
-            : "";
 
-          sessionContextPrompt = `\n\n## Session Context\nThe therapist is reflecting on a session from ${sessionDate}${duration} with ${clientLabel}. Here is a summary of the session transcript:\n\n${transcriptText}`;
+          if (rawTranscript.length > 0) {
+            const MAX_CHARS = 8000;
+            let transcriptText: string;
+            let truncationNote = "";
+            if (rawTranscript.length > MAX_CHARS) {
+              transcriptText = rawTranscript.slice(0, MAX_CHARS);
+              truncationNote = `\n[Transcript truncated — showing first portion of a ${rawTranscript.length} character transcript]`;
+            } else {
+              transcriptText = rawTranscript;
+            }
+
+            sessionContextPrompt = [
+              "",
+              `--- CURRENT SESSION TRANSCRIPT (${sessionDate}${durationPart}) ---`,
+              "The therapist is reflecting on this specific session. The transcript follows:",
+              "",
+              transcriptText,
+              truncationNote,
+              "--- END SESSION TRANSCRIPT ---",
+            ]
+              .filter((line) => line !== "")
+              .join("\n");
+          }
+        } else {
+          sessionContextPrompt = `The therapist is reflecting on a session from ${sessionDate}, but the transcript is not yet available.`;
         }
       }
 
@@ -207,6 +232,21 @@ export async function POST(request: Request) {
       });
 
       const effectiveJurisdiction = therapistProfile?.jurisdiction ?? null;
+
+      // Assemble client context if a client is selected
+      let clientContextPrompt = "";
+      if (selectedClientId) {
+        try {
+          const { contextBlock } = await assembleChatClientContext({
+            clientId: selectedClientId,
+            therapistId: session.user.id,
+          });
+          clientContextPrompt = getClientContextPrompt(contextBlock);
+        } catch (error) {
+          // Log but don't fail the chat — client context is enhancement, not critical path
+          console.error("[chat] Failed to assemble client context:", error);
+        }
+      }
 
       // ── Dev logging: start turn ─────────────────────────────────────
       const turnLog = devLogger.startTurn({
@@ -284,6 +324,7 @@ export async function POST(request: Request) {
                 | undefined,
               effectiveModality,
               effectiveJurisdiction,
+              clientContextPrompt,
               sensitiveContentPrompt,
               sensitiveCategories: sensitiveContent.detectedCategories,
               sessionContextPrompt,

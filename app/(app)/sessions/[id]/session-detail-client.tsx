@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { CaseFormulationNudge } from "@/components/notes/case-formulation-nudge";
 import { NoteDocumentEditor } from "@/components/notes/note-document-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
 import {
   type BirpNoteContent,
+  type ClinicalDocument,
   type ClinicalNote,
   type DapNoteContent,
   type FreeformNoteContent,
@@ -60,6 +62,7 @@ interface Props {
   consents: SessionConsent[];
   clientId: string | null;
   clientName: string | null;
+  caseFormulation: ClinicalDocument | null;
 }
 
 function formatTimestamp(ms: number): string {
@@ -240,9 +243,15 @@ function TranscriptTab({
 function NotesTab({
   session,
   notes: initialNotes,
+  clientId,
+  clientAlias,
+  caseFormulation,
 }: {
   session: TherapySession;
   notes: ClinicalNote[];
+  clientId: string | null;
+  clientAlias: string | null;
+  caseFormulation: ClinicalDocument | null;
 }) {
   const router = useRouter();
   const [notes, setNotes] = useState(initialNotes);
@@ -254,6 +263,7 @@ function NotesTab({
     {}
   );
   const [confirmFinalise, setConfirmFinalise] = useState(false);
+  const [justFinalised, setJustFinalised] = useState(false);
 
   const activeNote = notes[0] ?? null;
 
@@ -391,6 +401,9 @@ function NotesTab({
         if (res.ok) {
           const updated = await res.json();
           setNotes([updated]);
+          if (status === "finalised") {
+            setJustFinalised(true);
+          }
           router.refresh();
         }
       } finally {
@@ -657,6 +670,16 @@ function NotesTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {justFinalised && clientId && clientAlias && (
+        <CaseFormulationNudge
+          clientAlias={clientAlias}
+          clientId={clientId}
+          formationLastUpdated={caseFormulation?.updatedAt ?? null}
+          hasExistingFormulation={caseFormulation !== null}
+          sessionDate={session.sessionDate}
+        />
+      )}
     </div>
   );
 }
@@ -852,6 +875,7 @@ export function SessionDetailClient({
   consents,
   clientId,
   clientName,
+  caseFormulation,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -931,17 +955,17 @@ export function SessionDetailClient({
             <div>
               <Link
                 className="flex w-full items-center justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900 sm:w-auto sm:justify-start sm:gap-2"
-                href={`/chat/new?clientId=${session.clientId ?? "general"}`}
+                href={`/chat/new?clientId=${session.clientId ?? "general"}&sessionId=${session.id}`}
               >
                 <span>
-                  Start New Reflection
+                  Start Reflection
                   {clientName ? ` for ${clientName}` : ""}
                 </span>
                 <ArrowRight className="size-4" />
               </Link>
               <p className="text-xs text-muted-foreground mt-1.5 px-1">
-                Transcript not yet available — this will start a general
-                reflection chat
+                Transcript not yet available — the AI won't have access to the
+                session recording
               </p>
             </div>
           )}
@@ -966,7 +990,13 @@ export function SessionDetailClient({
           )}
 
           <TabsContent className="mt-4" value="notes">
-            <NotesTab notes={notes} session={session} />
+            <NotesTab
+              caseFormulation={caseFormulation}
+              clientAlias={clientName}
+              clientId={clientId}
+              notes={notes}
+              session={session}
+            />
           </TabsContent>
 
           <TabsContent className="mt-4" value="details">

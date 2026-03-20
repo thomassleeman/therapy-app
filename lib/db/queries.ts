@@ -2605,6 +2605,100 @@ export async function addDocumentReferences(
   }
 }
 
+export async function getRecentClinicalNotesByClient({
+  clientId,
+  therapistId,
+  limit = 10,
+}: {
+  clientId: string;
+  therapistId: string;
+  limit?: number;
+}): Promise<ClinicalNoteWithSession[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .select(
+        "id, session_id, note_format, status, content, created_at, updated_at, therapy_sessions(session_date)"
+      )
+      .eq("therapist_id", therapistId)
+      .eq("client_id", clientId)
+      .neq("status", "generating")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      handleSupabaseError(error, "get recent clinical notes by client");
+    }
+
+    const notes = (data || [])
+      .map((row: any) => ({
+        id: row.id as string,
+        sessionId: (row.session_id ?? null) as string | null,
+        sessionDate: (row.therapy_sessions?.session_date ?? null) as
+          | string
+          | null,
+        noteFormat: row.note_format as ClinicalNoteWithSession["noteFormat"],
+        status: row.status as ClinicalNoteWithSession["status"],
+        content: row.content as ClinicalNoteWithSession["content"],
+        createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
+      }))
+      .sort((a, b) => {
+        if (!a.sessionDate && !b.sessionDate) { return 0; }
+        if (!a.sessionDate) { return 1; }
+        if (!b.sessionDate) { return -1; }
+        return b.sessionDate.localeCompare(a.sessionDate);
+      })
+      .slice(0, limit);
+
+    await Promise.all(
+      notes.map(async (note) => {
+        note.content = await decryptJsonb(note.content, note.id);
+      })
+    );
+    return notes;
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get recent clinical notes by client"
+    );
+  }
+}
+
+export async function getClientSessionCount({
+  clientId,
+  therapistId,
+}: {
+  clientId: string;
+  therapistId: string;
+}): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const { count, error } = await supabase
+      .from("therapy_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .eq("therapist_id", therapistId);
+
+    if (error) {
+      handleSupabaseError(error, "get client session count");
+    }
+
+    return count ?? 0;
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get client session count"
+    );
+  }
+}
+
 export async function getLatestDocumentByType({
   clientId,
   therapistId,

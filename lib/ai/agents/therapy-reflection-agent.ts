@@ -28,6 +28,8 @@ const callOptionsSchema = z.object({
   // Sensitive content (already processed by the route)
   sensitiveContentPrompt: z.string().default(""),
   sensitiveCategories: z.array(z.string()).default([]),
+  // Client context (assembled from client record, summary document, recent notes)
+  clientContextPrompt: z.string().default(""),
   // Session transcript context (injected when chat is linked to a therapy session)
   sessionContextPrompt: z.string().default(""),
   // Session for tool factories
@@ -58,6 +60,7 @@ export const therapyReflectionAgent = new ToolLoopAgent({
         effectiveModality: options.effectiveModality,
         effectiveJurisdiction: options.effectiveJurisdiction,
       }) +
+      options.clientContextPrompt +
       options.sessionContextPrompt +
       options.sensitiveContentPrompt;
 

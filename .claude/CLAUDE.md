@@ -1,6 +1,6 @@
-# CLAUDE.md — Pasu Health
+# CLAUDE.md — Therapy Reflection App
 
-> **Platform:** Pasu Health (`pasuhealth.com`)
+> **Platform:** Therapy reflection app
 > **Contact:** `contact@pasuhealth.com`
 > **Registered address:** 167-169 Great Portland Street, 5th Floor, London, W1W 5PF
 > **Repository:** `thomassleeman/therapy-app`
@@ -79,6 +79,7 @@ lib/
 │   ├── embedding.ts    # Centralised Cohere Embed v4 provider (AWS Bedrock eu-west-1)
 │   ├── models.ts       # Available LLM models
 │   └── providers.ts    # Model provider configuration
+├── chat/               # Chat-specific context assembly (planned — see client-aware-chat-context-plan.md)
 ├── db/
 │   ├── queries.ts      # All Supabase query functions
 │   ├── types.ts        # TypeScript types for DB entities
@@ -158,7 +159,7 @@ tests/                  # Playwright E2E + fixtures
 - Default model: `claude-sonnet-4-5-20250929`
 - `stopWhen: stepCountIs(6)` — allows up to 5 tool calls per turn
 - Tools are registered via factory functions that accept a `{ session }` parameter
-- The system prompt is assembled in `lib/ai/prompts.ts` via `systemPrompt()` which composes: base prompt + orientation prompt + tool context prompt + sensitive content directives + session transcript context
+- The system prompt is assembled in `lib/ai/prompts.ts` via `systemPrompt()` which composes: base prompt + orientation prompt + tool context prompt + sensitive content directives + session transcript context + client context (when implemented — see Client-Aware Chat Context below)
 
 ### Knowledge Base Content
 
@@ -209,7 +210,13 @@ Sensitive content detection (keyword-based, <1ms)
     ↓
 Modality resolution chain: per-chat override → client default → therapist default → null
     ↓
-System prompt assembly (role + orientation + tool context + sensitive content + session transcript)
+Client context assembly (when clientId present — see Client-Aware Chat Context section)
+  → Tier 1: client record (always)
+  → Tier 2: latest Case Formulation or Comprehensive Assessment (when available)
+  → Tier 3: last 10 session notes (when available)
+  → Session transcript (when session-linked chat)
+    ↓
+System prompt assembly (role + orientation + tool context + sensitive content + client context + session transcript)
     ↓
 ToolLoopAgent runs (up to 6 steps)
   → LLM decides to call search tools
@@ -248,6 +255,51 @@ All tools share `executeHybridSearch` in `knowledge-search-tools.ts`.
 | High | > 0.80 | Respond freely with full citations |
 | Moderate | 0.65 – 0.80 | Respond with epistemic hedging |
 | Low | < 0.65 | Disclose gap, suggest supervisor referral |
+
+---
+
+## Client-Aware Chat Context
+
+**Status:** Planned — implementation plan in `client-aware-chat-context-plan.md`
+
+When a therapist selects a client in the chat header, the agent should have access to the client's full clinical picture. This uses a three-tier context injection strategy that avoids a hidden auto-maintained summary layer (which would risk compounding hallucinated errors in a clinical context). Instead, long-range context comes from therapist-reviewed clinical documents.
+
+### Three-Tier Architecture
+
+| Tier | What | Source | Size | When included |
+|------|------|--------|------|---------------|
+| 1 — Client record | Presenting issues, treatment goals, risk considerations, background, modality, status | `clients` table | ~200 words | Always (when client selected) |
+| 2 — Summary document | Latest Case Formulation or Comprehensive Assessment | `clinical_documents` table | ~1000–2000 words | When a therapist-reviewed clinical document exists |
+| 3 — Recent raw notes | Last 10 session notes (SOAP, DAP, BIRP, GIRP, Narrative) in full | `clinical_notes` table | ~3000–6000 words | Always (when notes exist) |
+
+**Session-linked context:** When a chat is initiated from a session detail page ("Chat About This Session"), the specific session transcript is also injected (truncated to 8,000 characters if necessary), giving the agent both clinical history and the specific session the therapist wants to reflect on.
+
+### Token Budget Safety Valve
+
+For long-running therapeutic relationships (40+ sessions), raw notes could exceed the context budget. A progressive truncation strategy applies when the assembled context exceeds 30,000 characters (~7,500 tokens):
+
+1. Reduce Tier 3 from N notes to N/2 (most recent half)
+2. If still over: reduce to 3 most recent notes only
+3. If still over: truncate each remaining note to 500 characters
+
+Tier 1 and Tier 2 are never truncated — they are the most information-dense per character.
+
+### Case Formulation Update Nudge
+
+After a therapist finalises session notes, the UI nudges them to update their Case Formulation if it predates the session. This keeps the Tier 2 summary document current through therapist initiative, not system automation, ensuring every update goes through a clinical review gate. This also reinforces good clinical practice — case formulations are supposed to be living documents.
+
+### GDPR Position
+
+Client context injection is GDPR-compatible. The data is already stored on the platform under the therapist's existing lawful basis. Injecting it into the LLM context window for the same therapist's reflection chat does not create a new processing activity — the data flow to Anthropic is identical regardless of context window size.
+
+### Key Files (planned)
+
+| File | Purpose |
+|------|---------|
+| `lib/chat/context-assembly.ts` | Three-tier context assembly for chat route |
+| `lib/ai/prompts.ts` | New `getClientContextPrompt()` function + "Client Context" system prompt section |
+| `app/(chat)/api/chat/route.ts` | Integration point — calls context assembly, injects into system prompt |
+| `components/notes/case-formulation-nudge.tsx` | Post-finalisation UI nudge |
 
 ---
 
@@ -333,6 +385,7 @@ Separate from session notes. Client-level documents spanning multiple sessions:
 - Format specs in `lib/documents/specs/*.md` (instructions to the LLM, not templates)
 - Stored in `clinical_documents` table with draft → reviewed → finalised lifecycle and versioning via `supersedes_id`
 - Document content encrypted at rest (AES-256-GCM) — decrypted in memory for context assembly and display
+- The Case Formulation and Comprehensive Assessment document types double as the Tier 2 summary for the planned client-aware chat context system — therapist-reviewed clinical summaries that give the chat agent long-range client context
 
 ---
 
@@ -471,6 +524,7 @@ tests/
 
 ### Not Yet Implemented / On the Horizon
 
+- **Client-aware chat context injection** — Three-tier context system for enriching chat agent responses with client-specific clinical data when a client is selected. Implementation plan in `client-aware-chat-context-plan.md` (7 prompts). Architecture: Tier 1 (client record — always), Tier 2 (latest Case Formulation or Comprehensive Assessment — therapist-reviewed summary), Tier 3 (last 10 session notes in full). Includes session-linked chat transcript injection, token budget safety valve (30,000 char limit with progressive truncation), and post-note-finalisation nudge to update Case Formulation. GDPR-compatible — no new processing activity, same data flow to Anthropic. Key files to create: `lib/chat/context-assembly.ts`, modifications to `app/(chat)/api/chat/route.ts` and `lib/ai/prompts.ts`. Requires Aaron review of the "Client Context" system prompt instructions before merging (Prompt 3).
 - **Confidence threshold integration into tool files** — `applyConfidenceThreshold` exists in `lib/ai/confidence.ts` but the wiring into `knowledge-search-tools.ts` and `search-knowledge-base.ts` may be incomplete. Verify the tool execute functions call it.
 - **Contextual enrichment prompt update** — Add situational vocabulary generation to `scripts/lib/contextual-enrichment.ts` (addresses semantic gap between therapist language and KB terminology). Requires re-running ingestion with `--with-context`.
 - **`ingest-knowledge.ts` stale OPENAI_API_KEY check** — The `--with-context` flag still validates `OPENAI_API_KEY` at startup, but contextual enrichment now uses `@ai-sdk/anthropic` directly. Remove the check and replace with `ANTHROPIC_API_KEY` validation (which is already required by the main app anyway).
@@ -521,3 +575,5 @@ tests/
 7. **Codebase-first assessment.** Before producing plans or prompts, read the actual repository. Don't rely on specification documents or conversation history for current state.
 
 8. **Master key is irreplaceable.** Loss of `ENCRYPTION_MASTER_KEY` means permanent, unrecoverable loss of all encrypted clinical data. The key must be backed up in a password manager and stored in Vercel environment variables. It must never be committed to the repository or logged.
+
+9. **No hidden clinical automation.** Clinical summary documents (Case Formulations, Assessments) must always be therapist-initiated and therapist-reviewed. The platform nudges updates but never auto-generates or silently modifies clinical documents — this prevents compounding errors in a context where hallucination has real clinical consequences.

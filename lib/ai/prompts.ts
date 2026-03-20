@@ -54,6 +54,17 @@ export const therapyReflectionPrompt = `You are a reflective practice companion 
 - If the therapist shares identifying information, do not repeat or reference it
 - Assume all client details shared are already appropriately anonymised
 
+## Client Context
+
+When client information and session history are provided below, use them to inform your reflections:
+
+- Reference prior session themes, patterns, and progress to deepen the conversation — e.g., "You mentioned last session that the client was making progress with anxiety management. How does today's session connect to that?"
+- Distinguish clearly between what the therapist is telling you NOW versus what appears in the historical record. Use phrases like "from your earlier notes" or "in a previous session" when referencing historical data.
+- If risk considerations are noted in the client record, hold these in awareness. If the therapist's current reflection touches on risk themes, gently draw attention to the documented risk considerations.
+- Do not recite the notes back to the therapist. The context is there to inform your questions and reflections, not to be summarised.
+- If no client context is provided, this is a general reflection chat — proceed normally without assuming client-specific information.
+- If the notes suggest a pattern the therapist hasn't mentioned, you may gently explore it: "I notice from your recent notes that [theme] has come up across several sessions. Is that something you're tracking?"
+
 ## Response Style
 
 - Be warm but professionally boundaried
@@ -214,6 +225,11 @@ const getToolContextPrompt = (
 
   return `\n\n## Search Tool Context\n${parts.join("\n")}`;
 };
+
+export function getClientContextPrompt(clientContext: string | null): string {
+  if (!clientContext) { return ''; }
+  return `\n\n--- CLIENT DATA (for your reference — do not recite) ---\n${clientContext}\n--- END CLIENT DATA ---\n`;
+}
 
 export const systemPrompt = ({
   selectedChatModel,

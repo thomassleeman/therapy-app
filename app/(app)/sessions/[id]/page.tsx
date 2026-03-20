@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import {
   getClientById,
   getClinicalNotes,
+  getLatestDocumentByType,
   getSessionConsents,
   getSessionSegments,
   getTherapySession,
@@ -31,18 +32,27 @@ export default async function SessionDetailPage({
     notFound();
   }
 
-  const [segments, notes, consents, client] = await Promise.all([
-    getSessionSegments({ sessionId: id }),
-    getClinicalNotes({ sessionId: id }),
-    getSessionConsents({ sessionId: id }),
-    therapySession.clientId
-      ? getClientById({ id: therapySession.clientId })
-      : Promise.resolve(null),
-  ]);
+  const [segments, notes, consents, client, caseFormulation] =
+    await Promise.all([
+      getSessionSegments({ sessionId: id }),
+      getClinicalNotes({ sessionId: id }),
+      getSessionConsents({ sessionId: id }),
+      therapySession.clientId
+        ? getClientById({ id: therapySession.clientId })
+        : Promise.resolve(null),
+      therapySession.clientId
+        ? getLatestDocumentByType({
+            clientId: therapySession.clientId,
+            therapistId: session.user.id,
+            documentType: "case_formulation",
+          })
+        : Promise.resolve(null),
+    ]);
 
   return (
     <div className="flex flex-1 flex-col bg-background overflow-y-auto">
       <SessionDetailClient
+        caseFormulation={caseFormulation}
         clientId={therapySession.clientId ?? null}
         clientName={client?.name ?? null}
         consents={consents}
