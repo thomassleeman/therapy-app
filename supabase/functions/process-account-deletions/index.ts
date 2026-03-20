@@ -15,7 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
 interface AuditEntry {
@@ -77,7 +77,7 @@ async function deleteStorageFiles(userId: string): Promise<{
       if (filesError) {
         // Log but continue — don't abort over a single subfolder
         console.error(
-          `Failed to list files in ${folderPath}: ${filesError.message}`,
+          `Failed to list files in ${folderPath}: ${filesError.message}`
         );
         continue;
       }
@@ -91,7 +91,7 @@ async function deleteStorageFiles(userId: string): Promise<{
 
       if (deleteError) {
         console.error(
-          `Failed to delete files in ${folderPath}: ${deleteError.message}`,
+          `Failed to delete files in ${folderPath}: ${deleteError.message}`
         );
         continue;
       }
@@ -109,7 +109,7 @@ async function deleteStorageFiles(userId: string): Promise<{
 async function deleteFromTable(
   table: string,
   column: string,
-  userId: string,
+  userId: string
 ): Promise<{ count: number; error: string | null }> {
   try {
     const { data, error } = await supabase
@@ -130,7 +130,7 @@ async function deleteFromTable(
 }
 
 async function deleteAuthUser(
-  userId: string,
+  userId: string
 ): Promise<{ deleted: boolean; error: string | null }> {
   try {
     const { error } = await supabase.auth.admin.deleteUser(userId);
@@ -148,9 +148,7 @@ async function processRequest(request: DeletionRequest): Promise<boolean> {
   const userId = request.user_id;
   const errors: string[] = [];
 
-  console.log(
-    `Processing deletion for user ${userId} (request ${request.id})`,
-  );
+  console.log(`Processing deletion for user ${userId} (request ${request.id})`);
 
   // Mark as processing
   await supabase
@@ -167,7 +165,7 @@ async function processRequest(request: DeletionRequest): Promise<boolean> {
   const sessions = await deleteFromTable(
     "therapy_sessions",
     "therapist_id",
-    userId,
+    userId
   );
   if (sessions.error) errors.push(sessions.error);
   console.log(`  therapy_sessions: ${sessions.count} deleted`);
@@ -209,9 +207,7 @@ async function processRequest(request: DeletionRequest): Promise<boolean> {
 
   // Auth user deletion is the only truly critical step
   const succeeded = auth.deleted;
-  const existingLog = Array.isArray(request.audit_log)
-    ? request.audit_log
-    : [];
+  const existingLog = Array.isArray(request.audit_log) ? request.audit_log : [];
 
   await supabase
     .from("account_deletion_requests")
@@ -226,7 +222,7 @@ async function processRequest(request: DeletionRequest): Promise<boolean> {
     .eq("id", request.id);
 
   console.log(
-    `  Request ${request.id}: ${succeeded ? "completed" : "FAILED"}${errors.length > 0 ? ` (${errors.length} errors)` : ""}`,
+    `  Request ${request.id}: ${succeeded ? "completed" : "FAILED"}${errors.length > 0 ? ` (${errors.length} errors)` : ""}`
   );
 
   return succeeded;
@@ -255,7 +251,7 @@ Deno.serve(async (req) => {
       console.error(`Failed to fetch pending requests: ${fetchError.message}`);
       return new Response(
         JSON.stringify({ error: `Fetch failed: ${fetchError.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -263,7 +259,7 @@ Deno.serve(async (req) => {
       console.log("No pending deletion requests");
       return new Response(
         JSON.stringify({ processed: 0, completed: 0, failed: 0 }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
 

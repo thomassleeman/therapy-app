@@ -9,7 +9,7 @@ import {
   Play,
   Square,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,11 +28,13 @@ type RecorderPhase =
 interface SessionRecorderProps {
   sessionId: string;
   onComplete: () => void;
+  onStart?: () => void;
 }
 
 export function SessionRecorder({
   sessionId,
   onComplete,
+  onStart,
 }: SessionRecorderProps) {
   const {
     isRecording,
@@ -50,6 +52,7 @@ export function SessionRecorder({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processSessionId, setProcessSessionId] = useState<string | null>(null);
+  const onStartCalledRef = useRef(false);
 
   const {
     progress: transcriptionProgress,
@@ -62,7 +65,11 @@ export function SessionRecorder({
     setErrorMessage(null);
     await startRecording();
     setPhase("recording");
-  }, [startRecording]);
+    if (!onStartCalledRef.current) {
+      onStartCalledRef.current = true;
+      onStart?.();
+    }
+  }, [startRecording, onStart]);
 
   const handleStop = useCallback(async () => {
     try {

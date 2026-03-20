@@ -3,7 +3,6 @@
 import { Check, Copy } from "lucide-react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-
 interface NoteSection {
   key: string;
   label: string;

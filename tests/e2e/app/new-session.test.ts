@@ -17,9 +17,11 @@ const mockClients = [
 /**
  * Mock all APIs needed for the new-session page:
  * - GET /api/clients → client list
- * - POST /api/sessions → creates session returning { id }
- * - POST /api/sessions/:id/consents → saves consent records
+ * - POST /api/sessions → creates session returning { id } (called from step 2, not step 1)
  * - Sidebar APIs (history, clients) to prevent real fetches
+ *
+ * Note: /api/sessions/:id/consents is no longer called — consents are now
+ * included in the POST /api/sessions body.
  */
 async function mockAllApis(page: Page) {
   await page.route("**/api/clients*", (route) => {
@@ -44,17 +46,6 @@ async function mockAllApis(page: Page) {
     return route.fallback();
   });
 
-  await page.route(`**/api/sessions/${TEST_SESSION_ID}/consents`, (route) => {
-    if (route.request().method() === "POST") {
-      return route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify({ id: `consent-${Date.now()}` }),
-      });
-    }
-    return route.fallback();
-  });
-
   await page.route("**/api/history*", (route) =>
     route.fulfill({
       status: 200,
@@ -73,7 +64,7 @@ async function goToNewSession(page: Page) {
   ).toBeVisible();
 }
 
-/** Fill step 1 defaults and click Continue to advance to consent step */
+/** Fill step 1 defaults and click Continue to advance to consent step (pure state transition) */
 async function advanceToConsent(page: Page) {
   await goToNewSession(page);
   await page.getByRole("button", { name: "Continue" }).click();
@@ -82,22 +73,9 @@ async function advanceToConsent(page: Page) {
   ).toBeVisible();
 }
 
-/** Tick all 8 full-session consent checkboxes */
-async function tickAllFullSessionConsents(page: Page) {
-  const checkboxes = page.getByRole("checkbox");
-  const count = await checkboxes.count();
-  for (let i = 0; i < count; i++) {
-    await checkboxes.nth(i).check();
-  }
-}
-
-/** Tick all 4 therapist-only consent checkboxes */
-async function tickAllTherapistConsents(page: Page) {
-  const checkboxes = page.getByRole("checkbox");
-  const count = await checkboxes.count();
-  for (let i = 0; i < count; i++) {
-    await checkboxes.nth(i).check();
-  }
+/** Tick the single consent checkbox */
+async function tickConsentCheckbox(page: Page) {
+  await page.getByRole("checkbox").check();
 }
 
 // ─── Step 1: Session Details ─────────────────────────────────────────────────
@@ -176,11 +154,12 @@ test.describe("New Session — Step 1: Session Details", () => {
     await fullSession.click();
   });
 
-  test("Continue button creates session and advances to consent", async ({
+  test("Continue button advances to consent without making an API call", async ({
     page,
   }) => {
     await goToNewSession(page);
 
+    // Track whether POST /api/sessions was called
     let sessionCreated = false;
     await page.route("**/api/sessions", (route) => {
       if (route.request().method() === "POST") {
@@ -199,50 +178,25 @@ test.describe("New Session — Step 1: Session Details", () => {
     await expect(
       page.getByText("Recording & AI Processing Consent")
     ).toBeVisible();
-    expect(sessionCreated).toBe(true);
+    // Session creation is deferred to step 2 — no API call on Continue
+    expect(sessionCreated).toBe(false);
   });
 });
 
 // ─── Step 2: Consent (Full Session) ──────────────────────────────────────────
 
 test.describe("New Session — Step 2: Consent (Full Session)", () => {
-  test("consent form shows 8 checkboxes for full session", async ({ page }) => {
+  test("consent form shows a single confirmation checkbox", async ({
+    page,
+  }) => {
     await advanceToConsent(page);
 
     const checkboxes = page.getByRole("checkbox");
-    await expect(checkboxes).toHaveCount(8);
+    await expect(checkboxes).toHaveCount(1);
 
-    // Verify all therapist labels
-    await expect(
-      page.getByText("I (therapist) consent to recording this session")
-    ).toBeVisible();
-    await expect(
-      page.getByText("I (therapist) consent to AI transcription")
-    ).toBeVisible();
-    await expect(
-      page.getByText("I (therapist) consent to AI-generated notes")
-    ).toBeVisible();
-    await expect(
-      page.getByText("I (therapist) consent to secure data storage")
-    ).toBeVisible();
-
-    // Verify all client labels
     await expect(
       page.getByText(
-        "My client has given explicit consent to recording this session"
-      )
-    ).toBeVisible();
-    await expect(
-      page.getByText("My client has given explicit consent to AI transcription")
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        "My client has given explicit consent to AI-generated notes"
-      )
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        "My client has given explicit consent to secure data storage"
+        "I consent to the above, and I confirm that my client has given explicit verbal or written consent to the recording and AI processing of this session."
       )
     ).toBeVisible();
   });
@@ -255,49 +209,36 @@ test.describe("New Session — Step 2: Consent (Full Session)", () => {
     ).toBeDisabled();
   });
 
-  test("ticking all 8 checkboxes enables Proceed", async ({ page }) => {
+  test("ticking the consent checkbox enables Proceed", async ({ page }) => {
     await advanceToConsent(page);
 
-    await tickAllFullSessionConsents(page);
+    await tickConsentCheckbox(page);
 
     await expect(
       page.getByRole("button", { name: "Proceed to Recording" })
     ).toBeEnabled();
   });
 
-  test("partial consent (7 of 8) keeps Proceed disabled", async ({ page }) => {
-    await advanceToConsent(page);
-
-    const checkboxes = page.getByRole("checkbox");
-    // Tick only the first 7
-    for (let i = 0; i < 7; i++) {
-      await checkboxes.nth(i).check();
-    }
-
-    await expect(
-      page.getByRole("button", { name: "Proceed to Recording" })
-    ).toBeDisabled();
-  });
-
-  test("Proceed saves consents and advances to recording step", async ({
+  test("Proceed creates session with consents and advances to recording step", async ({
     page,
   }) => {
     await advanceToConsent(page);
 
-    const consentRequests: string[] = [];
-    await page.route(`**/api/sessions/${TEST_SESSION_ID}/consents`, (route) => {
+    // Override the /api/sessions mock to capture the request body
+    let capturedBody: Record<string, unknown> | null = null;
+    await page.route("**/api/sessions", (route) => {
       if (route.request().method() === "POST") {
-        consentRequests.push(route.request().postData() ?? "");
+        capturedBody = JSON.parse(route.request().postData() ?? "{}");
         return route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify({ id: `consent-${consentRequests.length}` }),
+          body: JSON.stringify({ id: TEST_SESSION_ID }),
         });
       }
       return route.fallback();
     });
 
-    await tickAllFullSessionConsents(page);
+    await tickConsentCheckbox(page);
     await page.getByRole("button", { name: "Proceed to Recording" }).click();
 
     // Should advance to step 3
@@ -305,8 +246,13 @@ test.describe("New Session — Step 2: Consent (Full Session)", () => {
       page.getByText("Record or Upload Session Audio")
     ).toBeVisible();
 
-    // Should have made 8 consent API calls (4 therapist + 4 client)
-    expect(consentRequests.length).toBe(8);
+    // POST /api/sessions should have been called with a consents array
+    expect(capturedBody).not.toBeNull();
+    const consents = (capturedBody as unknown as { consents?: unknown[] })
+      .consents;
+    expect(Array.isArray(consents)).toBe(true);
+    // Full session: 4 consent types × 2 parties (therapist + client) = 8 records
+    expect(consents?.length).toBe(8);
   });
 });
 
@@ -324,36 +270,143 @@ test.describe("New Session — Step 2: Consent (Therapist Summary)", () => {
     await expect(page.getByText("AI Processing Consent")).toBeVisible();
   }
 
-  test("summary mode shows 4 checkboxes (therapist only)", async ({ page }) => {
+  test("summary mode shows a single consent checkbox (therapist only)", async ({
+    page,
+  }) => {
     await advanceToSummaryConsent(page);
 
     const checkboxes = page.getByRole("checkbox");
-    await expect(checkboxes).toHaveCount(4);
+    await expect(checkboxes).toHaveCount(1);
 
-    // Therapist labels present
-    await expect(
-      page.getByText("I (therapist) consent to recording this session")
-    ).toBeVisible();
-    await expect(
-      page.getByText("I (therapist) consent to AI transcription")
-    ).toBeVisible();
-
-    // Client labels absent
     await expect(
       page.getByText(
-        "My client has given explicit consent to recording this session"
+        "I consent to the recording and AI processing of my session summary as described above."
       )
-    ).not.toBeVisible();
+    ).toBeVisible();
   });
 
-  test("4 therapist checkboxes enable Proceed", async ({ page }) => {
+  test("ticking consent checkbox enables Proceed in summary mode", async ({
+    page,
+  }) => {
     await advanceToSummaryConsent(page);
 
-    await tickAllTherapistConsents(page);
+    await tickConsentCheckbox(page);
 
     await expect(
       page.getByRole("button", { name: "Proceed to Recording" })
     ).toBeEnabled();
+  });
+
+  test("Proceed creates session with therapist-only consents in summary mode", async ({
+    page,
+  }) => {
+    await advanceToSummaryConsent(page);
+
+    let capturedBody: Record<string, unknown> | null = null;
+    await page.route("**/api/sessions", (route) => {
+      if (route.request().method() === "POST") {
+        capturedBody = JSON.parse(route.request().postData() ?? "{}");
+        return route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({ id: TEST_SESSION_ID }),
+        });
+      }
+      return route.fallback();
+    });
+
+    await tickConsentCheckbox(page);
+    await page.getByRole("button", { name: "Proceed to Recording" }).click();
+
+    await expect(
+      page.getByText("Record or Upload Your Session Summary")
+    ).toBeVisible();
+
+    // Therapist summary: 4 consent types × 1 party (therapist only) = 4 records
+    const consents = (capturedBody as unknown as { consents?: unknown[] })
+      ?.consents;
+    expect(Array.isArray(consents)).toBe(true);
+    expect(consents?.length).toBe(4);
+  });
+});
+
+// ─── Back Navigation ──────────────────────────────────────────────────────────
+
+test.describe("New Session — Back Navigation", () => {
+  test("Back from consent to details makes no API calls and preserves form state", async ({
+    page,
+  }) => {
+    await advanceToConsent(page);
+
+    let apiCalled = false;
+    await page.route("**/api/sessions*", (route) => {
+      apiCalled = true;
+      return route.fallback();
+    });
+
+    await page.getByRole("button", { name: "Back" }).click();
+
+    // Should be back on details step
+    await expect(page.getByLabel("Session Date")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+
+    // No API calls should have been made
+    expect(apiCalled).toBe(false);
+  });
+
+  test("Back from write step to details makes no API calls", async ({
+    page,
+  }) => {
+    await goToNewSession(page);
+
+    // Select written notes
+    await page.getByRole("button", { name: /Write session notes/ }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // Should be on write step
+    await expect(
+      page.getByPlaceholder("Enter unformatted notes")
+    ).toBeVisible();
+
+    let apiCalled = false;
+    await page.route("**/api/sessions*", (route) => {
+      apiCalled = true;
+      return route.fallback();
+    });
+
+    await page.getByRole("button", { name: "Back" }).click();
+
+    // Should be back on details step
+    await expect(page.getByLabel("Session Date")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+
+    // No API calls should have been made
+    expect(apiCalled).toBe(false);
+  });
+
+  test("Back to Consent button on record step returns to consent", async ({
+    page,
+  }) => {
+    // Advance to record step via therapist summary (fewer clicks)
+    await goToNewSession(page);
+    await page.getByRole("button", { name: /Record a summary/ }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText("AI Processing Consent")).toBeVisible();
+
+    await tickConsentCheckbox(page);
+    await page.getByRole("button", { name: "Proceed to Recording" }).click();
+    await expect(
+      page.getByText("Record or Upload Your Session Summary")
+    ).toBeVisible();
+
+    // Back to Consent button is shown before recording starts
+    await page.getByRole("button", { name: "Back to Consent" }).click();
+
+    // Should be back on the consent step
+    await expect(page.getByText("AI Processing Consent")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Proceed to Recording" })
+    ).toBeVisible();
   });
 });
 
@@ -362,7 +415,7 @@ test.describe("New Session — Step 2: Consent (Therapist Summary)", () => {
 test.describe("New Session — Step 3: Record / Upload", () => {
   async function advanceToRecording(page: Page) {
     await advanceToConsent(page);
-    await tickAllFullSessionConsents(page);
+    await tickConsentCheckbox(page);
     await page.getByRole("button", { name: "Proceed to Recording" }).click();
     await expect(
       page.getByText("Record or Upload Session Audio")
@@ -399,37 +452,31 @@ test.describe("New Session — Step 3: Record / Upload", () => {
     // AudioUpload shows the drag-and-drop text
     await expect(page.getByText(/Drag and drop an audio file/)).toBeVisible();
   });
-
-  test("Back button returns to consent step", async ({ page }) => {
-    // For this test, go through the therapist summary flow (fewer clicks)
-    await goToNewSession(page);
-    await page.getByRole("button", { name: /Record a summary/ }).click();
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByText("AI Processing Consent")).toBeVisible();
-
-    // Tick all consents and proceed to recording
-    await tickAllTherapistConsents(page);
-    await page.getByRole("button", { name: "Proceed to Recording" }).click();
-    await expect(
-      page.getByText("Record or Upload Your Session Summary")
-    ).toBeVisible();
-
-    // Note: Step 3 doesn't have a built-in Back button in the current
-    // implementation. The step indicator shows previous steps but doesn't
-    // navigate. If this test fails, we may need to add back-navigation.
-  });
 });
 
 // ─── Step Indicator ──────────────────────────────────────────────────────────
 
 test.describe("New Session — Step Indicator", () => {
-  test("step indicator shows all three steps", async ({ page }) => {
+  test("step indicator shows all three steps for full session", async ({
+    page,
+  }) => {
     await goToNewSession(page);
 
     await expect(page.getByText("Session Details")).toBeVisible();
     // Step labels are hidden on mobile (sm:inline), but visible on default viewport
     await expect(page.getByText("Consent")).toBeVisible();
     await expect(page.getByText("Record / Upload")).toBeVisible();
+  });
+
+  test("step indicator shows two steps for written notes", async ({ page }) => {
+    await goToNewSession(page);
+
+    await page.getByRole("button", { name: /Write session notes/ }).click();
+
+    await expect(page.getByText("Session Details")).toBeVisible();
+    await expect(page.getByText("Write Notes")).toBeVisible();
+    // Record / Upload step should not be shown
+    await expect(page.getByText("Record / Upload")).not.toBeVisible();
   });
 
   test("step indicator updates when advancing", async ({ page }) => {

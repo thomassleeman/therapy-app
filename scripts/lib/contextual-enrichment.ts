@@ -73,8 +73,7 @@ function estimateCost(tracker: CostTracker): string {
   const inputCost =
     (tracker.totalInputTokens / 1_000_000) * HAIKU_INPUT_COST_PER_MILLION;
   const outputCost =
-    (tracker.totalOutputTokens / 1_000_000) *
-    HAIKU_OUTPUT_COST_PER_MILLION;
+    (tracker.totalOutputTokens / 1_000_000) * HAIKU_OUTPUT_COST_PER_MILLION;
   const totalCost = inputCost + outputCost;
 
   return [

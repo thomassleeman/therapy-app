@@ -814,8 +814,8 @@ function DetailsTab({
           <DialogHeader>
             <DialogTitle>Delete Session</DialogTitle>
             <DialogDescription>
-              This will permanently delete the session record, transcript,
-              and notes. This cannot be undone.
+              This will permanently delete the session record, transcript, and
+              notes. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

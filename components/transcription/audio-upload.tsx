@@ -39,6 +39,7 @@ interface SelectedFile {
 interface AudioUploadProps {
   sessionId: string;
   onComplete: () => void;
+  onStart?: () => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -62,7 +63,11 @@ async function getAudioDuration(
   }
 }
 
-export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
+export function AudioUpload({
+  sessionId,
+  onComplete,
+  onStart,
+}: AudioUploadProps) {
   const [phase, setPhase] = useState<UploadPhase>("idle");
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -70,6 +75,7 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [processSessionId, setProcessSessionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const onStartCalledRef = useRef(false);
 
   const {
     progress: transcriptionProgress,
@@ -139,6 +145,10 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
 
     setPhase("uploading");
     setUploadProgress(0);
+    if (!onStartCalledRef.current) {
+      onStartCalledRef.current = true;
+      onStart?.();
+    }
 
     try {
       const uploaded = await new Promise<boolean>((resolve) => {
@@ -204,7 +214,7 @@ export function AudioUpload({ sessionId, onComplete }: AudioUploadProps) {
       );
       setPhase("error");
     }
-  }, [selectedFile, sessionId]);
+  }, [selectedFile, sessionId, onStart]);
 
   const handleReset = useCallback(() => {
     setProcessSessionId(null);

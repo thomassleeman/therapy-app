@@ -326,8 +326,7 @@ function buildSystemPrompt({
   recordingType?: RecordingType;
 }): string {
   const isSummaryStyle =
-    recordingType === "therapist_summary" ||
-    recordingType === "written_notes";
+    recordingType === "therapist_summary" || recordingType === "written_notes";
   const formatInstructions = isSummaryStyle
     ? SUMMARY_FORMAT_INSTRUCTIONS[noteFormat]
     : FORMAT_INSTRUCTIONS[noteFormat];

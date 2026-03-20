@@ -37,7 +37,7 @@ import type {
   NoteStatus,
   SessionFrequency,
   SoapNoteContent,
-  TherapySession,
+  TherapySessionWithClient,
 } from "@/lib/db/types";
 import {
   AGE_BRACKET_LABELS,
@@ -55,6 +55,7 @@ import {
   getDocumentTypeLabel,
 } from "@/lib/documents/types";
 import { formatDate } from "@/lib/utils";
+import { SessionsTable } from "@/components/sessions-table";
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
   active: "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
@@ -91,21 +92,12 @@ function DetailRow({
   );
 }
 
-const TRANSCRIPTION_STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  uploading: "Uploading",
-  transcribing: "Transcribing",
-  labelling: "Labelling",
-  completed: "Completed",
-  failed: "Failed",
-};
-
 interface ClientHubPageProps {
   client: Client;
   chats: Chat[];
   clinicalDocuments: ClinicalDocumentSummary[];
   clinicalNotes: ClinicalNoteWithSession[];
-  sessions: TherapySession[];
+  sessions: TherapySessionWithClient[];
 }
 
 export function ClientHubPage({
@@ -430,14 +422,14 @@ function SessionsTab({
   sessions,
   clientId,
 }: {
-  sessions: TherapySession[];
+  sessions: TherapySessionWithClient[];
   clientId: string;
 }) {
   if (sessions.length === 0) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center py-8">
-          <CardDescription>No sessions recorded yet.</CardDescription>
+          <CardDescription>No sessions recorded for this client yet.</CardDescription>
           <Link className="mt-4" href={`/sessions/new?clientId=${clientId}`}>
             <Button size="sm" variant="outline">
               New Session
@@ -449,7 +441,7 @@ function SessionsTab({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex justify-end">
         <Link href={`/sessions/new?clientId=${clientId}`}>
           <Button size="sm" variant="outline">
@@ -457,34 +449,7 @@ function SessionsTab({
           </Button>
         </Link>
       </div>
-      <Card>
-        <CardContent className="p-0">
-          {sessions.map((session, i) => (
-            <div key={session.id}>
-              {i > 0 && <Separator />}
-              <Link
-                className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors"
-                href={`/sessions/${session.id}?from=client`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-sm font-medium">
-                    {formatDate(session.sessionDate)}
-                  </span>
-                  {session.durationMinutes && (
-                    <span className="text-xs text-muted-foreground">
-                      {session.durationMinutes} min
-                    </span>
-                  )}
-                </div>
-                <Badge variant="secondary">
-                  {TRANSCRIPTION_STATUS_LABELS[session.transcriptionStatus] ??
-                    session.transcriptionStatus}
-                </Badge>
-              </Link>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <SessionsTable hideClientColumn sessions={sessions} />
     </div>
   );
 }

@@ -6,8 +6,17 @@ import {
   getTherapySessions,
   updateTherapySession,
 } from "@/lib/db/queries";
-import type { RecordingType } from "@/lib/db/types";
-import { RECORDING_TYPES } from "@/lib/db/types";
+import type {
+  ConsentingParty,
+  ConsentType,
+  RecordingType,
+} from "@/lib/db/types";
+import {
+  CONSENT_TYPES,
+  CONSENTING_PARTIES,
+  RECORDING_TYPES,
+} from "@/lib/db/types";
+import { createClient } from "@/utils/supabase/server";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -34,6 +43,13 @@ export async function GET(request: Request) {
   return NextResponse.json({ sessions });
 }
 
+interface ConsentInput {
+  consentType: string;
+  consentingParty: string;
+  consented: boolean;
+  consentMethod: string;
+}
+
 export async function POST(request: Request) {
   const session = await auth();
   if (!session) {
@@ -41,14 +57,21 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { sessionDate, clientId, deliveryMethod, recordingType, writtenNotes } =
-    body as {
-      sessionDate: string;
-      clientId?: string;
-      deliveryMethod?: string;
-      recordingType?: string;
-      writtenNotes?: string;
-    };
+  const {
+    sessionDate,
+    clientId,
+    deliveryMethod,
+    recordingType,
+    writtenNotes,
+    consents,
+  } = body as {
+    sessionDate: string;
+    clientId?: string;
+    deliveryMethod?: string;
+    recordingType?: string;
+    writtenNotes?: string;
+    consents?: ConsentInput[];
+  };
 
   if (!sessionDate) {
     return NextResponse.json(
@@ -70,6 +93,39 @@ export async function POST(request: Request) {
     );
   }
 
+  if (consents && consents.length > 0) {
+    for (const c of consents) {
+      if (!CONSENT_TYPES.includes(c.consentType as ConsentType)) {
+        return NextResponse.json(
+          {
+            error: `Invalid consentType '${c.consentType}'. Must be one of: ${CONSENT_TYPES.join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
+      if (!CONSENTING_PARTIES.includes(c.consentingParty as ConsentingParty)) {
+        return NextResponse.json(
+          {
+            error: `Invalid consentingParty '${c.consentingParty}'. Must be one of: ${CONSENTING_PARTIES.join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
+      if (typeof c.consented !== "boolean") {
+        return NextResponse.json(
+          { error: "consented must be a boolean" },
+          { status: 400 }
+        );
+      }
+      if (typeof c.consentMethod !== "string" || !c.consentMethod) {
+        return NextResponse.json(
+          { error: "consentMethod must be a non-empty string" },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
   const therapySession = await createTherapySession({
     therapistId: session.user.id,
     sessionDate,
@@ -84,6 +140,33 @@ export async function POST(request: Request) {
       id: therapySession.id,
       transcriptionStatus: "not_applicable",
     });
+  }
+
+  if (consents && consents.length > 0) {
+    const supabase = await createClient();
+    const consentRecords = consents.map((c) => ({
+      session_id: therapySession.id,
+      consent_type: c.consentType as ConsentType,
+      consenting_party: c.consentingParty as ConsentingParty,
+      consented: c.consented,
+      consented_at: new Date().toISOString(),
+      consent_method: c.consentMethod,
+    }));
+
+    const { error: consentError } = await supabase
+      .from("session_consents")
+      .insert(consentRecords);
+
+    if (consentError) {
+      await supabase
+        .from("therapy_sessions")
+        .delete()
+        .eq("id", therapySession.id);
+      return NextResponse.json(
+        { error: "Failed to save consent records" },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json(therapySession, { status: 201 });

@@ -82,7 +82,6 @@ function NewSessionForm() {
   const [loadingClients, setLoadingClients] = useState(true);
   const [recordingType, setRecordingType] =
     useState<RecordingType>("full_session");
-  const [creatingSession, setCreatingSession] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [clientFromUrl, setClientFromUrl] = useState(false);
   const [noteFormat, setNoteFormat] = useState<
@@ -94,6 +93,9 @@ function NewSessionForm() {
   // Step 2 state
   const [consented, setConsented] = useState(false);
   const [savingConsents, setSavingConsents] = useState(false);
+
+  // Step 3 state
+  const [hasStartedRecording, setHasStartedRecording] = useState(false);
 
   // Fetch clients on mount and pre-select from URL if provided
   useEffect(() => {
@@ -128,45 +130,42 @@ function NewSessionForm() {
     fetchClients();
   }, [searchParams]);
 
-  // Step 1: Create session
-  const handleCreateSession = useCallback(async () => {
-    setCreatingSession(true);
-    try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionDate,
-          clientId,
-          deliveryMethod,
-          recordingType,
-        }),
-      });
+  // Step 1: Advance from details — pure state transition, no API call
+  const handleAdvanceFromDetails = useCallback(() => {
+    setStep(recordingType === "written_notes" ? "write" : "consent");
+  }, [recordingType]);
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to create session");
-      }
-
-      const session = await res.json();
-      setSessionId(session.id);
-      setStep(recordingType === "written_notes" ? "write" : "consent");
-    } catch (err) {
-      console.error("Failed to create session:", err);
-    } finally {
-      setCreatingSession(false);
-    }
-  }, [sessionDate, clientId, deliveryMethod, recordingType]);
-
-  // Written notes: save + generate
+  // Written notes: create session if needed, then save + generate
   const handleGenerateFromWrittenNotes = useCallback(async () => {
-    if (!sessionId || !writtenNotes.trim()) {
+    if (!writtenNotes.trim()) {
       return;
     }
     setGeneratingNotes(true);
     try {
+      // Create session on first click; skip creation if user navigated back and re-clicked.
+      let activeSessionId = sessionId;
+
+      if (!activeSessionId) {
+        const sessionRes = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionDate,
+            clientId,
+            deliveryMethod,
+            recordingType,
+          }),
+        });
+        if (!sessionRes.ok) {
+          throw new Error("Failed to create session");
+        }
+        const session = await sessionRes.json();
+        activeSessionId = session.id;
+        setSessionId(session.id);
+      }
+
       // Save latest written notes to the session
-      const patchRes = await fetch(`/api/sessions/${sessionId}`, {
+      const patchRes = await fetch(`/api/sessions/${activeSessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ writtenNotes }),
@@ -180,7 +179,7 @@ function NewSessionForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId,
+          sessionId: activeSessionId,
           noteFormat,
         }),
       });
@@ -189,51 +188,102 @@ function NewSessionForm() {
         throw new Error(data.error ?? "Failed to generate notes");
       }
 
-      router.push(`/sessions/${sessionId}`);
+      router.push(`/sessions/${activeSessionId}`);
     } catch (err) {
       console.error("Failed to generate notes:", err);
     } finally {
       setGeneratingNotes(false);
     }
-  }, [sessionId, writtenNotes, noteFormat, router]);
+  }, [
+    sessionId,
+    writtenNotes,
+    noteFormat,
+    sessionDate,
+    clientId,
+    deliveryMethod,
+    recordingType,
+    router,
+  ]);
 
-  // Step 2: Save consents
+  // Step 2: Create session + consents in one request, then advance to record
   const handleSaveConsents = useCallback(async () => {
-    if (!sessionId) { return; }
+    // Session already exists — user navigated back from record step. Skip creation, consents are already saved.
+    if (sessionId) {
+      setStep("record");
+      return;
+    }
+
     setSavingConsents(true);
-
     try {
-      const consentTypes = ['recording', 'ai_transcription', 'ai_note_generation', 'data_storage'];
-      const parties = recordingType === 'full_session'
-        ? ['therapist', 'client']
-        : ['therapist'];
-
-      const consentRecords = consentTypes.flatMap((consentType) =>
+      const consentTypes = [
+        "recording",
+        "ai_transcription",
+        "ai_note_generation",
+        "data_storage",
+      ];
+      const parties =
+        recordingType === "full_session"
+          ? ["therapist", "client"]
+          : ["therapist"];
+      const consentRecords = consentTypes.flatMap((ct) =>
         parties.map((party) => ({
-          consentType,
+          consentType: ct,
           consentingParty: party,
           consented: true,
-          consentMethod: party === 'therapist' ? 'in_app_checkbox' : 'verbal_recorded',
+          consentMethod:
+            party === "therapist" ? "in_app_checkbox" : "verbal_recorded",
         }))
       );
 
-      await Promise.all(
-        consentRecords.map((record) =>
-          fetch(`/api/sessions/${sessionId}/consents`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(record),
-          })
-        )
-      );
+      const sessionRes = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionDate,
+          clientId,
+          deliveryMethod,
+          recordingType,
+          consents: consentRecords,
+        }),
+      });
 
-      setStep('record');
+      if (!sessionRes.ok) {
+        const data = await sessionRes.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to create session");
+      }
+
+      const session = await sessionRes.json();
+      setSessionId(session.id);
+      setStep("record");
     } catch (error) {
-      console.error('Failed to save consents:', error);
+      console.error("Failed to create session:", error);
     } finally {
       setSavingConsents(false);
     }
-  }, [sessionId, recordingType]);
+  }, [sessionId, recordingType, sessionDate, clientId, deliveryMethod]);
+
+  // Back from consent: delete session if already created, then return to details
+  const handleBackFromConsent = useCallback(async () => {
+    if (sessionId) {
+      // Session was already created (user navigated record → consent → details).
+      // Delete it so we don't leave orphans.
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          console.error("Failed to delete session");
+          return; // Stay on the consent step
+        }
+      } catch {
+        console.error("Failed to delete session");
+        return; // Stay on the consent step
+      }
+      setSessionId(null);
+    }
+    setConsented(false); // Reset so they must re-confirm after changing details
+    setStep("details");
+  }, [sessionId]);
 
   // Step 3: Complete
   const handleComplete = useCallback(() => {
@@ -525,21 +575,12 @@ function NewSessionForm() {
 
             <Button
               className="w-full min-h-12"
-              disabled={creatingSession || !sessionDate || !clientId}
-              onClick={handleCreateSession}
+              disabled={!sessionDate || !clientId}
+              onClick={handleAdvanceFromDetails}
               size="lg"
             >
-              {creatingSession ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Creating Session...
-                </>
-              ) : (
-                <>
-                  Continue
-                  <ArrowRight className="size-4" />
-                </>
-              )}
+              Continue
+              <ArrowRight className="size-4" />
             </Button>
           </CardContent>
         </Card>
@@ -631,7 +672,7 @@ function NewSessionForm() {
           <div className="flex items-center gap-3">
             <Button
               className="min-h-12"
-              onClick={() => setStep("details")}
+              onClick={handleBackFromConsent}
               size="lg"
               variant="outline"
             >
@@ -661,7 +702,7 @@ function NewSessionForm() {
       )}
 
       {/* Step: Written Notes */}
-      {step === "write" && sessionId && (
+      {step === "write" && (
         <Card className="max-w-lg">
           <CardHeader>
             <CardTitle>Session Notes</CardTitle>
@@ -678,8 +719,10 @@ function NewSessionForm() {
               <Button
                 className="min-h-11"
                 onClick={() => setStep("details")}
+                size="lg"
                 variant="outline"
               >
+                <ArrowLeft className="size-4 mr-2" />
                 Back
               </Button>
               <Button
@@ -717,6 +760,21 @@ function NewSessionForm() {
             </p>
           </div>
 
+          {!hasStartedRecording && (
+            <Button
+              className="min-h-11 mb-4"
+              onClick={() => {
+                setHasStartedRecording(false);
+                setStep("consent");
+              }}
+              size="lg"
+              variant="outline"
+            >
+              <ArrowLeft className="size-4 mr-2" />
+              Back to Consent
+            </Button>
+          )}
+
           <Tabs defaultValue="record">
             <TabsList className="mb-4">
               <TabsTrigger className="gap-2" value="record">
@@ -736,12 +794,17 @@ function NewSessionForm() {
             <TabsContent value="record">
               <SessionRecorder
                 onComplete={handleComplete}
+                onStart={() => setHasStartedRecording(true)}
                 sessionId={sessionId}
               />
             </TabsContent>
 
             <TabsContent value="upload">
-              <AudioUpload onComplete={handleComplete} sessionId={sessionId} />
+              <AudioUpload
+                onComplete={handleComplete}
+                onStart={() => setHasStartedRecording(true)}
+                sessionId={sessionId}
+              />
             </TabsContent>
           </Tabs>
         </div>
