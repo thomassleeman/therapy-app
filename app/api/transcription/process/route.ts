@@ -13,7 +13,7 @@ import { decryptBuffer } from "@/lib/encryption/crypto";
 import { encryptSegments } from "@/lib/encryption/fields";
 import { transcribeAndDiarize } from "@/lib/transcription";
 
-export const maxDuration = 300; // 5 minutes — Whisper can be slow for long files
+export const maxDuration = 300; // 5 minutes — transcription can be slow for long files
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Decrypt audio from storage before sending to Whisper
+    // Decrypt audio from storage before sending to transcription provider
     const audioBuffer = await decryptBuffer(
       Buffer.from(await data.arrayBuffer()),
       sessionId
@@ -106,6 +106,9 @@ export async function POST(request: Request) {
 
     // Run transcription + diarization pipeline
     const diarisedTranscript = await transcribeAndDiarize(audioBuffer, {
+      transcribe: {
+        mimeType: therapySession.audioMimeType ?? undefined,
+      },
       diarize: isSummary ? undefined : { expectedSpeakers },
       skipDiarization: isSummary,
     });

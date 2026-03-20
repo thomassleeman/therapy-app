@@ -25,7 +25,7 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 | Auth | Supabase Auth (email/password + Google OAuth) |
 | AI / LLM | Vercel AI SDK v6, Anthropic Claude (via `@ai-sdk/anthropic`) |
 | Embeddings | Cohere Embed v4 at 512 dimensions via AWS Bedrock (`eu-west-1`), called through `@aws-sdk/client-bedrock-runtime` |
-| Transcription | AssemblyAI EU endpoint (`api.eu.assemblyai.com`, Dublin) — speech-to-text + speaker diarisation in a single call using `speech_models: ["universal-3-pro", "universal-2"]`. Fallback to OpenAI Whisper + Claude diarisation via env vars. Provider abstraction in `lib/transcription/`. |
+| Transcription | AssemblyAI EU endpoint (`api.eu.assemblyai.com`, Dublin) — sole transcription provider (Whisper removed for GDPR non-compliance). Speech-to-text + speaker diarisation in a single call using `speech_models: ["universal-3-pro", "universal-2"]`. Provider abstraction in `lib/transcription/`. Audio MIME type persisted in `therapy_sessions.audio_mime_type` and passed through to AssemblyAI via `TranscribeOptions.mimeType`. |
 | Encryption | AES-256-GCM with HKDF-SHA256 key derivation (Node.js `crypto`, zero dependencies) |
 | UI | Tailwind CSS, shadcn/ui, Tiptap editor |
 | Linting | Biome (via `ultracite` presets) |
@@ -89,7 +89,7 @@ lib/
 │   ├── crypto.ts       # Core primitives: encrypt, decrypt, encryptBuffer, decryptBuffer, isEncrypted
 │   ├── fields.ts       # Field helpers: encryptField, decryptField, encryptJsonb, decryptJsonb, encryptSegments, decryptSegments
 │   └── __tests__/      # Vitest test suites for crypto.ts and fields.ts
-├── transcription/      # Transcription abstraction layer (AssemblyAI default, Whisper + Claude fallback)
+├── transcription/      # Transcription abstraction layer (AssemblyAI only, with Claude diarisation fallback)
 ├── types/
 │   └── knowledge.ts    # Single source of truth for RAG enums (categories, modalities, jurisdictions)
 ├── auth.ts             # Supabase auth wrapper
@@ -214,7 +214,7 @@ System prompt assembly (role + orientation + tool context + sensitive content + 
 ToolLoopAgent runs (up to 6 steps)
   → LLM decides to call search tools
   → Tool generates 512-dim embedding via Cohere Embed v4 on AWS Bedrock eu-west-1 (see lib/ai/embedding.ts)
-  → Optional: query reformulation (3 clinical variants via gpt-4o-mini)
+  → Optional: query reformulation (3 clinical variants via claude-haiku-4-5-20251001)
   → Optional: parallel search + RRF merge
   → hybrid_search RPC executes (vector similarity + full-text search, merged via RRF)
   → Optional: Cohere reranking
@@ -223,7 +223,7 @@ ToolLoopAgent runs (up to 6 steps)
     ↓
 LLM generates cited response
     ↓
-Optional: async faithfulness check (gpt-4o-mini, non-blocking)
+Optional: async faithfulness check (claude-haiku-4-5-20251001, non-blocking)
     ↓
 Response streams to client
     ↓
@@ -260,6 +260,8 @@ Upload to Supabase Storage (session-audio bucket, private)
   → Audio encrypted (AES-256-GCM) before upload — stored as ciphertext blob
   → contentType must be the original audio MIME type (e.g. audio/webm), not application/octet-stream,
     because the Supabase bucket restricts allowed MIME types to audio formats
+  → MIME type normalised in upload route (e.g. audio/x-wav → audio/wav, audio/x-m4a → audio/mp4)
+    and persisted to `therapy_sessions.audio_mime_type` for use by the process route
     ↓
 POST /api/transcription/process (fire-and-forget from client; server blocks with maxDuration: 300)
   → Writes real phase transitions to DB: preparing → transcribing → saving → completed
@@ -269,9 +271,10 @@ POST /api/transcription/process (fire-and-forget from client; server blocks with
 Upload to AssemblyAI via custom uploadAudio() helper (bypasses SDK upload)
   → The AssemblyAI Node SDK hardcodes Content-Type: application/octet-stream when uploading,
     which causes their transcoder to misidentify Chrome's WebM audio as video/webm.
-    The uploadAudio() helper in assemblyai.ts sends Content-Type: audio/webm directly.
+    The uploadAudio() helper in assemblyai.ts sends the correct Content-Type from
+    `TranscribeOptions.mimeType` (read from `therapy_sessions.audio_mime_type`).
   → AssemblyAI EU endpoint (transcription + speaker diarisation in one call, ~$0.0028/min)
-  → Fallback: Whisper API (batch transcription) → Claude diarisation (speaker labelling)
+  → Fallback diarisation: Claude (text-based speaker labelling, same EU Anthropic endpoint as chat)
     ↓
 Segments encrypted (per-segment keys) → stored in session_segments table
     ↓
@@ -287,6 +290,23 @@ Notes encrypted (AES-256-GCM) → stored in clinical_notes table (draft → revi
 ```
 
 Three session creation modes: `full_session` (multi-speaker audio recording), `therapist_summary` (single-speaker narrated summary), and `written_notes` (therapist types/pastes brief unformatted notes — no audio, no transcription, no consent required). Written notes sessions set `transcriptionStatus` to `'not_applicable'` and store the therapist's original text in the `written_notes` column on `therapy_sessions`. The note generation route uses this text as source material (with `SUMMARY_FORMAT_INSTRUCTIONS`) instead of fetching a transcript.
+
+### Consent Collection
+
+Consent is collected at step 2 of the `/sessions/new` wizard (before the record/upload step) for `full_session` and `therapist_summary` recording types. `written_notes` skips consent entirely.
+
+**UI (`app/(app)/sessions/new/page.tsx`):** A single checkbox UI — informational items are displayed as a left-bordered list (not checkboxes), followed by one confirmation checkbox. Ticking it and clicking "Proceed to Recording" saves all granular consent records in a single `Promise.all` batch.
+
+- `full_session`: saves 8 records — all 4 consent types (`recording`, `ai_transcription`, `ai_note_generation`, `data_storage`) × both parties (`therapist`, `client`). `consentMethod` is `'in_app_checkbox'` for therapist, `'verbal_recorded'` for client (therapist is confirming verbal consent was obtained).
+- `therapist_summary`: saves 4 records — all 4 consent types × `therapist` only. `consentMethod` is `'in_app_checkbox'`.
+
+**Server-side guard (`lib/db/queries.ts` → `hasRequiredConsents`):** Both `POST /api/transcription/upload` and `POST /api/transcription/process` call `hasRequiredConsents({ sessionId, recordingType })` and return 403 if any required consent record is missing or has been withdrawn. This is defence-in-depth against direct API calls bypassing the UI. `recordingType` **must** be passed — without it the function defaults to `full_session` criteria (which requires client consents) and will incorrectly reject `therapist_summary` sessions.
+
+Required pairs checked:
+- `therapist_summary`: all 4 types × therapist
+- `full_session`: all 4 types × both parties
+
+Consent records are stored in the `session_consents` table with a UNIQUE constraint on `(session_id, consent_type, consenting_party)`. `recordSessionConsent` uses upsert. Consent can be soft-withdrawn (sets `withdrawn_at`, preserves audit record). The session detail page displays all consent records in the Details tab via `getSessionConsents`.
 
 ### Clinical Note Formats
 
@@ -328,8 +348,8 @@ Separate from session notes. Client-level documents spanning multiple sessions:
 | Provider | Purpose | Data Residency |
 |---|---|---|
 | Anthropic | AI chat (Claude) | EU |
+| AssemblyAI | Transcription + speaker diarisation | EU (Dublin) |
 | Cohere via AWS Bedrock | Embeddings | `eu-west-1` (Ireland) |
-| OpenAI | Transcription fallback | EU |
 | Supabase | Database, auth, storage | EU |
 | Vercel | Hosting | EU |
 
@@ -360,11 +380,10 @@ See `.env.example` for the full list. Key variables:
 | `AI_GATEWAY_API_KEY` | Yes | Vercel AI Gateway key |
 | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Yes | For embedding generation via Cohere Embed v4 on AWS Bedrock (`eu-west-1`). See `lib/ai/embedding.ts` |
 | `ASSEMBLYAI_API_KEY` | Yes | For session transcription and speaker diarisation via AssemblyAI EU endpoint (Dublin). See `lib/transcription/providers/assemblyai.ts` |
-| `OPENAI_API_KEY` | Yes | For contextual enrichment during ingestion (via AI Gateway). Also used if `TRANSCRIPTION_PROVIDER=whisper` fallback is active |
-| `TRANSCRIPTION_PROVIDER` | No | `assemblyai` (default) or `whisper` — selects transcription backend |
-| `DIARIZATION_PROVIDER` | No | `assemblyai` (default) or `claude` — selects diarisation backend |
+| `OPENAI_API_KEY` | No | No longer used by runtime code. `scripts/ingest-knowledge.ts` still checks for it when `--with-context` is passed — that check is stale and can be removed. |
+| `DIARIZATION_PROVIDER` | No | `assemblyai` (default) or `claude` — selects diarisation backend. `TRANSCRIPTION_PROVIDER` env var was removed (Whisper deleted for GDPR non-compliance; AssemblyAI is the sole provider). |
 | `ENABLE_TRANSCRIPTION` | No | Feature flag for transcription |
-| `ENABLE_QUERY_REFORMULATION` | No | Multi-query retrieval (~$0.0003/search) |
+| `ENABLE_QUERY_REFORMULATION` | No | Multi-query retrieval (~$0.0005/search via claude-haiku-4-5-20251001) |
 | `COHERE_API_KEY` + `ENABLE_RERANKING` | No | Cross-encoder reranking |
 | `DEV_LOGGING` | No | Dev-only RAG quality logging to disk |
 | `ENABLE_FAITHFULNESS_CHECK` | No | Post-generation grounding verification |
@@ -427,8 +446,9 @@ tests/
 - Full RAG pipeline (database, ingestion script, hybrid search RPC, search tools, system prompt, confidence thresholds, no-results handling, sensitive content detection) — knowledge base has been ingested and content authoring is ongoing
 - Modality-jurisdiction wiring (4-level resolution chain)
 - Unified sidebar navigation shell (NavBar removed)
-- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes; Whisper + Claude fallback available). **Audio auto-deleted** from Supabase Storage after successful transcription (segments stored separately in Postgres); `audioStoragePath` nulled on `therapy_sessions`. Session DELETE route handles the case where audio is already gone. **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES` includes `'not_applicable'` for written notes, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
+- Session transcription pipeline (record + upload → AssemblyAI EU endpoint for transcription + diarisation → clinical notes). **Audio auto-deleted** from Supabase Storage after successful transcription (segments stored separately in Postgres); `audioStoragePath` nulled on `therapy_sessions`. Session DELETE route handles the case where audio is already gone. **Real phase-based progress tracking** — the process route writes real status transitions (`preparing` → `transcribing` → `saving` → `completed`) to the DB at each phase boundary. Client fires the process request without awaiting and polls `GET /api/sessions/{id}` every 5s. `useTranscriptionProgress` maps DB statuses to step-based progress (0–100%). No fake time-based animation. Statuses defined in `lib/db/types.ts` (`SESSION_TRANSCRIPTION_STATUSES` includes `'not_applicable'` for written notes, `TRANSCRIPTION_STATUS_LABELS`). `useTranscriptionStatus` passes through real DB `TranscriptionStatus` values.
 - Session summary recording mode (therapist-narrated summaries)
+- **Session consent collection** — single-checkbox consent UI at step 2 of `/sessions/new` for `full_session` and `therapist_summary` recording types. One confirmation checkbox saves all granular consent records in a batch (8 records for full session, 4 for therapist summary). Server-side `hasRequiredConsents` guard on both upload and process routes checks all 4 consent types × appropriate parties. `recordingType` must always be passed to `hasRequiredConsents` to avoid incorrectly applying full-session (two-party) criteria to therapist-summary sessions.
 - **Written notes session creation path** — therapist types or pastes brief unformatted session notes on `/sessions/new`, AI expands into structured clinical notes. No audio recording, transcription, or consent flow. Uses `written_notes` recording type with `not_applicable` transcription status. Original text stored in `written_notes` column on `therapy_sessions`.
 - **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary/written-notes prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
@@ -453,7 +473,7 @@ tests/
 
 - **Confidence threshold integration into tool files** — `applyConfidenceThreshold` exists in `lib/ai/confidence.ts` but the wiring into `knowledge-search-tools.ts` and `search-knowledge-base.ts` may be incomplete. Verify the tool execute functions call it.
 - **Contextual enrichment prompt update** — Add situational vocabulary generation to `scripts/lib/contextual-enrichment.ts` (addresses semantic gap between therapist language and KB terminology). Requires re-running ingestion with `--with-context`.
-- **LLM provider evaluation** — Anthropic Claude API directly was recommended over Vercel AI Gateway for EU data residency and strong DPA terms.
+- **`ingest-knowledge.ts` stale OPENAI_API_KEY check** — The `--with-context` flag still validates `OPENAI_API_KEY` at startup, but contextual enrichment now uses `@ai-sdk/anthropic` directly. Remove the check and replace with `ANTHROPIC_API_KEY` validation (which is already required by the main app anyway).
 - **Post-diarisation speaker confirmation UI** — Highest-impact improvement to diarisation accuracy. Proposed but not implemented.
 - **Vercel artifact/document system** — Legacy from the template. Coexists with the purpose-built clinical notes and clinical documents systems but shares no data, UI, or database. Decision pending on whether to remove, repurpose, or keep.
 - **Proposed pages implementation** — `proposed-pages-implementation-plan.md` contains 18 prompts for dashboard overhaul, client list enhancements, session detail improvements, sidebar enhancements, and template cleanup. Partially implemented (check individual pages for current state).
@@ -490,7 +510,7 @@ tests/
 
 2. **KB-grounded for high confidence, general knowledge with labelling for gaps.** Rigid KB-exclusive enforcement during MVP (with an empty KB) kills adoption. The agreed approach: use KB content when available at high confidence, fall back to general clinical knowledge with explicit labelling, hard refusal only for safety-critical edge cases.
 
-3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`. **Transcription data residency** — all audio transcription and speaker diarisation uses AssemblyAI's EU endpoint (`api.eu.assemblyai.com`), processing data in Dublin (eu-west-1). No audio data leaves EU infrastructure. EU residency is controlled by the base URL in code — no dashboard configuration needed. AssemblyAI is SOC 2 Type 2, ISO 27001, and GDPR compliant. Configuration is in `lib/transcription/providers/assemblyai.ts`. **Encryption at rest** — all sensitive clinical content is encrypted at the application layer (AES-256-GCM) with keys managed separately from the database. Even a full database compromise yields only ciphertext.
+3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`. **Transcription data residency** — all audio transcription and speaker diarisation uses AssemblyAI's EU endpoint (`api.eu.assemblyai.com`), processing data in Dublin (eu-west-1). No audio data leaves EU infrastructure. EU residency is controlled by the base URL in code — no dashboard configuration needed. AssemblyAI is SOC 2 Type 2, ISO 27001, and GDPR compliant. Configuration is in `lib/transcription/providers/assemblyai.ts`. OpenAI Whisper was previously available as a fallback provider but was removed because the Whisper API has no EU data residency option for audio processing, making it non-compliant for Article 9 special category health data. **Encryption at rest** — all sensitive clinical content is encrypted at the application layer (AES-256-GCM) with keys managed separately from the database. Even a full database compromise yields only ciphertext.
 
 4. **Legislation as practitioner briefings.** Raw statutory text is inappropriate. All legislation content is practitioner-oriented, organised around therapeutic scenarios, written in therapist-friendly language with inline statutory citations.
 

@@ -58,12 +58,12 @@ function getClient(): AssemblyAI {
  * files as `video/webm` and reject them. This helper bypasses the SDK's upload
  * and sets `Content-Type: audio/webm` so the transcoder recognises the audio.
  */
-async function uploadAudio(audio: Buffer): Promise<string> {
+async function uploadAudio(audio: Buffer, mimeType?: string): Promise<string> {
   const response = await fetch(`${EU_BASE_URL}/v2/upload`, {
     method: "POST",
     headers: {
       Authorization: getApiKey(),
-      "Content-Type": "audio/webm",
+      "Content-Type": mimeType ?? "application/octet-stream",
     },
     body: new Uint8Array(audio),
   });
@@ -175,7 +175,7 @@ export class AssemblyAIProvider
     options: TranscribeOptions = {}
   ): Promise<RawTranscript> {
     const client = getClient();
-    const audioUrl = await uploadAudio(audio);
+    const audioUrl = await uploadAudio(audio, options.mimeType);
 
     const transcript = await client.transcripts.transcribe({
       audio_url: audioUrl,
@@ -238,12 +238,13 @@ export class AssemblyAIProvider
     options?: {
       language?: string;
       expectedSpeakers?: number;
+      mimeType?: string;
     }
   ): Promise<{ raw: RawTranscript; diarised: DiarisedTranscript }> {
     const client = getClient();
     const language = options?.language ?? "en";
 
-    const audioUrl = await uploadAudio(audio);
+    const audioUrl = await uploadAudio(audio, options?.mimeType);
 
     const transcript = await client.transcripts.transcribe({
       audio_url: audioUrl,

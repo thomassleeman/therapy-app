@@ -12,14 +12,30 @@ import { createClient } from "@/utils/supabase/server";
 const ACCEPTED_AUDIO_TYPES = new Set([
   "audio/webm",
   "audio/wav",
+  "audio/x-wav", // Safari reports WAV files with this non-standard type
   "audio/ogg",
   "audio/mp4",
+  "audio/x-m4a", // Some systems report M4A files with this non-standard type
   "audio/mpeg",
-  "audio/mp3",
-  "audio/x-m4a",
+  // audio/mp3 removed — non-standard IANA type, client never sends it
 ]);
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
+/**
+ * Normalise non-standard MIME types to their IANA-registered equivalents.
+ * Runs AFTER codec parameter stripping and AFTER validation, so that
+ * non-standard types pass the allowlist check but downstream consumers
+ * (Supabase Storage, database column, transcription providers) only
+ * receive standard types.
+ */
+function normaliseMimeType(baseType: string): string {
+  const NORMALISATION_MAP: Record<string, string> = {
+    "audio/x-wav": "audio/wav",
+    "audio/x-m4a": "audio/mp4",
+  };
+  return NORMALISATION_MAP[baseType] ?? baseType;
+}
 
 function getExtension(mimeType: string): string {
   const map: Record<string, string> = {
@@ -28,8 +44,6 @@ function getExtension(mimeType: string): string {
     "audio/ogg": "ogg",
     "audio/mp4": "m4a",
     "audio/mpeg": "mp3",
-    "audio/mp3": "mp3",
-    "audio/x-m4a": "m4a",
   };
   return map[mimeType] ?? "bin";
 }
@@ -81,7 +95,10 @@ export async function POST(request: Request) {
     }
 
     // Check consents
-    const consented = await hasRequiredConsents({ sessionId });
+    const consented = await hasRequiredConsents({
+      sessionId,
+      recordingType: therapySession.recordingType,
+    });
     if (!consented) {
       return NextResponse.json(
         { error: "Required consents not recorded" },
@@ -89,8 +106,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Normalise to IANA-standard type for storage and downstream use
+    const normalisedType = normaliseMimeType(baseType);
+
     // Upload to Supabase Storage
-    const extension = getExtension(baseType);
+    const extension = getExtension(normalisedType);
     const storagePath = `${session.user.id}/${sessionId}/audio.${extension}`;
     const fileBuffer = Buffer.from(await audioFile.arrayBuffer());
 
@@ -101,15 +121,21 @@ export async function POST(request: Request) {
     const { error: uploadError } = await supabase.storage
       .from("session-audio")
       .upload(storagePath, encryptedAudio, {
-        contentType: baseType,
+        contentType: normalisedType,
         upsert: true,
       });
 
     if (uploadError) {
       console.error("Audio upload error:", uploadError);
+      const isUnsupportedType =
+        "status" in uploadError && uploadError.status === 415;
       return NextResponse.json(
-        { error: "Failed to upload audio" },
-        { status: 500 }
+        {
+          error: isUnsupportedType
+            ? `File format not accepted by storage: ${baseType}. Please convert to MP3, WAV, or MP4.`
+            : "Failed to upload audio",
+        },
+        { status: isUnsupportedType ? 415 : 500 }
       );
     }
 
@@ -117,6 +143,7 @@ export async function POST(request: Request) {
     await updateTherapySession({
       id: sessionId,
       audioStoragePath: storagePath,
+      audioMimeType: normalisedType,
       transcriptionStatus: "uploading",
     });
 

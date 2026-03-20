@@ -35,8 +35,7 @@ export interface DiarisedTranscript {
 
 /**
  * Interface for speech-to-text providers.
- * Current: OpenAI Whisper API
- * Future: self-hosted WhisperX
+ * Current: AssemblyAI (EU data residency).
  */
 export interface TranscriptionProvider {
   /**
@@ -48,7 +47,8 @@ export interface TranscriptionProvider {
 
 export interface TranscribeOptions {
   language?: string; // ISO 639-1, default 'en'
-  prompt?: string; // Whisper context prompt for domain vocabulary
+  prompt?: string; // Context prompt for domain vocabulary
+  mimeType?: string; // Normalised IANA MIME type of the audio (e.g. "audio/wav")
 }
 
 /**

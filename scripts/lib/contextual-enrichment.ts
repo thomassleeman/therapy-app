@@ -14,7 +14,7 @@
  * @see https://www.anthropic.com/news/contextual-retrieval
  */
 
-import { gateway } from "@ai-sdk/gateway";
+import { anthropic } from "@ai-sdk/anthropic";
 import { generateText } from "ai";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ export interface BatchEnrichmentOptions {
   batchSize?: number;
   /** Delay in ms between batches to respect rate limits. Default: 1000 */
   batchDelayMs?: number;
-  /** Model to use in gateway format (provider/model). Default: 'openai/gpt-4o-mini' */
+  /** Anthropic model ID to use. Default: 'claude-haiku-4-5-20251001' */
   model?: string;
   /** Called after each batch completes */
   onBatchComplete?: (batchIndex: number, totalBatches: number) => void;
@@ -66,19 +66,19 @@ interface CostTracker {
   chunksFailed: number;
 }
 
-const GPT4O_MINI_INPUT_COST_PER_MILLION = 0.15; // $0.15 per 1M input tokens
-const GPT4O_MINI_OUTPUT_COST_PER_MILLION = 0.6; // $0.60 per 1M output tokens
+const HAIKU_INPUT_COST_PER_MILLION = 0.8; // $0.80 per 1M input tokens
+const HAIKU_OUTPUT_COST_PER_MILLION = 2.5; // $2.50 per 1M output tokens
 
 function estimateCost(tracker: CostTracker): string {
   const inputCost =
-    (tracker.totalInputTokens / 1_000_000) * GPT4O_MINI_INPUT_COST_PER_MILLION;
+    (tracker.totalInputTokens / 1_000_000) * HAIKU_INPUT_COST_PER_MILLION;
   const outputCost =
     (tracker.totalOutputTokens / 1_000_000) *
-    GPT4O_MINI_OUTPUT_COST_PER_MILLION;
+    HAIKU_OUTPUT_COST_PER_MILLION;
   const totalCost = inputCost + outputCost;
 
   return [
-    "Contextual enrichment cost estimate:",
+    "Contextual enrichment cost estimate (claude-haiku):",
     `  Chunks processed: ${tracker.chunksProcessed}`,
     `  Chunks skipped:   ${tracker.chunksSkipped}`,
     `  Chunks failed:    ${tracker.chunksFailed}`,
@@ -136,7 +136,7 @@ export async function enrichChunkWithContext(
   options: { skipEnrichment?: boolean; model?: string } = {}
 ): Promise<EnrichmentResult> {
   const { chunk, fullDocument, documentTitle, sectionPath } = input;
-  const model = options.model ?? "openai/gpt-4o-mini";
+  const model = options.model ?? "claude-haiku-4-5-20251001";
 
   // Fast path: skip enrichment for testing
   if (options.skipEnrichment) {
@@ -149,7 +149,7 @@ export async function enrichChunkWithContext(
 
   try {
     const { text } = await generateText({
-      model: gateway(model),
+      model: anthropic(model),
       system:
         "You are a precise document analyst. Generate concise context snippets for document chunks to improve search retrieval. Be factual and specific. Never include meta-commentary — output only the context snippet itself.",
       prompt: buildEnrichmentPrompt(
@@ -219,7 +219,7 @@ export async function enrichChunksInBatches(
     skipEnrichment = false,
     batchSize = 10,
     batchDelayMs = 1000,
-    model = "openai/gpt-4o-mini",
+    model = "claude-haiku-4-5-20251001",
     onBatchComplete,
   } = options;
 
@@ -258,7 +258,7 @@ export async function enrichChunksInBatches(
       batch.map(async (input) => {
         try {
           const { text, usage } = await generateText({
-            model: gateway(model),
+            model: anthropic(model),
             system:
               "You are a precise document analyst. Generate concise context snippets for document chunks to improve search retrieval. Be factual and specific. Never include meta-commentary — output only the context snippet itself.",
             prompt: buildEnrichmentPrompt(

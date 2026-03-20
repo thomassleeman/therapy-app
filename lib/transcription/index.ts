@@ -1,6 +1,5 @@
 import { AssemblyAIProvider } from "./providers/assemblyai";
 import { ClaudeDiarizationProvider } from "./providers/claude-diarization";
-import { WhisperApiProvider } from "./providers/whisper-api";
 import type {
   DiarisedTranscript,
   DiarizationProvider,
@@ -10,22 +9,14 @@ import type {
 } from "./types";
 
 /**
- * Returns the active transcription provider based on env config.
- * Default: AssemblyAI (EU data residency, built-in diarisation).
+ * Returns the active transcription provider.
+ *
+ * Only GDPR-compliant providers with EU data residency are permitted.
+ * OpenAI Whisper was removed — it has no EU data residency option for audio
+ * processing, making it non-compliant for Article 9 special category data.
  */
 export function getTranscriptionProvider(): TranscriptionProvider {
-  const provider = process.env.TRANSCRIPTION_PROVIDER ?? "assemblyai";
-  switch (provider) {
-    case "assemblyai":
-      return new AssemblyAIProvider();
-    case "whisper":
-      return new WhisperApiProvider();
-    default:
-      console.warn(
-        `[transcription] Unknown provider "${provider}", falling back to assemblyai`
-      );
-      return new AssemblyAIProvider();
-  }
+  return new AssemblyAIProvider();
 }
 
 /**
@@ -63,16 +54,10 @@ export async function transcribeAndDiarize(
     skipDiarization?: boolean;
   }
 ): Promise<DiarisedTranscript> {
-  const transcriptionProvider =
-    process.env.TRANSCRIPTION_PROVIDER ?? "assemblyai";
   const diarizationProvider = process.env.DIARIZATION_PROVIDER ?? "assemblyai";
 
-  // Fast path: if both are AssemblyAI, use the combined single-call method
-  if (
-    transcriptionProvider === "assemblyai" &&
-    diarizationProvider === "assemblyai" &&
-    !options?.skipDiarization
-  ) {
+  // Fast path: if diarization is also AssemblyAI, use the combined single-call method
+  if (diarizationProvider === "assemblyai" && !options?.skipDiarization) {
     const provider = new AssemblyAIProvider();
     console.log(
       "[transcription] Using AssemblyAI combined transcription + diarisation..."
@@ -80,6 +65,7 @@ export async function transcribeAndDiarize(
     const { diarised } = await provider.transcribeWithDiarization(audioBuffer, {
       language: options?.transcribe?.language,
       expectedSpeakers: options?.diarize?.expectedSpeakers,
+      mimeType: options?.transcribe?.mimeType,
     });
     console.log(
       `[transcription] Complete: ${diarised.segments.length} segments, speakers: ${diarised.speakers.join(", ")}`
@@ -87,7 +73,7 @@ export async function transcribeAndDiarize(
     return diarised;
   }
 
-  // Two-step path (for Whisper + Claude, or mixed configurations)
+  // Two-step path (for Claude diarization)
   const transcriber = getTranscriptionProvider();
 
   console.log("[transcription] Starting transcription...");

@@ -1388,6 +1388,7 @@ function mapRowToTherapySession(row: any): TherapySession {
     sessionDate: row.session_date,
     durationMinutes: row.duration_minutes ?? null,
     audioStoragePath: row.audio_storage_path ?? null,
+    audioMimeType: row.audio_mime_type ?? null,
     transcriptionStatus: row.transcription_status,
     transcriptionProvider: row.transcription_provider ?? null,
     notesStatus: row.notes_status,
@@ -1578,6 +1579,7 @@ export async function updateTherapySession({
       ["sessionDate", "session_date", fields.sessionDate],
       ["durationMinutes", "duration_minutes", fields.durationMinutes],
       ["audioStoragePath", "audio_storage_path", fields.audioStoragePath],
+      ["audioMimeType", "audio_mime_type", fields.audioMimeType],
       [
         "transcriptionStatus",
         "transcription_status",
@@ -1975,6 +1977,10 @@ export async function hasRequiredConsents({
             ["recording", "client"],
             ["ai_transcription", "therapist"],
             ["ai_transcription", "client"],
+            ["ai_note_generation", "therapist"],
+            ["ai_note_generation", "client"],
+            ["data_storage", "therapist"],
+            ["data_storage", "client"],
           ];
 
     return requiredPairs.every(([type, party]) =>

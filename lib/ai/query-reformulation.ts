@@ -7,15 +7,15 @@
  * keeps going quiet" may not land near chunks about "therapeutic rupture" or
  * "metacommunication" via embedding alone.
  *
- * Cost: ~$0.0003 per search invocation (one gpt-4o-mini call).
+ * Cost: ~$0.0005 per search invocation (one claude-haiku call).
  */
 
-import { openai } from "@ai-sdk/openai";
+import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 
 /**
- * Generates clinical reformulations of a therapist's search query using GPT-4o-mini.
+ * Generates clinical reformulations of a therapist's search query using Claude Haiku.
  *
  * Returns `[originalQuery, ...reformulations]` — the original is always included
  * so that the caller never searches with fewer than one query.
@@ -32,7 +32,7 @@ export async function reformulateQuery(
 
   try {
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: anthropic("claude-haiku-4-5-20251001"),
       temperature: 0.3,
       schema: z.object({
         reformulations: z

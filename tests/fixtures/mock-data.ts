@@ -38,6 +38,7 @@ export const mockSession: TherapySession = {
   sessionDate: "2025-12-10",
   durationMinutes: 50,
   audioStoragePath: null,
+  audioMimeType: null,
   transcriptionStatus: "completed",
   transcriptionProvider: "deepgram",
   notesStatus: "draft",

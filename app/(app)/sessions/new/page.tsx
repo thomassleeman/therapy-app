@@ -45,78 +45,6 @@ const DELIVERY_METHODS = [
   { value: "telephone", label: "Telephone" },
 ] as const;
 
-const CONSENT_BLOCKS = [
-  {
-    key: "recording" as const,
-    title: "Session Recording",
-    description: "This therapy session will be audio recorded.",
-    therapistLabel: "I (therapist) consent to recording this session",
-    clientLabel:
-      "My client has given explicit consent to recording this session",
-  },
-  {
-    key: "ai_transcription" as const,
-    title: "AI Transcription",
-    description:
-      "The recording will be processed by an AI speech-to-text service to create a written transcript. Audio is processed on secure servers and is not used to train AI models.",
-    therapistLabel: "I (therapist) consent to AI transcription",
-    clientLabel: "My client has given explicit consent to AI transcription",
-  },
-  {
-    key: "ai_note_generation" as const,
-    title: "AI Note Generation",
-    description:
-      "The transcript may be processed by an AI system to generate draft clinical session notes for your review.",
-    therapistLabel: "I (therapist) consent to AI-generated notes",
-    clientLabel: "My client has given explicit consent to AI-generated notes",
-  },
-  {
-    key: "data_storage" as const,
-    title: "Secure Data Storage",
-    description:
-      "The transcript and notes will be stored securely on the platform, encrypted at rest, and subject to your data retention settings.",
-    therapistLabel: "I (therapist) consent to secure data storage",
-    clientLabel: "My client has given explicit consent to secure data storage",
-  },
-] as const;
-
-type ConsentKey = (typeof CONSENT_BLOCKS)[number]["key"];
-
-interface ConsentState {
-  therapist: Record<ConsentKey, boolean>;
-  client: Record<ConsentKey, boolean>;
-}
-
-function createEmptyConsents(): ConsentState {
-  return {
-    therapist: {
-      recording: false,
-      ai_transcription: false,
-      ai_note_generation: false,
-      data_storage: false,
-    },
-    client: {
-      recording: false,
-      ai_transcription: false,
-      ai_note_generation: false,
-      data_storage: false,
-    },
-  };
-}
-
-function allConsented(
-  consents: ConsentState,
-  recordingType: RecordingType
-): boolean {
-  if (recordingType === "therapist_summary") {
-    return Object.values(consents.therapist).every(Boolean);
-  }
-  return (
-    Object.values(consents.therapist).every(Boolean) &&
-    Object.values(consents.client).every(Boolean)
-  );
-}
-
 function getTodayString(): string {
   const d = new Date();
   return d.toISOString().split("T")[0];
@@ -164,7 +92,7 @@ function NewSessionForm() {
   const [generatingNotes, setGeneratingNotes] = useState(false);
 
   // Step 2 state
-  const [consents, setConsents] = useState<ConsentState>(createEmptyConsents());
+  const [consented, setConsented] = useState(false);
   const [savingConsents, setSavingConsents] = useState(false);
 
   // Fetch clients on mount and pre-select from URL if provided
@@ -271,50 +199,37 @@ function NewSessionForm() {
 
   // Step 2: Save consents
   const handleSaveConsents = useCallback(async () => {
-    if (!sessionId) {
-      return;
-    }
+    if (!sessionId) { return; }
     setSavingConsents(true);
+
     try {
-      const consentPromises: Promise<Response>[] = [];
+      const consentTypes = ['recording', 'ai_transcription', 'ai_note_generation', 'data_storage'];
+      const parties = recordingType === 'full_session'
+        ? ['therapist', 'client']
+        : ['therapist'];
 
-      for (const block of CONSENT_BLOCKS) {
-        consentPromises.push(
+      const consentRecords = consentTypes.flatMap((consentType) =>
+        parties.map((party) => ({
+          consentType,
+          consentingParty: party,
+          consented: true,
+          consentMethod: party === 'therapist' ? 'in_app_checkbox' : 'verbal_recorded',
+        }))
+      );
+
+      await Promise.all(
+        consentRecords.map((record) =>
           fetch(`/api/sessions/${sessionId}/consents`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              consentType: block.key,
-              consentingParty: "therapist",
-              consented: true,
-            }),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record),
           })
-        );
-        if (recordingType === "full_session") {
-          consentPromises.push(
-            fetch(`/api/sessions/${sessionId}/consents`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                consentType: block.key,
-                consentingParty: "client",
-                consented: true,
-              }),
-            })
-          );
-        }
-      }
+        )
+      );
 
-      const results = await Promise.all(consentPromises);
-      const allOk = results.every((r) => r.ok);
-
-      if (!allOk) {
-        throw new Error("Failed to save some consent records");
-      }
-
-      setStep("record");
-    } catch (err) {
-      console.error("Failed to save consents:", err);
+      setStep('record');
+    } catch (error) {
+      console.error('Failed to save consents:', error);
     } finally {
       setSavingConsents(false);
     }
@@ -326,17 +241,6 @@ function NewSessionForm() {
       router.push(`/sessions/${sessionId}`);
     }
   }, [sessionId, router]);
-
-  const updateConsent = (
-    party: "therapist" | "client",
-    key: ConsentKey,
-    value: boolean
-  ) => {
-    setConsents((prev) => ({
-      ...prev,
-      [party]: { ...prev[party], [key]: value },
-    }));
-  };
 
   // Step indicators
   const steps =
@@ -643,93 +547,88 @@ function NewSessionForm() {
 
       {/* Step 2: Consent Collection */}
       {step === "consent" && (
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-xl font-semibold">
-              {recordingType === "therapist_summary"
-                ? "AI Processing Consent"
-                : "Recording & AI Processing Consent"}
-            </h2>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
-              {recordingType === "therapist_summary"
-                ? "Before recording your session summary, please confirm the following consents."
-                : "Before recording, please confirm the following consents. Both you and your client must consent to each item for the session to be recorded and processed."}
-            </p>
-          </div>
+        <div className="space-y-6 max-w-2xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {recordingType === "therapist_summary"
+                  ? "AI Processing Consent"
+                  : "Recording & AI Processing Consent"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {recordingType === "therapist_summary"
+                  ? "Before recording your session summary, please review the following."
+                  : "Before recording, please review the following. By proceeding, you confirm that both you and your client consent to each item."}
+              </p>
 
-          <div className="space-y-5">
-            {CONSENT_BLOCKS.map((block) => {
-              const title =
-                recordingType === "therapist_summary" &&
-                block.key === "recording"
-                  ? "Summary Recording"
-                  : block.title;
-              const description =
-                recordingType === "therapist_summary" &&
-                block.key === "recording"
-                  ? "Your spoken session summary will be audio recorded."
-                  : block.description;
+              <ol className="space-y-4">
+                <li className="pl-4 border-l-2 border-muted">
+                  <p className="text-sm font-medium">
+                    {recordingType === "therapist_summary"
+                      ? "Summary Recording"
+                      : "Session Recording"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                    {recordingType === "therapist_summary"
+                      ? "Your spoken session summary will be audio recorded."
+                      : "This therapy session will be audio recorded."}
+                  </p>
+                </li>
+                <li className="pl-4 border-l-2 border-muted">
+                  <p className="text-sm font-medium">AI Transcription</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                    The recording will be processed by an AI speech-to-text
+                    service to create a written transcript. Audio is processed
+                    on secure servers and is not used to train AI models.
+                  </p>
+                </li>
+                <li className="pl-4 border-l-2 border-muted">
+                  <p className="text-sm font-medium">AI Note Generation</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                    The transcript may be processed by an AI system to generate
+                    draft clinical session notes for your review.
+                  </p>
+                </li>
+                <li className="pl-4 border-l-2 border-muted">
+                  <p className="text-sm font-medium">Secure Data Storage</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                    The transcript and notes will be stored securely on the
+                    platform, encrypted at rest, and subject to your data
+                    retention settings.
+                  </p>
+                </li>
+              </ol>
 
-              return (
-                <Card key={block.key}>
-                  <CardContent className="py-6 space-y-5">
-                    <div>
-                      <h3 className="text-base font-semibold">{title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                        {description}
-                      </p>
-                    </div>
+              <Separator />
 
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3 cursor-pointer">
-                        <Checkbox
-                          checked={consents.therapist[block.key]}
-                          className="mt-0.5"
-                          onCheckedChange={(checked) =>
-                            updateConsent(
-                              "therapist",
-                              block.key,
-                              checked === true
-                            )
-                          }
-                        />
-                        <span className="text-sm leading-relaxed">
-                          {block.therapistLabel}
-                        </span>
-                      </div>
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  checked={consented}
+                  className="mt-0.5"
+                  id="consent-checkbox"
+                  onCheckedChange={(checked) => setConsented(checked === true)}
+                />
+                <Label
+                  className="text-sm leading-relaxed font-normal cursor-pointer"
+                  htmlFor="consent-checkbox"
+                >
+                  {recordingType === "therapist_summary"
+                    ? "I consent to the recording and AI processing of my session summary as described above."
+                    : "I consent to the above, and I confirm that my client has given explicit verbal or written consent to the recording and AI processing of this session."}
+                </Label>
+              </div>
 
-                      {recordingType === "full_session" && (
-                        <div className="flex items-start gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={consents.client[block.key]}
-                            className="mt-0.5"
-                            onCheckedChange={(checked) =>
-                              updateConsent(
-                                "client",
-                                block.key,
-                                checked === true
-                              )
-                            }
-                          />
-                          <span className="text-sm leading-relaxed">
-                            {block.clientLabel}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {recordingType === "therapist_summary"
+                  ? "As with all clinical documentation, ensure your record-keeping practices comply with your professional body\u2019s ethical framework and applicable data protection legislation."
+                  : "Client consent should be obtained verbally or in writing before the session begins. By ticking the box above, you are confirming that explicit consent was obtained."}
+              </p>
+            </CardContent>
+          </Card>
 
-          <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-            {recordingType === "therapist_summary"
-              ? "As with all clinical documentation, ensure your record-keeping practices comply with your professional body\u2019s ethical framework and applicable data protection legislation."
-              : "Client consent should be obtained verbally or in writing before the session begins. By ticking the client consent boxes, you are confirming that explicit consent was obtained."}
-          </p>
-
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-3">
             <Button
               className="min-h-12"
               onClick={() => setStep("details")}
@@ -741,9 +640,7 @@ function NewSessionForm() {
             </Button>
             <Button
               className="min-h-12 flex-1 sm:flex-none sm:min-w-[220px]"
-              disabled={
-                !allConsented(consents, recordingType) || savingConsents
-              }
+              disabled={!consented || savingConsents}
               onClick={handleSaveConsents}
               size="lg"
             >

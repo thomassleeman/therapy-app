@@ -423,6 +423,7 @@ export interface TherapySession {
   sessionDate: string;
   durationMinutes: number | null;
   audioStoragePath: string | null;
+  audioMimeType: string | null;
   transcriptionStatus: TranscriptionStatus;
   transcriptionProvider: string | null;
   notesStatus: string;
