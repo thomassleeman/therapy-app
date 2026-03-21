@@ -449,7 +449,7 @@ function SessionsTab({
           </Button>
         </Link>
       </div>
-      <SessionsTable hideClientColumn sessions={sessions} />
+      <SessionsTable clientId={clientId} hideClientColumn sessions={sessions} />
     </div>
   );
 }

@@ -689,9 +689,11 @@ function NotesTab({
 function DetailsTab({
   session,
   consents,
+  redirectHref,
 }: {
   session: TherapySession;
   consents: SessionConsent[];
+  redirectHref: string;
 }) {
   const router = useRouter();
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
@@ -704,13 +706,13 @@ function DetailsTab({
         method: "DELETE",
       });
       if (res.ok) {
-        router.push("/sessions");
+        router.push(redirectHref);
       }
     } finally {
       setDeleting(false);
       setConfirmDeleteSession(false);
     }
-  }, [session.id, router]);
+  }, [session.id, router, redirectHref]);
 
   return (
     <div className="space-y-8">
@@ -886,9 +888,9 @@ export function SessionDetailClient({
   const activeTab = searchParams.get("tab") ?? defaultTab;
 
   const backHref =
-    from === "client" && clientId ? `/clients/${clientId}` : "/sessions";
+    from === "client" && clientId ? `/clients/${clientId}?tab=sessions` : "/sessions";
   const backLabel =
-    from === "client" && clientId ? (clientName ?? "Client") : "Sessions";
+    from === "client" && clientId ? `Sessions - ${clientName ?? "Client"}` : "Sessions";
 
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -1000,7 +1002,7 @@ export function SessionDetailClient({
           </TabsContent>
 
           <TabsContent className="mt-4" value="details">
-            <DetailsTab consents={consents} session={session} />
+            <DetailsTab consents={consents} redirectHref={backHref} session={session} />
           </TabsContent>
         </Tabs>
       </div>

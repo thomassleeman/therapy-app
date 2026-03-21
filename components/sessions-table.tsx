@@ -160,6 +160,7 @@ function NotesBadge({ status }: { status: string }) {
 interface SessionsTableProps {
   sessions: TherapySessionWithClient[];
   hideClientColumn?: boolean;
+  clientId?: string;
   clients?: { id: string; name: string }[];
   onDeleted?: () => void;
 }
@@ -167,6 +168,7 @@ interface SessionsTableProps {
 export function SessionsTable({
   sessions,
   hideClientColumn = false,
+  clientId,
   clients,
   onDeleted,
 }: SessionsTableProps) {
@@ -350,13 +352,13 @@ export function SessionsTable({
                         if (target.closest("a, button")) {
                           return;
                         }
-                        router.push(`/sessions/${s.id}`);
+                        router.push(`/sessions/${s.id}${clientId ? "?from=client" : ""}`);
                       }}
                     >
                       <td className="py-4 pr-3 pl-4 sm:pl-0">
                         <Link
                           className="text-sm font-medium hover:underline"
-                          href={`/sessions/${s.id}`}
+                          href={`/sessions/${s.id}${clientId ? "?from=client" : ""}`}
                         >
                           {formatDate(s.sessionDate)}
                         </Link>
