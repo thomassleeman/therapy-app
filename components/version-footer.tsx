@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { useWindowSize } from "usehooks-ts";
+import { toast } from "@/components/toast";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { Document } from "@/lib/db/types";
 import { getDocumentTimestampByIndex } from "@/lib/utils";
@@ -54,10 +55,8 @@ export const VersionFooter = ({
           disabled={isMutating}
           onClick={async () => {
             setIsMutating(true);
-
-            mutate(
-              `/api/document?id=${artifact.documentId}`,
-              await fetch(
+            try {
+              const res = await fetch(
                 `/api/document?id=${artifact.documentId}&timestamp=${getDocumentTimestampByIndex(
                   documents,
                   currentVersionIndex
@@ -65,8 +64,18 @@ export const VersionFooter = ({
                 {
                   method: "DELETE",
                 }
-              ),
-              {
+              );
+
+              if (!res.ok) {
+                toast({
+                  type: "error",
+                  description: "Failed to restore version. Please try again.",
+                });
+                setIsMutating(false);
+                return;
+              }
+
+              mutate(`/api/document?id=${artifact.documentId}`, res, {
                 optimisticData: documents
                   ? [
                       ...documents.filter((document) =>
@@ -82,8 +91,14 @@ export const VersionFooter = ({
                       ),
                     ]
                   : [],
-              }
-            );
+              });
+            } catch {
+              toast({
+                type: "error",
+                description: "Failed to restore version. Please try again.",
+              });
+              setIsMutating(false);
+            }
           }}
         >
           <div>Restore this version</div>

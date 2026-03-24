@@ -39,6 +39,8 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 
 ```
 app/
+├── global-error.tsx    # Root error boundary (catches root layout errors)
+├── not-found.tsx       # Custom 404 page
 ├── (app)/              # All authenticated non-chat pages (unified sidebar layout)
 │   ├── page.tsx                    # Dashboard
 │   ├── clients/                    # Client list, client hub, clinical documents
@@ -60,6 +62,7 @@ components/             # React components (client-side)
 ├── transcription/      # Audio recorder, file upload
 ├── documents/          # Document generation form, viewer
 ├── ui/                 # shadcn/ui primitives
+├── error-fallback.tsx  # Reusable error boundary UI (used by all route-level error.tsx files)
 └── *.tsx               # Page-level components, sidebar, chat UI
 
 lib/
@@ -94,7 +97,9 @@ lib/
 ├── types/
 │   └── knowledge.ts    # Single source of truth for RAG enums (categories, modalities, jurisdictions)
 ├── auth.ts             # Supabase auth wrapper
-└── errors.ts           # Typed error classes
+├── errors.ts           # Typed error classes (ChatSDKError — used by chat subsystem)
+├── errors/
+│   └── client-error-handler.ts  # Centralised client-side error handling (showErrorToast, extractErrorMessage, showSuccessToast)
 
 scripts/
 ├── ingest-knowledge.ts # Knowledge base ingestion CLI (--dry-run, --with-context, --with-parents)
@@ -160,6 +165,32 @@ tests/                  # Playwright E2E + fixtures
 - `stopWhen: stepCountIs(6)` — allows up to 5 tool calls per turn
 - Tools are registered via factory functions that accept a `{ session }` parameter
 - The system prompt is assembled in `lib/ai/prompts.ts` via `systemPrompt()` which composes: base prompt + orientation prompt + tool context prompt + sensitive content directives + session transcript context + client context (when implemented — see Client-Aware Chat Context below)
+
+### Error Handling (Client-Side)
+
+- **Centralised utility** at `lib/errors/client-error-handler.ts` provides three functions used by all non-chat client-side operations:
+  - `showErrorToast(error, fallbackMessage)` — always shows the fallback message to the user (never raw `error.message`), logs the real error to console. Detects network failures (`TypeError` from `fetch()` + `navigator.onLine`) and shows a specific connectivity message instead of the generic fallback.
+  - `extractErrorMessage(res, fallbackMessage)` — extracts a human-readable error from a non-ok `Response` body (expects `{ error: string }` JSON). Falls back to connectivity-specific messages when JSON parsing fails and the browser is offline, or to a server-unreachable message otherwise.
+  - `showSuccessToast(message)` — convenience wrapper for success toasts.
+- **Chat subsystem** uses its own error handling via `ChatSDKError` in `lib/errors.ts` and `fetchWithErrorHandlers` in `lib/utils.ts` — these are separate systems.
+- **Toast API:** The custom wrapper at `components/toast.tsx` is the standard — `import { toast } from "@/components/toast"` with `toast({ type: "error" | "success", description: string })`. Some files still use direct `import { toast } from "sonner"` where `toast.promise()` is needed (sessions-table, sidebar-history, clients-page) since the custom wrapper doesn't support promise-based toasts.
+- **Error boundaries:** Every route group has an `error.tsx` file backed by a shared `ErrorFallback` component. `global-error.tsx` catches root layout errors. `not-found.tsx` provides a custom 404.
+- **Pattern for fetch handlers:**
+  ```typescript
+  try {
+    const res = await fetch(...);
+    if (!res.ok) {
+      const message = await extractErrorMessage(res, "Friendly fallback.");
+      toast({ type: "error", description: message });
+      return;
+    }
+    // success path
+  } catch (err) {
+    showErrorToast(err, "Friendly fallback.");
+  }
+  ```
+- **Network detection:** `showErrorToast` checks `navigator.onLine` and `TypeError` with fetch/network in the message. When detected, the toast reads: "Unable to connect. Please check your internet connection and try again." — this fires automatically for any handler using `showErrorToast`, no per-handler wiring needed.
+- **Never expose raw error messages to users.** `showErrorToast` always uses the caller-provided fallback for the toast. Technical details go to `console.error` only.
 
 ### Knowledge Base Content
 
@@ -519,6 +550,7 @@ tests/
 - System prompt surgery (search-first mandate, terminology preservation, citation rules, no-results disclosure, confidence handling)
 - Blank response bug fix (empty KB guard + fallback)
 - **Application-level encryption** (AES-256-GCM) on all sensitive clinical content: session transcripts, clinical notes, clinical documents, chat messages, and audio files. Per-record key derivation via HKDF-SHA256. Migration scripts for existing plaintext data.
+- **Centralised client-side error handling** — all fetch-based operations across sessions, notes, documents, and client CRUD show user-friendly toast messages on failure via `lib/errors/client-error-handler.ts`. Network failures are auto-detected and show a specific connectivity message ("Unable to connect...") rather than the generic operation-failed message. Error boundaries (`error.tsx`) on all route groups catch unhandled rendering errors with a recovery UI. Custom 404 page. Toast API standardised on the custom `components/toast.tsx` wrapper (direct sonner imports remain only where `toast.promise()` is needed).
 - **Privacy policy and terms of service** drafted as Word documents. Privacy policy states 30-day deletion window after account deletion request.
 - **Chat retention policy:** indefinite retention with user-controlled deletion. Therapists can delete individual chats, delete all chats (via settings), or delete their entire account. No automatic expiry.
 

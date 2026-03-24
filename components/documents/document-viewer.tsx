@@ -38,6 +38,10 @@ import {
 } from "@/components/ui/tooltip";
 import type { ClinicalDocumentWithReferences } from "@/lib/db/types";
 import type { DocumentTypeConfig } from "@/lib/documents/types";
+import {
+  extractErrorMessage,
+  showErrorToast,
+} from "@/lib/errors/client-error-handler";
 
 interface Props {
   document: ClinicalDocumentWithReferences;
@@ -171,11 +175,23 @@ export function DocumentViewer({
       });
 
       if (res.ok) {
-        const updated = await res.json();
+        const updated = await res.json().catch(() => null);
+        if (!updated) {
+          throw new Error("Received an invalid response from the server.");
+        }
         setDocument((prev) => ({ ...prev, ...updated }));
         setEditedContent({});
         setEditedTitle(null);
+        toast({ type: "success", description: "Document saved." });
+      } else {
+        const message = await extractErrorMessage(
+          res,
+          "Failed to save document. Please try again."
+        );
+        toast({ type: "error", description: message });
       }
+    } catch (err) {
+      showErrorToast(err, "Failed to save document. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -192,10 +208,14 @@ export function DocumentViewer({
         toast({ type: "success", description: "Document deleted." });
         router.push(`/clients/${clientId}`);
       } else {
-        toast({ type: "error", description: "Failed to delete document." });
+        const message = await extractErrorMessage(
+          res,
+          "Failed to delete document. Please try again."
+        );
+        toast({ type: "error", description: message });
       }
-    } catch {
-      toast({ type: "error", description: "Failed to delete document." });
+    } catch (err) {
+      showErrorToast(err, "Failed to delete document. Please try again.");
     } finally {
       setDeleting(false);
       setConfirmDelete(false);
@@ -218,10 +238,24 @@ export function DocumentViewer({
         });
 
         if (res.ok) {
-          const updated = await res.json();
+          const updated = await res.json().catch(() => null);
+          if (!updated) {
+            throw new Error("Received an invalid response from the server.");
+          }
           setDocument((prev) => ({ ...prev, ...updated }));
           router.refresh();
+        } else {
+          const message = await extractErrorMessage(
+            res,
+            "Failed to update document status. Please try again."
+          );
+          toast({ type: "error", description: message });
         }
+      } catch (err) {
+        showErrorToast(
+          err,
+          "Failed to update document status. Please try again."
+        );
       } finally {
         setSaving(false);
         setConfirmFinalise(false);
@@ -304,11 +338,11 @@ export function DocumentViewer({
                   link.download = filenameMatch?.[1] ?? "document.docx";
                   link.click();
                   URL.revokeObjectURL(url);
-                } catch {
-                  toast({
-                    type: "error",
-                    description: "Failed to export document. Please try again.",
-                  });
+                } catch (err) {
+                  showErrorToast(
+                    err,
+                    "Failed to export document. Please try again."
+                  );
                 }
               }}
               size="sm"

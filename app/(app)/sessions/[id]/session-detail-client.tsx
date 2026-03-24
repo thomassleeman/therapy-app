@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   ArrowRight,
-  Check,
   FileText,
   Loader2,
   RefreshCw,
@@ -14,7 +13,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { CaseFormulationNudge } from "@/components/notes/case-formulation-nudge";
-import { NoteDocumentEditor } from "@/components/notes/note-document-editor";
+import { NotesRefinement } from "@/components/notes/notes-refinement";
+import { toast } from "@/components/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,21 +39,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
 import {
-  type BirpNoteContent,
   type ClinicalDocument,
   type ClinicalNote,
-  type DapNoteContent,
-  type FreeformNoteContent,
-  type GirpNoteContent,
-  type NarrativeNoteContent,
-  type NoteContent,
   type NoteFormat,
+  type NoteStatus,
   type SessionConsent,
   type SessionSegment,
-  type SoapNoteContent,
   type TherapySession,
   TRANSCRIPTION_STATUS_LABELS,
 } from "@/lib/db/types";
+import {
+  extractErrorMessage,
+  showErrorToast,
+} from "@/lib/errors/client-error-handler";
 
 interface Props {
   session: TherapySession;
@@ -114,47 +112,6 @@ const FORMAT_DESCRIPTIONS: Record<NoteFormat, string> = {
   narrative:
     "Chronological narrative covering session opening, body, clinical synthesis, and path forward.",
 };
-
-function isSoapContent(
-  content: NoteContent,
-  format: NoteFormat
-): content is SoapNoteContent {
-  return format === "soap" && "subjective" in content;
-}
-
-function isDapContent(
-  content: NoteContent,
-  format: NoteFormat
-): content is DapNoteContent {
-  return format === "dap" && "data" in content;
-}
-
-function isBirpContent(
-  content: NoteContent,
-  format: NoteFormat
-): content is BirpNoteContent {
-  return format === "birp" && "behaviour" in content;
-}
-
-function isGirpContent(
-  content: NoteContent,
-  format: NoteFormat
-): content is GirpNoteContent {
-  return format === "girp" && "goals" in content;
-}
-
-function isNarrativeContent(
-  content: NoteContent,
-  format: NoteFormat
-): content is NarrativeNoteContent {
-  return format === "narrative" && "clinicalOpening" in content;
-}
-
-function isFreeformContent(
-  content: NoteContent
-): content is FreeformNoteContent {
-  return "body" in content;
-}
 
 // ─── Transcript Tab ────────────────────────────────────────────────────────
 
@@ -258,11 +215,8 @@ function NotesTab({
   const [selectedFormat, setSelectedFormat] = useState<NoteFormat>("soap");
   const [additionalContext, setAdditionalContext] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editedContent, setEditedContent] = useState<Record<string, string>>(
-    {}
-  );
-  const [confirmFinalise, setConfirmFinalise] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [justFinalised, setJustFinalised] = useState(false);
 
   const activeNote = notes[0] ?? null;
@@ -286,11 +240,13 @@ function NotesTab({
           throw new Error(data.error ?? "Failed to generate notes");
         }
 
-        const note = await res.json();
+        const note = await res.json().catch(() => null);
+        if (!note) {
+          throw new Error("Received an invalid response from the server.");
+        }
         setNotes([note]);
-        setEditedContent({});
       } catch (err) {
-        console.error("Note generation failed:", err);
+        showErrorToast(err, "Failed to generate notes. Please try again.");
       } finally {
         setGenerating(false);
       }
@@ -298,125 +254,109 @@ function NotesTab({
     [session.id, additionalContext]
   );
 
-  const handleSave = useCallback(async () => {
-    if (!activeNote) {
-      return;
-    }
-    setSaving(true);
-    try {
-      let updatedContent = activeNote.content;
+  const handleSaveNotes = useCallback(
+    async (content: Record<string, string>) => {
+      try {
+        const res = await fetch(`/api/sessions/${session.id}/notes`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            noteId: activeNote?.id,
+            content,
+          }),
+        });
 
-      if (Object.keys(editedContent).length > 0) {
-        if (isSoapContent(activeNote.content, activeNote.noteFormat)) {
-          updatedContent = {
-            subjective:
-              editedContent.subjective ?? activeNote.content.subjective,
-            objective: editedContent.objective ?? activeNote.content.objective,
-            assessment:
-              editedContent.assessment ?? activeNote.content.assessment,
-            plan: editedContent.plan ?? activeNote.content.plan,
-          };
-        } else if (isDapContent(activeNote.content, activeNote.noteFormat)) {
-          updatedContent = {
-            data: editedContent.data ?? activeNote.content.data,
-            assessment:
-              editedContent.assessment ?? activeNote.content.assessment,
-            plan: editedContent.plan ?? activeNote.content.plan,
-          };
-        } else if (isBirpContent(activeNote.content, activeNote.noteFormat)) {
-          updatedContent = {
-            behaviour: editedContent.behaviour ?? activeNote.content.behaviour,
-            intervention:
-              editedContent.intervention ?? activeNote.content.intervention,
-            response: editedContent.response ?? activeNote.content.response,
-            plan: editedContent.plan ?? activeNote.content.plan,
-          };
-        } else if (isGirpContent(activeNote.content, activeNote.noteFormat)) {
-          updatedContent = {
-            goals: editedContent.goals ?? activeNote.content.goals,
-            intervention:
-              editedContent.intervention ?? activeNote.content.intervention,
-            response: editedContent.response ?? activeNote.content.response,
-            plan: editedContent.plan ?? activeNote.content.plan,
-          };
-        } else if (
-          isNarrativeContent(activeNote.content, activeNote.noteFormat)
-        ) {
-          updatedContent = {
-            clinicalOpening:
-              editedContent.clinicalOpening ??
-              activeNote.content.clinicalOpening,
-            sessionBody:
-              editedContent.sessionBody ?? activeNote.content.sessionBody,
-            clinicalSynthesis:
-              editedContent.clinicalSynthesis ??
-              activeNote.content.clinicalSynthesis,
-            pathForward:
-              editedContent.pathForward ?? activeNote.content.pathForward,
-          };
-        } else if (isFreeformContent(activeNote.content)) {
-          updatedContent = {
-            body: editedContent.body ?? activeNote.content.body,
-          };
+        if (!res.ok) {
+          const message = await extractErrorMessage(
+            res,
+            "Failed to save notes. Please try again."
+          );
+          toast({ type: "error", description: message });
+          return;
         }
+
+        const updated = await res.json().catch(() => null);
+        if (updated) {
+          setNotes([updated]);
+        }
+        toast({ type: "success", description: "Notes saved." });
+      } catch (err) {
+        showErrorToast(err, "Failed to save notes. Please try again.");
       }
+    },
+    [activeNote?.id, session.id]
+  );
 
-      const res = await fetch(`/api/sessions/${session.id}/notes`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          noteId: activeNote.id,
-          content: updatedContent,
-        }),
-      });
-
-      if (res.ok) {
-        const updated = await res.json();
-        setNotes([updated]);
-        setEditedContent({});
-      }
-    } finally {
-      setSaving(false);
-    }
-  }, [activeNote, editedContent, session.id]);
-
-  const handleStatusUpdate = useCallback(
-    async (status: "reviewed" | "finalised") => {
+  const handleStatusChange = useCallback(
+    async (newStatus: NoteStatus) => {
       if (!activeNote) {
         return;
       }
-      setSaving(true);
       try {
         const res = await fetch(`/api/sessions/${session.id}/notes`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             noteId: activeNote.id,
-            status,
+            status: newStatus,
             reviewedAt:
-              status === "reviewed" ? new Date().toISOString() : undefined,
+              newStatus === "reviewed" ? new Date().toISOString() : undefined,
           }),
         });
 
         if (res.ok) {
-          const updated = await res.json();
-          setNotes([updated]);
-          if (status === "finalised") {
+          const updated = await res.json().catch(() => null);
+          if (updated) {
+            setNotes([updated]);
+          }
+          if (newStatus === "finalised") {
             setJustFinalised(true);
           }
           router.refresh();
+        } else {
+          const message = await extractErrorMessage(
+            res,
+            "Failed to update note status. Please try again."
+          );
+          toast({ type: "error", description: message });
         }
-      } finally {
-        setSaving(false);
-        setConfirmFinalise(false);
+      } catch (err) {
+        showErrorToast(err, "Failed to update note status. Please try again.");
       }
     },
     [activeNote, session.id, router]
   );
 
-  const updateField = (field: string, value: string) => {
-    setEditedContent((prev) => ({ ...prev, [field]: value }));
-  };
+  const handleDelete = useCallback(async () => {
+    if (!activeNote) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/notes`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ noteId: activeNote.id }),
+      });
+
+      if (res.ok) {
+        setNotes([]);
+        toast({ type: "success", description: "Note deleted." });
+        router.refresh();
+      } else {
+        const message = await extractErrorMessage(
+          res,
+          "Failed to delete note. Please try again."
+        );
+        toast({ type: "error", description: message });
+      }
+    } catch (err) {
+      showErrorToast(err, "Failed to delete note. Please try again.");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [activeNote, session.id, router]);
 
   // No notes yet — show generation form
   if (!activeNote) {
@@ -509,135 +449,21 @@ function NotesTab({
     );
   }
 
-  // Notes exist — show editor
-  const noteContent = activeNote.content;
-  const sections: { key: string; label: string; value: string }[] = [];
-
-  if (isSoapContent(noteContent, activeNote.noteFormat)) {
-    sections.push(
-      { key: "subjective", label: "Subjective", value: noteContent.subjective },
-      { key: "objective", label: "Objective", value: noteContent.objective },
-      { key: "assessment", label: "Assessment", value: noteContent.assessment },
-      { key: "plan", label: "Plan", value: noteContent.plan }
-    );
-  } else if (isDapContent(noteContent, activeNote.noteFormat)) {
-    sections.push(
-      { key: "data", label: "Data", value: noteContent.data },
-      { key: "assessment", label: "Assessment", value: noteContent.assessment },
-      { key: "plan", label: "Plan", value: noteContent.plan }
-    );
-  } else if (isBirpContent(noteContent, activeNote.noteFormat)) {
-    sections.push(
-      { key: "behaviour", label: "Behaviour", value: noteContent.behaviour },
-      {
-        key: "intervention",
-        label: "Intervention",
-        value: noteContent.intervention,
-      },
-      { key: "response", label: "Response", value: noteContent.response },
-      { key: "plan", label: "Plan", value: noteContent.plan }
-    );
-  } else if (isGirpContent(noteContent, activeNote.noteFormat)) {
-    sections.push(
-      { key: "goals", label: "Goals", value: noteContent.goals },
-      {
-        key: "intervention",
-        label: "Intervention",
-        value: noteContent.intervention,
-      },
-      { key: "response", label: "Response", value: noteContent.response },
-      { key: "plan", label: "Plan", value: noteContent.plan }
-    );
-  } else if (isNarrativeContent(noteContent, activeNote.noteFormat)) {
-    sections.push(
-      {
-        key: "clinicalOpening",
-        label: "Clinical Opening",
-        value: noteContent.clinicalOpening,
-      },
-      {
-        key: "sessionBody",
-        label: "Session Body",
-        value: noteContent.sessionBody,
-      },
-      {
-        key: "clinicalSynthesis",
-        label: "Clinical Synthesis & Risk",
-        value: noteContent.clinicalSynthesis,
-      },
-      {
-        key: "pathForward",
-        label: "The Path Forward",
-        value: noteContent.pathForward,
-      }
-    );
-  } else if (isFreeformContent(noteContent)) {
-    sections.push({
-      key: "body",
-      label: "Notes",
-      value: noteContent.body,
-    });
-  }
-
+  // Notes exist — show refinement interface
   return (
     <div className="space-y-4">
-      {activeNote.status !== "finalised" && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-4 py-3">
-          <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
-            AI-generated draft — please review before finalising.
-          </p>
-        </div>
-      )}
-
-      <NoteDocumentEditor
-        disabled={activeNote.status === "finalised"}
-        editedContent={editedContent}
-        onFieldChange={updateField}
-        sections={sections}
+      <NotesRefinement
+        initialContent={activeNote.content as unknown as Record<string, string>}
+        key={activeNote.id}
+        noteFormat={activeNote.noteFormat}
+        noteId={activeNote.id}
+        noteStatus={activeNote.status}
+        onSave={handleSaveNotes}
+        onStatusChange={handleStatusChange}
+        sessionId={session.id}
       />
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
-        {activeNote.status !== "finalised" && (
-          <>
-            <Button
-              className="min-h-11"
-              disabled={saving || Object.keys(editedContent).length === 0}
-              onClick={handleSave}
-              size="lg"
-            >
-              {saving ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Check className="size-4" />
-              )}
-              Save Changes
-            </Button>
-
-            {activeNote.status === "draft" && (
-              <Button
-                className="min-h-11"
-                disabled={saving}
-                onClick={() => handleStatusUpdate("reviewed")}
-                size="lg"
-                variant="outline"
-              >
-                Mark as Reviewed
-              </Button>
-            )}
-
-            <Button
-              className="min-h-11"
-              disabled={saving}
-              onClick={() => setConfirmFinalise(true)}
-              size="lg"
-              variant="outline"
-            >
-              Finalise
-            </Button>
-          </>
-        )}
-
         <Button
           className="min-h-11"
           disabled={generating || activeNote.status === "finalised"}
@@ -648,24 +474,43 @@ function NotesTab({
           <RefreshCw className="size-4" />
           Regenerate
         </Button>
+
+        <Button
+          className="min-h-11 ml-auto"
+          disabled={deleting}
+          onClick={() => setConfirmDelete(true)}
+          size="lg"
+          variant="ghost"
+        >
+          <Trash2 className="size-4 text-destructive" />
+          <span className="text-destructive">Delete</span>
+        </Button>
       </div>
 
-      {/* Finalise Confirmation Dialog */}
-      <Dialog onOpenChange={setConfirmFinalise} open={confirmFinalise}>
+      {/* Delete Confirmation Dialog */}
+      <Dialog onOpenChange={setConfirmDelete} open={confirmDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalise Notes</DialogTitle>
+            <DialogTitle>Delete Note</DialogTitle>
             <DialogDescription>
-              Once finalised, these notes can no longer be edited. Make sure you
-              have reviewed and are satisfied with the content.
+              This will permanently delete this clinical note. You can
+              regenerate notes afterwards if needed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setConfirmFinalise(false)} variant="outline">
+            <Button onClick={() => setConfirmDelete(false)} variant="outline">
               Cancel
             </Button>
-            <Button onClick={() => handleStatusUpdate("finalised")}>
-              Finalise Notes
+            <Button
+              disabled={deleting}
+              onClick={handleDelete}
+              variant="destructive"
+            >
+              {deleting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                "Delete Note"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -706,8 +551,17 @@ function DetailsTab({
         method: "DELETE",
       });
       if (res.ok) {
+        toast({ type: "success", description: "Session deleted." });
         router.push(redirectHref);
+      } else {
+        const message = await extractErrorMessage(
+          res,
+          "Failed to delete session. Please try again."
+        );
+        toast({ type: "error", description: message });
       }
+    } catch (err) {
+      showErrorToast(err, "Failed to delete session. Please try again.");
     } finally {
       setDeleting(false);
       setConfirmDeleteSession(false);
@@ -888,9 +742,13 @@ export function SessionDetailClient({
   const activeTab = searchParams.get("tab") ?? defaultTab;
 
   const backHref =
-    from === "client" && clientId ? `/clients/${clientId}?tab=sessions` : "/sessions";
+    from === "client" && clientId
+      ? `/clients/${clientId}?tab=sessions`
+      : "/sessions";
   const backLabel =
-    from === "client" && clientId ? `Sessions - ${clientName ?? "Client"}` : "Sessions";
+    from === "client" && clientId
+      ? `Sessions - ${clientName ?? "Client"}`
+      : "Sessions";
 
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -1002,7 +860,11 @@ export function SessionDetailClient({
           </TabsContent>
 
           <TabsContent className="mt-4" value="details">
-            <DetailsTab consents={consents} redirectHref={backHref} session={session} />
+            <DetailsTab
+              consents={consents}
+              redirectHref={backHref}
+              session={session}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -1,6 +1,6 @@
 import { memo } from "react";
-import { toast } from "sonner";
 import { useCopyToClipboard } from "usehooks-ts";
+import { toast } from "@/components/toast";
 import type { ChatMessage } from "@/lib/types";
 import { Action, Actions } from "./elements/actions";
 import { CopyIcon, PencilEditIcon } from "./icons";
@@ -32,12 +32,12 @@ export function PureMessageActions({
 
   const handleCopy = async () => {
     if (!textFromParts) {
-      toast.error("There's no text to copy!");
+      toast({ type: "error", description: "There's no text to copy!" });
       return;
     }
 
     await copyToClipboard(textFromParts);
-    toast.success("Copied to clipboard!");
+    toast({ type: "success", description: "Copied to clipboard!" });
   };
 
   // User messages get edit (on hover) and copy actions

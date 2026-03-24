@@ -169,6 +169,11 @@ export function Chat({
             description: error.message,
           });
         }
+      } else {
+        toast({
+          type: "error",
+          description: "Something went wrong. Please try again.",
+        });
       }
     },
   });

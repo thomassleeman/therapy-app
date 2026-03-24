@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ClientDialog } from "@/components/client-dialog";
 import { FabNewChat } from "@/components/fab-new-chat";
 import { PencilEditIcon } from "@/components/icons";
+import { SessionsTable } from "@/components/sessions-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,10 +17,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import type {
   AgeBracket,
   BirpNoteContent,
@@ -55,7 +54,6 @@ import {
   getDocumentTypeLabel,
 } from "@/lib/documents/types";
 import { formatDate } from "@/lib/utils";
-import { SessionsTable } from "@/components/sessions-table";
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
   active: "bg-green-600 text-white dark:bg-green-900 dark:text-green-200",
@@ -429,7 +427,9 @@ function SessionsTab({
     return (
       <Card>
         <CardContent className="flex flex-col items-center py-8">
-          <CardDescription>No sessions recorded for this client yet.</CardDescription>
+          <CardDescription>
+            No sessions recorded for this client yet.
+          </CardDescription>
           <Link className="mt-4" href={`/sessions/new?clientId=${clientId}`}>
             <Button size="sm" variant="outline">
               New Session

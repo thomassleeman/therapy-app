@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,11 +9,7 @@ import { useClients } from "@/hooks/use-clients";
 import { useSessions } from "@/hooks/use-sessions";
 import type { TherapySessionWithClient } from "@/lib/db/types";
 import { PlusIcon } from "./icons";
-import {
-  ListPageEmpty,
-  ListPageShell,
-  ListPageSkeleton,
-} from "./list-page";
+import { ListPageEmpty, ListPageShell, ListPageSkeleton } from "./list-page";
 import { SessionsTable } from "./sessions-table";
 
 // ── Summary cards ─────────────────────────────────────────────────────
@@ -89,7 +86,7 @@ function SummaryCards({ counts }: { counts: SummaryCounts }) {
 // ── Main component ────────────────────────────────────────────────────
 
 export function SessionsPage() {
-  const { sessions, isLoading, refresh } = useSessions();
+  const { sessions, isLoading, error: sessionsError, refresh } = useSessions();
   const { clients } = useClients();
 
   const summaryCounts = useMemo(
@@ -114,6 +111,16 @@ export function SessionsPage() {
     >
       {isLoading ? (
         <ListPageSkeleton />
+      ) : sessionsError && sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+          <AlertCircle className="size-8 text-destructive" />
+          <p className="text-sm text-muted-foreground">
+            Failed to load sessions. Please try refreshing the page.
+          </p>
+          <Button onClick={() => refresh()} size="sm" variant="outline">
+            Try again
+          </Button>
+        </div>
       ) : (
         <>
           {sessions.length === 0 && (

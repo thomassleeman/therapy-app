@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import { Artifact } from "@/components/create-artifact";
 import { DocumentSkeleton } from "@/components/document-skeleton";
 import {
@@ -9,6 +8,7 @@ import {
   UndoIcon,
 } from "@/components/icons";
 import { Editor } from "@/components/text-editor";
+import { toast } from "@/components/toast";
 
 export const textArtifact = new Artifact<"text">({
   kind: "text",
@@ -103,7 +103,7 @@ export const textArtifact = new Artifact<"text">({
       description: "Copy to clipboard",
       onClick: ({ content }) => {
         navigator.clipboard.writeText(content);
-        toast.success("Copied to clipboard!");
+        toast({ type: "success", description: "Copied to clipboard!" });
       },
     },
   ],

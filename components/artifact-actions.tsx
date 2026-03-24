@@ -1,5 +1,5 @@
 import { type Dispatch, memo, type SetStateAction, useState } from "react";
-import { toast } from "sonner";
+import { showErrorToast } from "@/lib/errors/client-error-handler";
 import { cn } from "@/lib/utils";
 import { artifactDefinitions, type UIArtifact } from "./artifact";
 import type { ArtifactActionContext } from "./create-artifact";
@@ -67,8 +67,11 @@ function PureArtifactActions({
 
                 try {
                   await Promise.resolve(action.onClick(actionContext));
-                } catch (_error) {
-                  toast.error("Failed to execute action");
+                } catch (err) {
+                  showErrorToast(
+                    err,
+                    "Failed to execute action. Please try again."
+                  );
                 } finally {
                   setIsLoading(false);
                 }

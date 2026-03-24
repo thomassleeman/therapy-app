@@ -75,10 +75,10 @@ export function CaseFormulationNudge({
             <Link href={documentUrl}>{actionLabel}</Link>
           </Button>
           <Button
+            className="text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
             onClick={() => setDismissed(true)}
             size="sm"
             variant="ghost"
-            className="text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
           >
             Not now
           </Button>

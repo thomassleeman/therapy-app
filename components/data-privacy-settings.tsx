@@ -4,12 +4,12 @@ import { ChevronRight, Download, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import {
   deleteAllChatsAction,
   exportDataAction,
   requestAccountDeletionAction,
 } from "@/app/(app)/settings/privacy/actions";
+import { toast } from "@/components/toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -118,9 +118,15 @@ function DataRightsCard() {
         a.download = `therapy-platform-data-export-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success("Your data export has been downloaded.");
+        toast({
+          type: "success",
+          description: "Your data export has been downloaded.",
+        });
       } else {
-        toast.error(result.error ?? "Failed to export data.");
+        toast({
+          type: "error",
+          description: result.error ?? "Failed to export data.",
+        });
       }
     });
   }
@@ -129,10 +135,16 @@ function DataRightsCard() {
     startDeleteTransition(async () => {
       const result = await requestAccountDeletionAction();
       if (result.success) {
-        toast.success("Account deletion request submitted.");
+        toast({
+          type: "success",
+          description: "Account deletion request submitted.",
+        });
         router.push("/login");
       } else {
-        toast.error(result.error ?? "Failed to request account deletion.");
+        toast({
+          type: "error",
+          description: result.error ?? "Failed to request account deletion.",
+        });
       }
     });
   }
@@ -249,10 +261,16 @@ function ChatDataCard({
     startTransition(async () => {
       const result = await deleteAllChatsAction(userId);
       if (result.success) {
-        toast.success(`Deleted ${result.deletedCount ?? 0} conversations.`);
+        toast({
+          type: "success",
+          description: `Deleted ${result.deletedCount ?? 0} conversations.`,
+        });
         onChatsDeleted();
       } else {
-        toast.error(result.error ?? "Failed to delete chats.");
+        toast({
+          type: "error",
+          description: result.error ?? "Failed to delete chats.",
+        });
       }
     });
   }

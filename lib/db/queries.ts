@@ -1882,6 +1882,32 @@ export async function updateClinicalNote({
   }
 }
 
+export async function deleteClinicalNote({
+  id,
+}: {
+  id: string;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("clinical_notes")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      handleSupabaseError(error, "delete clinical note");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete clinical note"
+    );
+  }
+}
+
 // ============================================================
 // Consent records
 // ============================================================
@@ -2644,9 +2670,15 @@ export async function getRecentClinicalNotesByClient({
         updatedAt: row.updated_at as string,
       }))
       .sort((a, b) => {
-        if (!a.sessionDate && !b.sessionDate) { return 0; }
-        if (!a.sessionDate) { return 1; }
-        if (!b.sessionDate) { return -1; }
+        if (!a.sessionDate && !b.sessionDate) {
+          return 0;
+        }
+        if (!a.sessionDate) {
+          return 1;
+        }
+        if (!b.sessionDate) {
+          return -1;
+        }
         return b.sessionDate.localeCompare(a.sessionDate);
       })
       .slice(0, limit);

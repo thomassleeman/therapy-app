@@ -227,7 +227,9 @@ const getToolContextPrompt = (
 };
 
 export function getClientContextPrompt(clientContext: string | null): string {
-  if (!clientContext) { return ''; }
+  if (!clientContext) {
+    return "";
+  }
   return `\n\n--- CLIENT DATA (for your reference — do not recite) ---\n${clientContext}\n--- END CLIENT DATA ---\n`;
 }
 

@@ -706,6 +706,7 @@ export async function POST(request: Request) {
 
       const clinicalNote = await createClinicalNote({
         sessionId,
+        clientId: therapySession.clientId ?? undefined,
         therapistId: session.user.id,
         noteFormat: actualFormat,
         content,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -45,6 +45,7 @@ import {
   SESSION_FREQUENCIES,
   SESSION_FREQUENCY_LABELS,
 } from "@/lib/db/types";
+import { showErrorToast } from "@/lib/errors/client-error-handler";
 import { ChevronDownIcon } from "./icons";
 import { TagInput } from "./tag-input";
 
@@ -181,7 +182,7 @@ export function ClientDialog({
     e.preventDefault();
 
     if (!form.name.trim()) {
-      toast.error("Client name is required");
+      toast({ type: "error", description: "Client name is required" });
       return;
     }
 
@@ -225,13 +226,19 @@ export function ClientDialog({
 
       const savedClient = await response.json();
 
-      toast.success(isEditing ? "Client updated" : "Client created");
+      toast({
+        type: "success",
+        description: isEditing ? "Client updated" : "Client created",
+      });
       refresh();
       onOpenChange(false);
       onSuccess?.(savedClient);
-    } catch (_error) {
-      toast.error(
-        isEditing ? "Failed to update client" : "Failed to create client"
+    } catch (error) {
+      showErrorToast(
+        error,
+        isEditing
+          ? "Failed to update client. Please try again."
+          : "Failed to create client. Please try again."
       );
     } finally {
       setIsSubmitting(false);

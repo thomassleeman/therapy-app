@@ -14,7 +14,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import {
   ModelSelector,
@@ -27,13 +26,16 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
+import { toast } from "@/components/toast";
 import {
   chatModels,
   DEFAULT_CHAT_MODEL,
   modelsByProvider,
 } from "@/lib/ai/models";
+import { showErrorToast } from "@/lib/errors/client-error-handler";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
 import {
   PromptInput,
   PromptInputSubmit,
@@ -200,9 +202,9 @@ function PureMultimodalInput({
         };
       }
       const { error } = await response.json();
-      toast.error(error);
-    } catch (_error) {
-      toast.error("Failed to upload file, please try again!");
+      toast({ type: "error", description: error });
+    } catch (err) {
+      showErrorToast(err, "Failed to upload file, please try again!");
     }
   }, []);
 
@@ -270,9 +272,9 @@ function PureMultimodalInput({
           ...curr,
           ...(successfullyUploadedAttachments as Attachment[]),
         ]);
-      } catch (error) {
-        console.error("Error uploading pasted images:", error);
-        toast.error("Failed to upload pasted image(s)");
+      } catch (err) {
+        console.error("Error uploading pasted images:", err);
+        showErrorToast(err, "Failed to upload pasted image(s)");
       } finally {
         setUploadQueue([]);
       }
@@ -312,7 +314,10 @@ function PureMultimodalInput({
           if (status === "ready") {
             submitForm();
           } else {
-            toast.error("Please wait for the model to finish its response!");
+            toast({
+              type: "error",
+              description: "Please wait for the model to finish its response!",
+            });
           }
         }}
       >

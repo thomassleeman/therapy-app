@@ -31,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { RecordingType } from "@/lib/db/types";
+import { showErrorToast } from "@/lib/errors/client-error-handler";
 
 interface ClientOption {
   id: string;
@@ -159,7 +160,10 @@ function NewSessionForm() {
         if (!sessionRes.ok) {
           throw new Error("Failed to create session");
         }
-        const session = await sessionRes.json();
+        const session = await sessionRes.json().catch(() => null);
+        if (!session) {
+          throw new Error("Received an invalid response from the server.");
+        }
         activeSessionId = session.id;
         setSessionId(session.id);
       }
@@ -190,7 +194,7 @@ function NewSessionForm() {
 
       router.push(`/sessions/${activeSessionId}`);
     } catch (err) {
-      console.error("Failed to generate notes:", err);
+      showErrorToast(err, "Failed to generate notes. Please try again.");
     } finally {
       setGeneratingNotes(false);
     }
@@ -252,11 +256,14 @@ function NewSessionForm() {
         throw new Error(data.error ?? "Failed to create session");
       }
 
-      const session = await sessionRes.json();
+      const session = await sessionRes.json().catch(() => null);
+      if (!session) {
+        throw new Error("Received an invalid response from the server.");
+      }
       setSessionId(session.id);
       setStep("record");
     } catch (error) {
-      console.error("Failed to create session:", error);
+      showErrorToast(error, "Failed to create session. Please try again.");
     } finally {
       setSavingConsents(false);
     }
@@ -272,11 +279,14 @@ function NewSessionForm() {
           method: "DELETE",
         });
         if (!res.ok) {
-          console.error("Failed to delete session");
+          showErrorToast(
+            new Error("Failed to clean up session"),
+            "Failed to go back. Please try again."
+          );
           return; // Stay on the consent step
         }
-      } catch {
-        console.error("Failed to delete session");
+      } catch (err) {
+        showErrorToast(err, "Failed to go back. Please try again.");
         return; // Stay on the consent step
       }
       setSessionId(null);

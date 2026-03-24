@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -89,7 +90,12 @@ function StatusBadge({ status }: { status: ClientStatus }) {
 
 export function ClientsPage() {
   const router = useRouter();
-  const { clients, isLoading: isLoadingClients, refresh } = useClients();
+  const {
+    clients,
+    isLoading: isLoadingClients,
+    error: clientsError,
+    refresh,
+  } = useClients();
   const { data: countsData, mutate: mutateCounts } = useSWR<{
     counts: ChatCounts;
   }>("/api/clients/chats", fetcher);
@@ -187,6 +193,16 @@ export function ClientsPage() {
 
       {isLoadingClients ? (
         <ListPageSkeleton />
+      ) : clientsError && clients.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+          <AlertCircle className="size-8 text-destructive" />
+          <p className="text-sm text-muted-foreground">
+            Failed to load clients. Please try refreshing the page.
+          </p>
+          <Button onClick={() => refresh()} size="sm" variant="outline">
+            Try again
+          </Button>
+        </div>
       ) : (
         <>
           {clients.length === 0 && (

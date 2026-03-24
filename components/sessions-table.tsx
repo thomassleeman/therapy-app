@@ -23,7 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { TherapySessionWithClient, TranscriptionStatus } from "@/lib/db/types";
+import type {
+  TherapySessionWithClient,
+  TranscriptionStatus,
+} from "@/lib/db/types";
 import { TrashIcon } from "./icons";
 import { ListPageEmpty, ListPageFilters, ListPageSearch } from "./list-page";
 
@@ -174,7 +177,9 @@ export function SessionsTable({
 }: SessionsTableProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<SessionFilter | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<SessionFilter | "all">(
+    "all"
+  );
   const [notesFilter, setNotesFilter] = useState<NotesFilter | "all">("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [deleteSession, setDeleteSession] =
@@ -210,7 +215,14 @@ export function SessionsTable({
       }
       return true;
     });
-  }, [sessions, searchQuery, statusFilter, notesFilter, clientFilter, hideClientColumn]);
+  }, [
+    sessions,
+    searchQuery,
+    statusFilter,
+    notesFilter,
+    clientFilter,
+    hideClientColumn,
+  ]);
 
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
@@ -352,7 +364,9 @@ export function SessionsTable({
                         if (target.closest("a, button")) {
                           return;
                         }
-                        router.push(`/sessions/${s.id}${clientId ? "?from=client" : ""}`);
+                        router.push(
+                          `/sessions/${s.id}${clientId ? "?from=client" : ""}`
+                        );
                       }}
                     >
                       <td className="py-4 pr-3 pl-4 sm:pl-0">

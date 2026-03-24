@@ -11,6 +11,10 @@
  *
  * Preferred entry point: `transcribeWithDiarization()` — performs transcription
  * and diarisation in a single API call, halving cost and latency.
+ *
+ * - GDPR data minimisation — transcripts are deleted from AssemblyAI's servers
+ *   immediately after the result is captured locally. This ensures special
+ *   category health data does not persist on third-party infrastructure.
  */
 
 import type { Transcript } from "assemblyai";
@@ -170,6 +174,19 @@ function buildDiarisedTranscript(transcript: Transcript): DiarisedTranscript {
 export class AssemblyAIProvider
   implements TranscriptionProvider, DiarizationProvider
 {
+  private async deleteTranscript(transcriptId: string): Promise<void> {
+    try {
+      await getClient().transcripts.delete(transcriptId);
+      console.log(
+        `[assemblyai] Deleted remote transcript ${transcriptId} (GDPR compliance)`
+      );
+    } catch (error) {
+      console.warn(
+        `[assemblyai] WARNING: Failed to delete remote transcript ${transcriptId}: ${error}`
+      );
+    }
+  }
+
   async transcribe(
     audio: Buffer,
     options: TranscribeOptions = {}
@@ -188,6 +205,8 @@ export class AssemblyAIProvider
     }
 
     const result = buildRawTranscript(transcript, options.language ?? "en");
+
+    await this.deleteTranscript(transcript.id);
 
     console.log(
       `[assemblyai] Transcribed ${result.durationMs / 1000}s of audio, ${result.segments.length} segments`
@@ -226,6 +245,8 @@ export class AssemblyAIProvider
 
     const diarised = buildDiarisedTranscript(result);
 
+    await this.deleteTranscript(result.id);
+
     console.log(
       `[assemblyai] Diarised: ${diarised.segments.length} utterances, ${diarised.speakers.length} speakers`
     );
@@ -260,6 +281,8 @@ export class AssemblyAIProvider
 
     const raw = buildRawTranscript(transcript, language);
     const diarised = buildDiarisedTranscript(transcript);
+
+    await this.deleteTranscript(transcript.id);
 
     console.log(
       `[assemblyai] Transcribed ${raw.durationMs / 1000}s of audio, ${raw.segments.length} segments`

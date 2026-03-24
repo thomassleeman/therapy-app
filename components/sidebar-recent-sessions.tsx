@@ -13,8 +13,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { SidebarSession } from "@/lib/db/types";
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { fetcher } from "@/lib/utils";
 
 function formatClientName(name: string | null): string {
   if (!name) return "Unknown";

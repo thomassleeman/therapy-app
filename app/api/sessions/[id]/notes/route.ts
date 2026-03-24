@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import {
+  deleteClinicalNote,
   getClinicalNotes,
   getTherapySession,
   updateClinicalNote,
@@ -77,4 +78,39 @@ export async function PATCH(
   }
 
   return NextResponse.json(updatedNote);
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const body = await request.json();
+  const { noteId } = body as { noteId: string };
+
+  if (!noteId) {
+    return NextResponse.json({ error: "noteId is required" }, { status: 400 });
+  }
+
+  // Verify session ownership
+  const therapySession = await getTherapySession({ id });
+  if (!therapySession) {
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+  if (therapySession.therapistId !== session.user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  await deleteClinicalNote({ id: noteId });
+
+  // Reset notes status on the therapy session
+  await updateTherapySession({ id, notesStatus: "none" });
+
+  return NextResponse.json({ success: true });
 }
