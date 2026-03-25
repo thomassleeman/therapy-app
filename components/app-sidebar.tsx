@@ -29,7 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { setOpenMobile } = useSidebar();
+  const { open, setOpenMobile } = useSidebar();
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: () => <HomeIcon size={16} /> },
@@ -58,25 +58,27 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               />
             </span>
             {/* </Link> */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="h-8 p-1 md:h-fit md:p-2"
-                  onClick={() => {
-                    setOpenMobile(false);
-                    router.push("/chat/new");
-                    router.refresh();
-                  }}
-                  type="button"
-                  variant="ghost"
-                >
-                  <PlusIcon />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent align="end" className="hidden md:block">
-                New Chat
-              </TooltipContent>
-            </Tooltip>
+            {open && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className="h-8 p-1 md:h-fit md:p-2"
+                    onClick={() => {
+                      setOpenMobile(false);
+                      router.push("/chat/new");
+                      router.refresh();
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <PlusIcon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent align="end" className="hidden md:block">
+                  New Chat
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </SidebarMenu>
       </SidebarHeader>

@@ -20,7 +20,7 @@ async function SidebarWrapper({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen={!isCollapsed}>
       <AppSidebar user={session?.user} />
-      <SidebarInset>
+      <SidebarInset className="max-h-svh overflow-hidden">
         <AppHeader />
         {children}
       </SidebarInset>

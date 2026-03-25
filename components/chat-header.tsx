@@ -1,13 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { memo, useEffect, useMemo, useState } from "react";
-import { useWindowSize } from "usehooks-ts";
 import { ClientDialog } from "@/components/client-dialog";
 import { ClientSelector } from "@/components/client-selector";
 import { SidebarToggle } from "@/components/sidebar-toggle";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,8 +14,7 @@ import {
 import { useChatClient } from "@/hooks/use-chat-client";
 import { useClients } from "@/hooks/use-clients";
 import type { TherapeuticOrientation } from "@/lib/ai/prompts";
-import { ChevronDownIcon, PlusIcon } from "./icons";
-import { useSidebar } from "./ui/sidebar";
+import { ChevronDownIcon } from "./icons";
 
 const DISPLAY_TO_ORIENTATION: Record<string, TherapeuticOrientation> = {
   CBT: "cbt",
@@ -196,34 +192,17 @@ function PureChatHeader({
   isReadonly: boolean;
   onApproachChange: (orientation: TherapeuticOrientation) => void;
 }) {
-  const router = useRouter();
-  const { open } = useSidebar();
   const [showClientDialog, setShowClientDialog] = useState(false);
   const { clientId } = useChatClient({
     chatId,
     initialClientId: selectedClientId,
   });
 
-  const { width: windowWidth } = useWindowSize();
 
   return (
     <>
       <header className="sticky top-0 flex flex-wrap items-center gap-2 bg-background px-2 py-1.5 md:px-2">
         <SidebarToggle />
-
-        {(!open || windowWidth < 768) && (
-          <Button
-            className="order-2 ml-auto h-8 px-2 md:order-1 md:ml-0 md:h-fit md:px-2"
-            onClick={() => {
-              router.push("/chat/new");
-              router.refresh();
-            }}
-            variant="outline"
-          >
-            <PlusIcon />
-            <span className="md:sr-only">New Chat</span>
-          </Button>
-        )}
 
         {!isReadonly && (
           <ClientSelector

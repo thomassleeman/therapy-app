@@ -6,7 +6,7 @@ import type { NoteContent } from "@/lib/db/types";
  * for the refinement UI.
  */
 export function flattenNoteContent(
-  content: NoteContent,
+  content: NoteContent
 ): Record<string, string> {
   if ("subjective" in content) {
     return {
