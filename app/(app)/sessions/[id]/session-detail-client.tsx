@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 import { CaseFormulationNudge } from "@/components/notes/case-formulation-nudge";
-import { flattenNoteContent } from "@/components/notes/flatten-note-content";
+
 import { NotesActionsBar } from "@/components/sessions/notes-actions-bar";
 import { NotesEditor } from "@/components/sessions/notes-editor";
 import { NotesGenerateForm } from "@/components/sessions/notes-generate-form";
@@ -78,37 +78,29 @@ export function SessionDetailClient({
   const hasNotes = activeNote !== null;
 
   // Note editing state (lifted to page level so both editor and chat can access)
-  const [noteContent, setNoteContent] = useState<Record<string, string>>(() =>
-    activeNote
-      ? flattenNoteContent(
-          activeNote.content as Parameters<typeof flattenNoteContent>[0]
-        )
-      : {}
-  );
-  const [highlightedSections, setHighlightedSections] = useState<Set<string>>(
-    new Set()
+  const [noteText, setNoteText] = useState<string>(
+    activeNote?.content.body ?? ""
   );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Re-initialise note content when the active note changes (e.g. after generation)
+  // Re-initialise note text when the active note changes (e.g. after generation)
   const activeNoteContent = activeNote?.content ?? null;
   useEffect(() => {
     if (activeNoteContent) {
-      setNoteContent(
-        flattenNoteContent(
-          activeNoteContent as Parameters<typeof flattenNoteContent>[0]
-        )
-      );
+      setNoteText(activeNoteContent.body);
       setHasUnsavedChanges(false);
     } else {
-      setNoteContent({});
+      setNoteText("");
     }
   }, [activeNoteContent]);
 
-  // Keep a ref to noteContent so the transport body always has current values
-  const noteContentRef = useRef(noteContent);
-  noteContentRef.current = noteContent;
+  // Keep refs so the transport body always has current values
+  // (useChat creates its Chat instance once — closures in the transport are frozen from that first render)
+  const noteTextRef = useRef(noteText);
+  noteTextRef.current = noteText;
+  const noteFormatRef = useRef(activeNote?.noteFormat ?? "");
+  noteFormatRef.current = activeNote?.noteFormat ?? "";
 
   // Track which tool call outputs we've already processed
   const processedToolCalls = useRef<Set<string>>(new Set());
@@ -143,9 +135,8 @@ export function SessionDetailClient({
             ...request.body,
             messages: request.messages,
             sessionId: session.id,
-            noteId: activeNote?.id,
-            noteContent: noteContentRef.current,
-            noteFormat: activeNote?.noteFormat,
+            noteText: noteTextRef.current,
+            noteFormat: noteFormatRef.current,
           },
         };
       },
@@ -157,28 +148,11 @@ export function SessionDetailClient({
         toolCall.input
       ) {
         const args = toolCall.input as {
-          updates: Array<{ section: string; content: string }>;
+          updatedNote: string;
           summary: string;
         };
-
-        setNoteContent((prev) => {
-          const next = { ...prev };
-          for (const update of args.updates) {
-            if (update.section in prev) {
-              next[update.section] = update.content;
-            } else {
-              console.warn(
-                `[session-detail] AI tried to update non-existent section: ${update.section}`
-              );
-            }
-          }
-          return next;
-        });
+        setNoteText(args.updatedNote);
         setHasUnsavedChanges(true);
-
-        const updatedKeys = new Set(args.updates.map((u) => u.section));
-        setHighlightedSections(updatedKeys);
-        setTimeout(() => setHighlightedSections(new Set()), 2000);
       }
     },
   });
@@ -202,28 +176,11 @@ export function SessionDetailClient({
               processedToolCalls.current.add(callId);
 
               const args = part.input as {
-                updates: Array<{ section: string; content: string }>;
+                updatedNote: string;
                 summary: string;
               };
-
-              setNoteContent((prev) => {
-                const next = { ...prev };
-                for (const update of args.updates) {
-                  if (update.section in prev) {
-                    next[update.section] = update.content;
-                  } else {
-                    console.warn(
-                      `[session-detail] AI tried to update non-existent section: ${update.section}`
-                    );
-                  }
-                }
-                return next;
-              });
+              setNoteText(args.updatedNote);
               setHasUnsavedChanges(true);
-
-              const updatedKeys = new Set(args.updates.map((u) => u.section));
-              setHighlightedSections(updatedKeys);
-              setTimeout(() => setHighlightedSections(new Set()), 2000);
             }
           }
         }
@@ -241,9 +198,9 @@ export function SessionDetailClient({
     router.replace(`${pathname}?${params.toString()}`);
   };
 
-  // ─── Note field editing ─────────────────────────────────────────────────────
-  const handleFieldChange = useCallback((key: string, value: string) => {
-    setNoteContent((prev) => ({ ...prev, [key]: value }));
+  // ─── Note text editing ──────────────────────────────────────────────────────
+  const handleNoteTextChange = useCallback((text: string) => {
+    setNoteText(text);
     setHasUnsavedChanges(true);
   }, []);
 
@@ -259,7 +216,7 @@ export function SessionDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           noteId: activeNote.id,
-          content: noteContent,
+          content: { body: noteText },
         }),
       });
 
@@ -283,7 +240,7 @@ export function SessionDetailClient({
     } finally {
       setSaving(false);
     }
-  }, [activeNote, session.id, noteContent]);
+  }, [activeNote, session.id, noteText]);
 
   // Cmd+S / Ctrl+S to save
   useEffect(() => {
@@ -420,9 +377,21 @@ export function SessionDetailClient({
   }, [activeNote, session.id, router]);
 
   // ─── Notes generation callback ──────────────────────────────────────────────
-  const handleNotesGenerated = useCallback((note: ClinicalNote) => {
-    setCurrentNotes([note]);
-  }, []);
+  const handleNotesGenerated = useCallback(
+    (note: ClinicalNote, commentary?: string) => {
+      setCurrentNotes([note]);
+      if (commentary) {
+        setMessages([
+          {
+            id: `commentary-${note.id}`,
+            role: "assistant" as const,
+            parts: [{ type: "text" as const, text: commentary }],
+          },
+        ]);
+      }
+    },
+    [setMessages]
+  );
 
   // ─── Chat handlers ──────────────────────────────────────────────────────────
   const handleSendMessage = useCallback(() => {
@@ -492,11 +461,10 @@ export function SessionDetailClient({
                   {hasNotes ? (
                     <div>
                       <NotesEditor
-                        highlightedSections={highlightedSections}
-                        noteContent={noteContent}
                         noteFormat={activeNote.noteFormat}
                         noteStatus={activeNote.status}
-                        onFieldChange={handleFieldChange}
+                        noteText={noteText}
+                        onNoteTextChange={handleNoteTextChange}
                       />
 
                       {justFinalised && clientId && clientName && (

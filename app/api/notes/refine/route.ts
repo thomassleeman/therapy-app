@@ -12,8 +12,8 @@ import {
   getTherapistProfile,
   getTherapySession,
 } from "@/lib/db/queries";
-import type { NoteFormat, RecordingType } from "@/lib/db/types";
-import { NOTE_FORMATS } from "@/lib/db/types";
+import type { RecordingType } from "@/lib/db/types";
+import { formatClientRecord } from "@/lib/documents/context-assembly";
 
 export const maxDuration = 120;
 
@@ -21,25 +21,21 @@ export const maxDuration = 120;
 
 function buildRefinementSystemPrompt({
   noteFormat,
-  noteContent,
+  noteText,
   sourceMaterial,
   clientContext,
   modality,
   jurisdiction,
   recordingType,
 }: {
-  noteFormat: NoteFormat;
-  noteContent: Record<string, string>;
+  noteFormat: string;
+  noteText: string;
   sourceMaterial: string;
   clientContext: string;
   modality: string;
   jurisdiction: string;
   recordingType: RecordingType;
 }): string {
-  const noteContentBlock = Object.entries(noteContent)
-    .map(([key, value]) => `## ${key}\n${value}`)
-    .join("\n\n");
-
   const sourceLabel =
     recordingType === "written_notes"
       ? "therapist written notes"
@@ -47,28 +43,33 @@ function buildRefinementSystemPrompt({
         ? "therapist spoken summary transcript"
         : "session transcript";
 
-  const clientContextBlock = clientContext
-    ? `CLIENT CONTEXT:\n${clientContext}`
-    : "CLIENT CONTEXT: Not available.";
+  const clientContextBlock = clientContext || "CLIENT CONTEXT: Not available.";
 
   return `You are a clinical notes refinement assistant for qualified therapists in the UK and Ireland. The therapist has AI-generated clinical session notes and wants to refine them through conversation with you.
 
-RULES:
+RULES FOR NOTE CONTENT:
 - Use UK English spelling throughout (behaviour, colour, programme, etc.).
-- Do NOT include client names or identifying information. Use "the client" throughout.
+- Do NOT include client names or identifying information. Use "the client" as the primary way to refer to the client. Where a second reference within the same sentence would cause awkward repetition, use "they/them/their" instead (e.g., "The client mentioned that they had been feeling tired"). Do not use gendered pronouns (he/him/his, she/her/hers) even if the client's gender is known.
 - Use observational, professional clinical language.
-- When the therapist asks you to change, add, expand, rewrite, or remove content in the notes, use the update_notes tool to make the change. Always provide the complete updated section text in the tool call, not a diff or partial update.
-- You may update multiple sections in a single tool call if the change spans sections.
-- If the therapist asks about clinical frameworks, guidelines, or legislation, use your search tools to find relevant knowledge base content, then incorporate it into the notes if the therapist agrees.
-- Do not make changes the therapist has not requested. If you think something should be changed, suggest it conversationally and wait for approval.
-- Keep your conversational responses brief and focused. The therapist is here to refine notes, not have an extended discussion.
-- If the therapist asks you to add content that is not supported by the source material, you may do so but add a bracketed note: [Added at therapist's direction — not present in original session record].
+- If you include connections or hypotheses in the notes always frame them as uncertain using terms like "may", "might", "could be", "appears to be", "seems to be", etc. Avoid definitive language unless instructed by the therapist to use it.
+- When writing notes, use "the therapist, not "you" - There is a subtle distinction here: Write the notes in the voice of a therapist writing in the 3rd person and refering to themselves as "the therapist", not as a separate party writing about the therapist in the 3rd person.
+- When the therapist asks you to change, add, expand, rewrite, or remove content in the notes, use the update_notes tool to provide the complete updated note. IMPORTANT: Always include the FULL note text — all sections, not just the one you changed. Preserve sections the therapist did not ask you to modify.
 - Do not fabricate clinical details. If the therapist asks you to expand a section and there is insufficient source material, say so and ask them to provide the detail.
+- Prefer concise clinical language. Each section should be as brief as possible while remaining clinically complete and defensible.
+
+RULES FOR YOUR CHAT RESPONSES:
+- Keep responses to 1–3 sentences unless absolutely necessary. The therapist is here to refine notes, not have a discussion.
+- Refer to the therapist as "you" in chat responses. 
+- Do not use bullet lists, numbered lists, or bold/italic formatting in chat responses.
+- If you have multiple suggestions, state them in a single short sentence (e.g., "You could also add a prognosis statement or link to treatment goals — want me to add either?").
+- Do not repeat or summarise note content — the therapist can see the notes directly.
+- IMPORTANT: Do not make changes the therapist has not requested. If you think something should be changed, suggest it briefly and wait for approval.
+- If the therapist asks about clinical frameworks, guidelines, or legislation, use your search tools to find relevant knowledge base content, then incorporate it into the notes if the therapist agrees.
 
 CURRENT NOTE FORMAT: ${noteFormat.toUpperCase()}
 
 CURRENT NOTE CONTENT:
-${noteContentBlock}
+${noteText}
 
 SOURCE MATERIAL (${sourceLabel}):
 ${sourceMaterial}
@@ -84,32 +85,21 @@ THERAPIST CONTEXT:
 
 const updateNotesTool = tool({
   description:
-    "Update one or more sections of the clinical notes. Call this whenever the therapist asks you to change, add, expand, rewrite, or remove content. Always provide the complete new text for each section being updated.",
+    "Replace the entire clinical notes with an updated version. Call this whenever the therapist asks you to change, add, expand, rewrite, or remove content. Always provide the COMPLETE updated note text — not just the changed section.",
   inputSchema: z.object({
-    updates: z
-      .array(
-        z.object({
-          section: z
-            .string()
-            .describe(
-              'The section key to update. Must match one of the keys in the current notes (e.g. "subjective", "objective", "assessment", "plan" for SOAP; "data", "assessment", "plan" for DAP; "behaviour", "intervention", "response", "plan" for BIRP; "goals", "intervention", "response", "plan" for GIRP; "clinicalOpening", "sessionBody", "clinicalSynthesis", "pathForward" for Narrative; "body" for Freeform).'
-            ),
-          content: z
-            .string()
-            .describe(
-              "The complete new content for this section. Always provide the full section text, never a partial update or diff."
-            ),
-        })
-      )
-      .describe("Array of section updates to apply."),
+    updatedNote: z
+      .string()
+      .describe(
+        "The complete updated note text. Must include ALL sections with their UPPERCASE headers, not just the section that changed. Preserve all sections the therapist did not ask you to change."
+      ),
     summary: z
       .string()
       .describe(
         "A brief, one-sentence summary of what was changed. This is shown to the therapist as confirmation."
       ),
   }),
-  execute: ({ updates, summary }) => {
-    return { updates, summary };
+  execute: ({ updatedNote, summary }) => {
+    return { updatedNote, summary };
   },
 });
 
@@ -124,10 +114,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { messages, sessionId, noteContent, noteFormat } = body as {
+    const { messages, sessionId, noteText, noteFormat } = body as {
       messages: UIMessage[];
       sessionId: string;
-      noteContent: Record<string, string>;
+      noteText: string;
       noteFormat: string;
     };
 
@@ -138,9 +128,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!noteContent || typeof noteContent !== "object") {
+    if (!noteText || typeof noteText !== "string") {
       return NextResponse.json(
-        { error: "noteContent must be a non-null object" },
+        { error: "noteText must be a non-empty string" },
         { status: 400 }
       );
     }
@@ -152,16 +142,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!NOTE_FORMATS.includes(noteFormat as NoteFormat)) {
+    if (!noteFormat || typeof noteFormat !== "string") {
       return NextResponse.json(
-        {
-          error: `Invalid noteFormat. Must be one of: ${NOTE_FORMATS.join(", ")}`,
-        },
+        { error: "noteFormat is required" },
         { status: 400 }
       );
     }
-
-    const validatedFormat = noteFormat as NoteFormat;
 
     // Fetch the therapy session and verify ownership
     const therapySession = await getTherapySession({ id: sessionId });
@@ -197,19 +183,23 @@ export async function POST(request: Request) {
 
     // Format client context
     let clientContext = "";
+    let clientModality: string | undefined;
     if (client) {
-      clientContext = `- Presenting issues: ${client.presentingIssues || "not recorded"}
-- Treatment goals: ${client.treatmentGoals || "not recorded"}
-- Risk considerations: ${client.riskConsiderations || "none recorded"}`;
+      clientContext = formatClientRecord(client);
+      clientModality =
+        client.therapeuticModalities.length > 0
+          ? client.therapeuticModalities.join(", ")
+          : undefined;
     }
 
-    const modality = therapistProfile?.defaultModality || "Not specified";
+    const modality =
+      clientModality || therapistProfile?.defaultModality || "Not specified";
     const jurisdiction = therapistProfile?.jurisdiction || "Not specified";
 
     // Build system prompt
     const systemPrompt = buildRefinementSystemPrompt({
-      noteFormat: validatedFormat,
-      noteContent: noteContent ?? {},
+      noteFormat,
+      noteText,
       sourceMaterial,
       clientContext,
       modality,

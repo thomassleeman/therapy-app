@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useClients } from "@/hooks/use-clients";
 import { useSessions } from "@/hooks/use-sessions";
 import type { TherapySessionWithClient } from "@/lib/db/types";
 import { PlusIcon } from "./icons";
-import { ListPageEmpty, ListPageShell, ListPageSkeleton } from "./list-page";
+import { ListPageEmpty, ListPageShell } from "./list-page";
 import { SessionsTable } from "./sessions-table";
 
 // ── Summary cards ─────────────────────────────────────────────────────
@@ -83,6 +84,64 @@ function SummaryCards({ counts }: { counts: SummaryCounts }) {
   );
 }
 
+// ── Skeleton ─────────────────────────────────────────────────────────
+
+function SessionsPageSkeleton() {
+  return (
+    <>
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3">
+        {["card-1", "card-2", "card-3"].map((id) => (
+          <Card className="py-0" key={id}>
+            <CardContent className="px-4 py-3">
+              <Skeleton className="h-8 w-10 mb-1" />
+              <Skeleton className="h-3 w-20" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Search bar */}
+      <Skeleton className="h-9 w-full rounded-md" />
+
+      {/* Filter controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Skeleton className="h-8 w-[120px] rounded-md" />
+        <Skeleton className="h-8 w-[140px] rounded-md" />
+        <Skeleton className="h-8 w-[180px] rounded-md" />
+      </div>
+
+      {/* Table */}
+      <div className="mt-4 flow-root">
+        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+            {/* Table header */}
+            <div className="flex items-center gap-4 border-b py-3">
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="hidden h-3 w-14 sm:block" />
+              <Skeleton className="hidden h-3 w-16 md:block" />
+              <Skeleton className="h-3 w-20 ml-auto" />
+              <Skeleton className="hidden h-3 w-12 lg:block" />
+              <Skeleton className="h-3 w-8" />
+            </div>
+            {/* Table rows */}
+            {["row-1", "row-2", "row-3", "row-4", "row-5"].map((id) => (
+              <div className="flex items-center gap-4 border-b py-4" key={id}>
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="hidden h-4 w-28 sm:block" />
+                <Skeleton className="hidden h-4 w-16 md:block" />
+                <Skeleton className="h-5 w-20 rounded-full ml-auto" />
+                <Skeleton className="hidden h-5 w-16 rounded-full lg:block" />
+                <Skeleton className="size-8 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────
 
 export function SessionsPage() {
@@ -110,7 +169,7 @@ export function SessionsPage() {
       title="Sessions"
     >
       {isLoading ? (
-        <ListPageSkeleton />
+        <SessionsPageSkeleton />
       ) : sessionsError && sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
           <AlertCircle className="size-8 text-destructive" />

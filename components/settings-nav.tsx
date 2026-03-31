@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, Lock, Shield, UserCog } from "lucide-react";
+import { FileText, Info, Lock, Shield, UserCog } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,12 @@ const navItems = [
     href: "/settings/account",
     icon: Shield,
     testId: "settings-nav-account",
+  },
+  {
+    label: "Note Formats",
+    href: "/settings/note-formats",
+    icon: FileText,
+    testId: "settings-nav-note-formats",
   },
   {
     label: "Data & Privacy",

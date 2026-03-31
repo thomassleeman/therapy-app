@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ import { useClients } from "@/hooks/use-clients";
 import type {
   AgeBracket,
   Client,
+  ClientGenderOption,
   ClientStatus,
   DeliveryMethod,
   SessionFrequency,
@@ -37,6 +39,7 @@ import type {
 import {
   AGE_BRACKET_LABELS,
   AGE_BRACKETS,
+  CLIENT_GENDER_OPTIONS,
   CLIENT_STATUS_LABELS,
   CLIENT_STATUSES,
   COMMON_MODALITIES,
@@ -56,6 +59,15 @@ interface ClientDialogProps {
   onSuccess?: (client: Client) => void;
 }
 
+const PREDEFINED_GENDERS = new Set<string>(CLIENT_GENDER_OPTIONS);
+
+const GENDER_LABELS: Record<ClientGenderOption, string> = {
+  female: "Female",
+  male: "Male",
+  non_binary: "Non-binary",
+  not_recorded: "Not recorded",
+};
+
 interface ClientFormState {
   name: string;
   status: ClientStatus;
@@ -71,12 +83,29 @@ interface ClientFormState {
   therapyStartDate: string;
   referralSource: string;
   ageBracket: AgeBracket | "";
+  gender: ClientGenderOption | "self_describe" | "";
+  genderSelfDescribe: string;
   background: string;
   supervisorNotes: string;
   tags: string[];
 }
 
+function getInitialGender(client?: Client | null): {
+  gender: ClientFormState["gender"];
+  genderSelfDescribe: string;
+} {
+  const stored = client?.gender;
+  if (!stored) {
+    return { gender: "", genderSelfDescribe: "" };
+  }
+  if (PREDEFINED_GENDERS.has(stored)) {
+    return { gender: stored as ClientGenderOption, genderSelfDescribe: "" };
+  }
+  return { gender: "self_describe", genderSelfDescribe: stored };
+}
+
 function getInitialState(client?: Client | null): ClientFormState {
+  const { gender, genderSelfDescribe } = getInitialGender(client);
   return {
     name: client?.name ?? "",
     status: client?.status ?? "active",
@@ -92,6 +121,8 @@ function getInitialState(client?: Client | null): ClientFormState {
     therapyStartDate: client?.therapyStartDate ?? "",
     referralSource: client?.referralSource ?? "",
     ageBracket: client?.ageBracket ?? "",
+    gender,
+    genderSelfDescribe,
     background: client?.background ?? "",
     supervisorNotes: client?.supervisorNotes ?? "",
     tags: client?.tags ?? [],
@@ -129,7 +160,7 @@ function hasClientDetails(client?: Client | null): boolean {
   if (!client) {
     return false;
   }
-  return Boolean(client.ageBracket || client.background);
+  return Boolean(client.ageBracket || client.gender || client.background);
 }
 
 function hasProfessionalNotes(client?: Client | null): boolean {
@@ -214,6 +245,10 @@ export function ClientDialog({
           therapyStartDate: form.therapyStartDate || null,
           referralSource: form.referralSource.trim() || null,
           ageBracket: form.ageBracket || null,
+          gender:
+            form.gender === "self_describe"
+              ? form.genderSelfDescribe.trim() || null
+              : form.gender || null,
           background: form.background.trim() || null,
           supervisorNotes: form.supervisorNotes.trim() || null,
           tags: form.tags,
@@ -501,6 +536,55 @@ export function ClientDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Gender</Label>
+                  <RadioGroup
+                    onValueChange={(v) => {
+                      updateField("gender", v as ClientFormState["gender"]);
+                      if (v !== "self_describe") {
+                        updateField("genderSelfDescribe", "");
+                      }
+                    }}
+                    value={form.gender || undefined}
+                  >
+                    {CLIENT_GENDER_OPTIONS.map((option) => (
+                      <div className="flex items-center space-x-2" key={option}>
+                        <RadioGroupItem
+                          id={`gender-${option}`}
+                          value={option}
+                        />
+                        <Label
+                          className="font-normal"
+                          htmlFor={`gender-${option}`}
+                        >
+                          {GENDER_LABELS[option]}
+                        </Label>
+                      </div>
+                    ))}
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        id="gender-self_describe"
+                        value="self_describe"
+                      />
+                      <Label
+                        className="font-normal"
+                        htmlFor="gender-self_describe"
+                      >
+                        Prefer to self-describe
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {form.gender === "self_describe" && (
+                    <Input
+                      onChange={(e) =>
+                        updateField("genderSelfDescribe", e.target.value)
+                      }
+                      placeholder="Gender identity..."
+                      value={form.genderSelfDescribe}
+                    />
+                  )}
                 </div>
 
                 <div className="grid gap-2">

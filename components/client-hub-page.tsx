@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ClientDialog } from "@/components/client-dialog";
 import { FabNewChat } from "@/components/fab-new-chat";
@@ -21,21 +21,16 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   AgeBracket,
-  BirpNoteContent,
   Chat,
   Client,
   ClientStatus,
   ClinicalDocumentSummary,
   ClinicalNoteWithSession,
-  DapNoteContent,
+  CustomNoteFormat,
   DeliveryMethod,
-  FreeformNoteContent,
-  GirpNoteContent,
-  NarrativeNoteContent,
   NoteFormat,
   NoteStatus,
   SessionFrequency,
-  SoapNoteContent,
   TherapySessionWithClient,
 } from "@/lib/db/types";
 import {
@@ -273,12 +268,23 @@ function DetailsCard({ client }: { client: Client }) {
   );
 }
 
+function formatGender(gender: string): string {
+  const known: Record<string, string> = {
+    female: "Female",
+    male: "Male",
+    non_binary: "Non-binary",
+    not_recorded: "Not recorded",
+  };
+  return known[gender] ?? gender.charAt(0).toUpperCase() + gender.slice(1);
+}
+
 function PracticeCard({ client }: { client: Client }) {
   const hasContent =
     client.sessionFrequency ||
     client.deliveryMethod ||
     client.sessionDurationMinutes ||
     client.ageBracket ||
+    client.gender ||
     client.therapyStartDate ||
     client.feePerSession;
 
@@ -325,6 +331,10 @@ function PracticeCard({ client }: { client: Client }) {
               ? AGE_BRACKET_LABELS[client.ageBracket as AgeBracket]
               : null
           }
+        />
+        <DetailRow
+          label="Gender"
+          value={client.gender ? formatGender(client.gender) : null}
         />
         <DetailRow
           label="Therapy Start Date"
@@ -729,39 +739,74 @@ const STATUS_BADGE_COLORS: Record<NoteStatus, string> = {
 };
 
 function getNotePreview(note: ClinicalNoteWithSession): string {
-  const content = note.content;
-  let text = "";
-  if (note.noteFormat === "soap" && "subjective" in content) {
-    text = (content as SoapNoteContent).subjective;
-  } else if (note.noteFormat === "dap" && "data" in content) {
-    text = (content as DapNoteContent).data;
-  } else if (note.noteFormat === "birp" && "behaviour" in content) {
-    text = (content as BirpNoteContent).behaviour;
-  } else if (note.noteFormat === "girp" && "goals" in content) {
-    text = (content as GirpNoteContent).goals;
-  } else if (note.noteFormat === "narrative" && "clinicalOpening" in content) {
-    text = (content as NarrativeNoteContent).clinicalOpening;
-  } else if ("body" in content) {
-    text = (content as FreeformNoteContent).body;
-  }
+  const text = note.content.body;
   if (text.length > 100) {
     return `${text.slice(0, 100)}…`;
   }
   return text || "No content";
 }
 
-type FilterFormat = "all" | NoteFormat;
+type FilterFormat = "all" | NoteFormat | "custom";
+
+function isCustomFormat(format: string): boolean {
+  return format.startsWith("custom:");
+}
+
+function getCustomFormatName(
+  format: string,
+  customFormats: CustomNoteFormat[]
+): string {
+  const id = format.replace("custom:", "");
+  const found = customFormats.find((cf) => cf.id === id);
+  return found?.name ?? "Custom";
+}
 
 function ClinicalNotesTab({ notes }: { notes: ClinicalNoteWithSession[] }) {
   const [filter, setFilter] = useState<FilterFormat>("all");
+  const [customFormats, setCustomFormats] = useState<CustomNoteFormat[]>([]);
+
+  // Fetch custom formats for badge display
+  useEffect(() => {
+    const hasCustomNotes = notes.some((n) => isCustomFormat(n.noteFormat));
+    if (!hasCustomNotes) {
+      return;
+    }
+
+    async function fetchCustomFormats() {
+      try {
+        const res = await fetch("/api/settings/note-formats");
+        if (res.ok) {
+          const data = await res.json();
+          setCustomFormats(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        // Custom formats unavailable — show "Custom" fallback
+      }
+    }
+    fetchCustomFormats();
+  }, [notes]);
+
+  const hasCustomNotes = notes.some((n) => isCustomFormat(n.noteFormat));
 
   const filteredNotes =
-    filter === "all" ? notes : notes.filter((n) => n.noteFormat === filter);
+    filter === "all"
+      ? notes
+      : filter === "custom"
+        ? notes.filter((n) => isCustomFormat(n.noteFormat))
+        : notes.filter((n) => n.noteFormat === filter);
 
   const filterOptions: { value: FilterFormat; label: string }[] = [
     { value: "all", label: "All" },
     ...NOTE_FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] })),
+    ...(hasCustomNotes ? [{ value: "custom" as const, label: "Custom" }] : []),
   ];
+
+  const activeFilterLabel =
+    filter === "all"
+      ? ""
+      : filter === "custom"
+        ? "custom"
+        : FORMAT_LABELS[filter];
 
   if (notes.length === 0) {
     return (
@@ -799,7 +844,7 @@ function ClinicalNotesTab({ notes }: { notes: ClinicalNoteWithSession[] }) {
         <Card>
           <CardContent className="flex flex-col items-center py-8">
             <CardDescription>
-              No {filter === "all" ? "" : FORMAT_LABELS[filter]} notes found.
+              No {activeFilterLabel} notes found.
             </CardDescription>
           </CardContent>
         </Card>
@@ -809,7 +854,7 @@ function ClinicalNotesTab({ notes }: { notes: ClinicalNoteWithSession[] }) {
             {filteredNotes.map((note, i) => (
               <div key={note.id}>
                 {i > 0 && <Separator />}
-                <NoteRow note={note} />
+                <NoteRow customFormats={customFormats} note={note} />
               </div>
             ))}
           </CardContent>
@@ -819,7 +864,22 @@ function ClinicalNotesTab({ notes }: { notes: ClinicalNoteWithSession[] }) {
   );
 }
 
-function NoteRow({ note }: { note: ClinicalNoteWithSession }) {
+function NoteRow({
+  note,
+  customFormats,
+}: {
+  note: ClinicalNoteWithSession;
+  customFormats: CustomNoteFormat[];
+}) {
+  const isCustom = isCustomFormat(note.noteFormat);
+  const formatLabel = isCustom
+    ? getCustomFormatName(note.noteFormat, customFormats)
+    : (FORMAT_LABELS[note.noteFormat as NoteFormat] ?? note.noteFormat);
+  const formatBadgeClass = isCustom
+    ? "border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
+    : (FORMAT_COLORS[note.noteFormat as NoteFormat] ??
+      "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200");
+
   const inner = (
     <div className="flex flex-col gap-1.5 px-4 py-3 hover:bg-accent transition-colors">
       <div className="flex items-center justify-between gap-2">
@@ -828,9 +888,9 @@ function NoteRow({ note }: { note: ClinicalNoteWithSession }) {
             {formatShortDate(note.createdAt)}
           </span>
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${FORMAT_COLORS[note.noteFormat]}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${formatBadgeClass}`}
           >
-            {FORMAT_LABELS[note.noteFormat]}
+            {formatLabel}
           </span>
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_COLORS[note.status]}`}

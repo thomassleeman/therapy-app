@@ -198,7 +198,6 @@ function PureChatHeader({
     initialClientId: selectedClientId,
   });
 
-
   return (
     <>
       <header className="sticky top-0 flex flex-wrap items-center gap-2 bg-background px-2 py-1.5 md:px-2">

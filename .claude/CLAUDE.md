@@ -45,7 +45,7 @@ app/
 │   ├── page.tsx                    # Dashboard
 │   ├── clients/                    # Client list, client hub, clinical documents
 │   ├── sessions/                   # Session list, new session, session detail
-│   └── settings/                   # Settings area (profile, account, privacy, about)
+│   └── settings/                   # Settings area (profile, note-formats, account, privacy, about)
 ├── (auth-pages)/       # Sign-in, sign-up, password reset (no sidebar)
 ├── (chat)/             # Chat interface (own layout with DataStreamProvider)
 │   ├── api/chat/                   # Chat route + stream resumption
@@ -54,11 +54,15 @@ app/
 ├── api/                # Standalone API routes
 │   ├── documents/                  # Clinical document generation + CRUD
 │   ├── notes/generate/             # Clinical note generation from transcripts or written notes
+│   ├── notes/refine/               # Streaming refinement chat for iterating on notes
 │   ├── sessions/                   # Session CRUD + transcript retrieval
+│   ├── settings/note-formats/      # Custom note format CRUD
 │   └── transcription/              # Audio upload + processing pipeline
 └── auth/               # OAuth callback routes
 
 components/             # React components (client-side)
+├── notes/              # Case formulation update nudge
+├── sessions/           # Session detail sub-components (header, transcript, notes editor, refinement chat, actions bar, generate form, details tab)
 ├── transcription/      # Audio recorder, file upload
 ├── documents/          # Document generation form, viewer
 ├── ui/                 # shadcn/ui primitives
@@ -88,11 +92,12 @@ lib/
 │   ├── types.ts        # TypeScript types for DB entities
 │   └── faithfulness.ts # Faithfulness check persistence
 ├── dev/                # Dev-only RAG quality logging (behind DEV_LOGGING env var)
-├── documents/          # Clinical documents system (types, context assembly, specs/)
+├── documents/          # Clinical documents system (types, context assembly via formatClientRecord/assembleClientRecord, specs/)
 ├── encryption/         # Application-level encryption (AES-256-GCM)
 │   ├── crypto.ts       # Core primitives: encrypt, decrypt, encryptBuffer, decryptBuffer, isEncrypted
 │   ├── fields.ts       # Field helpers: encryptField, decryptField, encryptJsonb, decryptJsonb, encryptSegments, decryptSegments
 │   └── __tests__/      # Vitest test suites for crypto.ts and fields.ts
+├── notes/              # Note format config (FORMAT_DESCRIPTIONS, EXAMPLE_PROMPTS)
 ├── transcription/      # Transcription abstraction layer (AssemblyAI only, with Claude diarisation fallback)
 ├── types/
 │   └── knowledge.ts    # Single source of truth for RAG enums (categories, modalities, jurisdictions)
@@ -103,6 +108,7 @@ lib/
 
 scripts/
 ├── ingest-knowledge.ts # Knowledge base ingestion CLI (--dry-run, --with-context, --with-parents)
+├── flatten-note-content.ts  # One-time migration: flatten structured note JSONB to { body: "..." }
 ├── encrypt-all.ts      # Run all encryption migration scripts in sequence
 ├── encrypt-session-segments.ts  # Migrate plaintext session_segments to encrypted
 ├── encrypt-clinical-notes.ts    # Migrate plaintext clinical_notes to encrypted
@@ -138,12 +144,13 @@ tests/                  # Playwright E2E + fixtures
 
 ### Database
 
-- **Newer tables use `snake_case`** (`therapy_sessions`, `clinical_notes`, `therapist_profiles`, `knowledge_documents`)
+- **Newer tables use `snake_case`** (`therapy_sessions`, `clinical_notes`, `therapist_profiles`, `knowledge_documents`, `custom_note_formats`)
 - **Legacy tables use `PascalCase`** (`"Chat"`, `"Message_v2"`) — always quote these in SQL
 - All queries go through `lib/db/queries.ts` using the Supabase client from `@/utils/supabase/server`
 - Error handling via `handleSupabaseError(error, context)` helper
 - "Not found" errors (code `PGRST116`) return `null` rather than throwing
 - TypeScript types use camelCase, mapped from snake_case DB columns
+- Clinical note content is always `{ body: string }` regardless of format — the `note_format` column records which format was used but does not affect the JSONB shape
 
 ### Migrations
 
@@ -165,6 +172,8 @@ tests/                  # Playwright E2E + fixtures
 - `stopWhen: stepCountIs(6)` — allows up to 5 tool calls per turn
 - Tools are registered via factory functions that accept a `{ session }` parameter
 - The system prompt is assembled in `lib/ai/prompts.ts` via `systemPrompt()` which composes: base prompt + orientation prompt + tool context prompt + sensitive content directives + session transcript context + client context (when implemented — see Client-Aware Chat Context below)
+- **Zod schema constraint for Anthropic `generateObject`:** The Anthropic API does not support `minItems` values greater than 1 on array types in structured output schemas. Avoid `.length(n)`, `.min(n)` (where n > 1) on Zod arrays passed to `generateObject` — use `.max(n)` instead and rely on the prompt to request the desired count. This applies to all `generateObject` calls using Anthropic models (e.g. query reformulation in `lib/ai/query-reformulation.ts`).
+- **`useChat` stale closure trap:** `useChat` (AI SDK v6) creates its internal `Chat` instance once on first render and stores it in a ref. The `DefaultChatTransport` and its `prepareSendMessagesRequest` closure are frozen from that first render. Any values that change after mount (e.g. state derived from async operations like note generation) will be stale in the closure. **Always use refs** for dynamic values passed in `prepareSendMessagesRequest` — see `noteTextRef` and `noteFormatRef` in `session-detail-client.tsx` for the pattern.
 
 ### Error Handling (Client-Side)
 
@@ -301,7 +310,7 @@ When a therapist selects a client in the chat header, the agent should have acce
 |------|------|--------|------|---------------|
 | 1 — Client record | Presenting issues, treatment goals, risk considerations, background, modality, status | `clients` table | ~200 words | Always (when client selected) |
 | 2 — Summary document | Latest Case Formulation or Comprehensive Assessment | `clinical_documents` table | ~1000–2000 words | When a therapist-reviewed clinical document exists |
-| 3 — Recent raw notes | Last 10 session notes (SOAP, DAP, BIRP, GIRP, Narrative) in full | `clinical_notes` table | ~3000–6000 words | Always (when notes exist) |
+| 3 — Recent raw notes | Last 10 session notes in full (plain text with UPPERCASE headers) | `clinical_notes` table | ~3000–6000 words | Always (when notes exist) |
 
 **Session-linked context:** When a chat is initiated from a session detail page ("Chat About This Session"), the specific session transcript is also injected (truncated to 8,000 characters if necessary), giving the agent both clinical history and the specific session the therapist wants to reflect on.
 
@@ -367,7 +376,7 @@ Audio deleted from Supabase Storage + audioStoragePath nulled on therapy_session
 POST /api/notes/generate
   → Segments decrypted for LLM context assembly
     ↓
-LLM generates structured clinical notes (SOAP, DAP, BIRP, GIRP, Narrative formats)
+LLM generates clinical notes (SOAP, DAP, BIRP, GIRP, Narrative, or custom formats)
     ↓
 Notes encrypted (AES-256-GCM) → stored in clinical_notes table (draft → reviewed → finalised lifecycle)
 ```
@@ -393,7 +402,9 @@ Consent records are stored in the `session_consents` table with a UNIQUE constra
 
 ### Clinical Note Formats
 
-Five note formats, each with full-session and therapist-summary/written-notes prompt variants. Format specifications authored by Aaron (clinical lead) in `.claude/note-taking-prompts.md`.
+Five built-in note formats plus user-defined custom formats. All notes are stored as plain text with UPPERCASE section headers in a single JSONB field (`{ body: "full text" }`). No per-format TypeScript interfaces or regex parsing — the LLM output is stored directly.
+
+Format specifications authored by Aaron (clinical lead) in `.claude/note-taking-prompts.md`. Each built-in format has full-session and therapist-summary/written-notes prompt variants.
 
 | Format | Sections | Use Case |
 |---|---|---|
@@ -402,8 +413,21 @@ Five note formats, each with full-session and therapist-summary/written-notes pr
 | **BIRP** | Behaviour (observable only), Intervention (clinical verbs), Response (verbal + non-verbal), Plan (client + clinician actions) | Behavioural focus, skills acquisition tracking |
 | **GIRP** | Goals (treatment plan linked), Intervention (precise clinical terms), Response (progress evaluation), Plan (homework, future focus) | Goal-driven, "golden thread" to treatment plan |
 | **Narrative** | Clinical Opening, Session Body (chronological), Clinical Synthesis & Risk, The Path Forward | Chronological narrative with thematic integration |
+| **Custom** | User-defined sections with therapist-authored descriptions | Therapist creates via `/settings/note-formats` |
 
-All formats are governed by universal clinical documentation standards (accuracy, defensibility, GDPR audience awareness, treatment alignment) prepended to every system prompt. Prompts are in `app/api/notes/generate/route.ts`. Parsers extract structured sections via regex with freeform fallback on parse failure.
+**Storage model:** All note content (built-in and custom) is stored as `{ body: "SUBJECTIVE\nThe client described...\n\nOBJECTIVE\n..." }` — plain text with UPPERCASE headers. The `note_format` column records which format was used (`soap`, `dap`, `birp`, `girp`, `narrative`, or `custom:{uuid}`).
+
+**Custom formats:** Stored in the `custom_note_formats` table (RLS-scoped to the owning therapist, max 10 per therapist). Each format defines sections (label + description + required flag) and optional general rules. At generation time, section descriptions are injected into the prompt. The `note_format` column stores `custom:{uuid}` referencing the format definition. Existing notes remain readable even if the format definition is later deleted — the content is self-contained plain text.
+
+**Note editor:** A single textarea displaying the full note text. The therapist can edit freely, including modifying headers. No per-section split at display time.
+
+**Refinement chat:** The `update_notes` tool performs full note replacement — the LLM returns the complete updated note text, not per-section diffs. The system prompt instructs the LLM to preserve sections the therapist did not ask to change.
+
+**Structured generation output:** The note generation prompt requires the LLM to output its response in `<note>` and `<commentary>` XML tags. `parseGenerationOutput()` in `app/api/notes/generate/route.ts` extracts both parts — only the note content is stored in the database. If the LLM omits the XML tags, the parser falls back to using the entire output as the note (no commentary). The commentary (observations about gaps in the source material, assumptions made, areas to review) is returned alongside the clinical note in the API response and injected as the first assistant message in the refinement chat panel via `setMessages` in `session-detail-client.tsx`. If the LLM has no observations, the commentary is empty and the chat starts blank as normal.
+
+**Client context in note generation:** Both the generate and refine routes inject the full client record into the system prompt via `formatClientRecord()` from `lib/documents/context-assembly.ts` — the same fields used by document generation (presenting issues, treatment goals, risk considerations, background, therapeutic modalities, status, therapy start date, session frequency, delivery method). Modality resolution prefers the client's `therapeuticModalities` over the therapist's `defaultModality` when available, so notes are framed around the correct therapeutic approach for that client.
+
+All formats are governed by universal clinical documentation standards (accuracy, defensibility, GDPR audience awareness, treatment alignment) prepended to every system prompt. Prompts are in `app/api/notes/generate/route.ts`.
 
 ---
 
@@ -534,10 +558,11 @@ tests/
 - Session summary recording mode (therapist-narrated summaries)
 - **Session consent collection** — single-checkbox consent UI at step 2 of `/sessions/new` for `full_session` and `therapist_summary` recording types. One confirmation checkbox saves all granular consent records in a batch (8 records for full session, 4 for therapist summary). Server-side `hasRequiredConsents` guard on both upload and process routes checks all 4 consent types × appropriate parties. `recordingType` must always be passed to `hasRequiredConsents` to avoid incorrectly applying full-session (two-party) criteria to therapist-summary sessions.
 - **Written notes session creation path** — therapist types or pastes brief unformatted session notes on `/sessions/new`, AI expands into structured clinical notes. No audio recording, transcription, or consent flow. Uses `written_notes` recording type with `not_applicable` transcription status. Original text stored in `written_notes` column on `therapy_sessions`.
-- **Clinical note formats** — 5 formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary/written-notes prompt variants for each format. Source of truth: `.claude/note-taking-prompts.md`
+- **Clinical note formats** — 5 built-in formats (SOAP, DAP, BIRP, GIRP, Narrative) with Aaron's detailed clinical specifications, universal documentation standards preamble, and full-session + therapist-summary/written-notes prompt variants. Plus user-defined custom formats via `/settings/note-formats`. All notes stored as plain text with UPPERCASE section headers in `{ body: "..." }` JSONB — no per-format TypeScript interfaces or regex parsing. Single textarea editor. Refinement chat uses full-note replacement tool. Source of truth for built-in format specs: `.claude/note-taking-prompts.md`
 - Clinical documents system (7 document types, generation API, context assembly, viewer + editor)
-- **Settings area** at `app/(app)/settings/` with four sections:
+- **Settings area** at `app/(app)/settings/` with five sections:
   - `/settings/profile` — Professional Profile (jurisdiction, default modality, professional body). Feeds agent system prompt and search filtering.
+  - `/settings/note-formats` — Custom Note Formats (create, edit, delete user-defined note formats with section definitions and general rules; max 10 per therapist)
   - `/settings/account` — Account & Security (account info, password change, session management placeholder)
   - `/settings/privacy` — Data & Privacy (data handling info, GDPR rights, data export, account deletion request, delete-all-chats with type-to-confirm, sub-processor table, legal document links)
   - `/settings/about` — Platform info, professional body references, data protection summary
@@ -566,7 +591,7 @@ tests/
 - **Playwright `mockApi` fixture issue** — An `unknown parameter` error was being diagnosed. Check `tests/fixtures/index.ts` for correct `test.extend()` generic type, and verify no test files import from `@playwright/test` directly instead of the custom fixture.
 - **RAGAS evaluation framework** and golden test dataset — knowledge base now has content; evaluation can proceed when prioritised.
 - **Encryption key rotation procedure** — The module supports rotation via `ENCRYPTION_MASTER_KEY_OLD` + re-encryption, but no automated rotation script exists yet. Build when needed.
-- **`clients` table sensitive field encryption** — Fields like `presenting_issues`, `treatment_goals`, `risk_considerations`, and `background` contain clinical information but are not yet encrypted. Deferred to a second phase because these fields are read during context assembly for document generation.
+- **`clients` table sensitive field encryption** — Fields like `presenting_issues`, `treatment_goals`, `risk_considerations`, and `background` contain clinical information but are not yet encrypted. Deferred to a second phase because these fields are read during context assembly for both note generation and document generation.
 - **PII detection** — Pre-submission flagging of personally identifiable information before it reaches the LLM.
 
 ### Outstanding Compliance Items

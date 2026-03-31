@@ -189,7 +189,12 @@ export const searchKnowledgeBase = ({
         try {
           rawData = await parallelSearchAndMerge(queries, searchFn, matchCount);
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message =
+            err instanceof Error
+              ? err.message
+              : typeof err === "object" && err !== null && "message" in err
+                ? (err as { message: string }).message
+                : JSON.stringify(err);
           console.error(
             "[searchKnowledgeBase] parallel search failed:",
             message

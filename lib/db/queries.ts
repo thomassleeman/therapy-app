@@ -28,6 +28,10 @@ import type {
   ClinicalNoteWithSession,
   ConsentingParty,
   ConsentType,
+  CustomNoteFormat,
+  CustomNoteFormatInsert,
+  CustomNoteFormatSection,
+  CustomNoteFormatUpdate,
   DBMessage,
   Document,
   HybridSearchResult,
@@ -90,6 +94,7 @@ function mapRowToClient(row: any): Client {
     therapyStartDate: row.therapy_start_date ?? null,
     referralSource: row.referral_source ?? null,
     ageBracket: row.age_bracket ?? null,
+    gender: row.gender ?? null,
     sessionDurationMinutes: row.session_duration_minutes ?? null,
     contractedSessions: row.contracted_sessions ?? null,
     feePerSession:
@@ -901,6 +906,7 @@ export async function createClientRecord(params: ClientInsert) {
         therapy_start_date: params.therapyStartDate ?? null,
         referral_source: params.referralSource ?? null,
         age_bracket: params.ageBracket ?? null,
+        gender: params.gender ?? null,
         session_duration_minutes: params.sessionDurationMinutes ?? null,
         contracted_sessions: params.contractedSessions ?? null,
         fee_per_session: params.feePerSession ?? null,
@@ -947,6 +953,7 @@ export async function updateClientById({
       ["therapyStartDate", "therapy_start_date", fields.therapyStartDate],
       ["referralSource", "referral_source", fields.referralSource],
       ["ageBracket", "age_bracket", fields.ageBracket],
+      ["gender", "gender", fields.gender],
       [
         "sessionDurationMinutes",
         "session_duration_minutes",
@@ -2771,6 +2778,225 @@ export async function getLatestDocumentByType({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get latest document by type"
+    );
+  }
+}
+
+// ── Custom Note Format queries ───────────────────────────────────────────
+
+function mapRowToCustomNoteFormat(row: any): CustomNoteFormat {
+  return {
+    id: row.id,
+    therapistId: row.therapist_id,
+    name: row.name,
+    slug: row.slug,
+    sections: row.sections as CustomNoteFormatSection[],
+    generalRules: row.general_rules ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getCustomNoteFormats({
+  therapistId,
+}: {
+  therapistId: string;
+}): Promise<CustomNoteFormat[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("custom_note_formats")
+      .select("*")
+      .eq("therapist_id", therapistId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      handleSupabaseError(error, "get custom note formats");
+    }
+
+    return (data ?? []).map(mapRowToCustomNoteFormat);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get custom note formats"
+    );
+  }
+}
+
+export async function getCustomNoteFormat({
+  id,
+  therapistId,
+}: {
+  id: string;
+  therapistId: string;
+}): Promise<CustomNoteFormat | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("custom_note_formats")
+      .select("*")
+      .eq("id", id)
+      .eq("therapist_id", therapistId)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return null;
+      }
+      handleSupabaseError(error, "get custom note format");
+    }
+
+    return mapRowToCustomNoteFormat(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get custom note format"
+    );
+  }
+}
+
+export async function createCustomNoteFormat(
+  format: CustomNoteFormatInsert
+): Promise<CustomNoteFormat> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("custom_note_formats")
+      .insert({
+        therapist_id: format.therapistId,
+        name: format.name,
+        slug: format.slug,
+        sections: format.sections,
+        general_rules: format.generalRules ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "create custom note format");
+    }
+
+    return mapRowToCustomNoteFormat(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create custom note format"
+    );
+  }
+}
+
+export async function updateCustomNoteFormat({
+  id,
+  therapistId,
+  updates,
+}: {
+  id: string;
+  therapistId: string;
+  updates: CustomNoteFormatUpdate;
+}): Promise<CustomNoteFormat> {
+  try {
+    const supabase = await createClient();
+
+    const updatePayload: Record<string, unknown> = {};
+    if (updates.name !== undefined) {
+      updatePayload.name = updates.name;
+    }
+    if (updates.slug !== undefined) {
+      updatePayload.slug = updates.slug;
+    }
+    if (updates.sections !== undefined) {
+      updatePayload.sections = updates.sections;
+    }
+    if (updates.generalRules !== undefined) {
+      updatePayload.general_rules = updates.generalRules;
+    }
+
+    const { data, error } = await supabase
+      .from("custom_note_formats")
+      .update(updatePayload)
+      .eq("id", id)
+      .eq("therapist_id", therapistId)
+      .select()
+      .single();
+
+    if (error) {
+      handleSupabaseError(error, "update custom note format");
+    }
+
+    return mapRowToCustomNoteFormat(data);
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update custom note format"
+    );
+  }
+}
+
+export async function deleteCustomNoteFormat({
+  id,
+  therapistId,
+}: {
+  id: string;
+  therapistId: string;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("custom_note_formats")
+      .delete()
+      .eq("id", id)
+      .eq("therapist_id", therapistId);
+
+    if (error) {
+      handleSupabaseError(error, "delete custom note format");
+    }
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete custom note format"
+    );
+  }
+}
+
+export async function countCustomNoteFormats({
+  therapistId,
+}: {
+  therapistId: string;
+}): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const { count, error } = await supabase
+      .from("custom_note_formats")
+      .select("id", { count: "exact", head: true })
+      .eq("therapist_id", therapistId);
+
+    if (error) {
+      handleSupabaseError(error, "count custom note formats");
+    }
+
+    return count ?? 0;
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      throw error;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to count custom note formats"
     );
   }
 }

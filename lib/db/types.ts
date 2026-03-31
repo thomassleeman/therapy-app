@@ -45,6 +45,15 @@ export const AGE_BRACKETS = [
 ] as const;
 export type AgeBracket = (typeof AGE_BRACKETS)[number];
 
+export const CLIENT_GENDER_OPTIONS = [
+  "female",
+  "male",
+  "non_binary",
+  "not_recorded",
+] as const;
+
+export type ClientGenderOption = (typeof CLIENT_GENDER_OPTIONS)[number];
+
 // Display labels for enum values
 export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
   active: "Active",
@@ -120,6 +129,7 @@ export interface Client {
   therapyStartDate: string | null;
   referralSource: string | null;
   ageBracket: AgeBracket | null;
+  gender: string | null;
   // Contract details
   sessionDurationMinutes: number | null;
   contractedSessions: number | null;
@@ -279,6 +289,7 @@ export interface ClientInsert {
   therapyStartDate?: string | null;
   referralSource?: string | null;
   ageBracket?: AgeBracket | null;
+  gender?: string | null;
   sessionDurationMinutes?: number | null;
   contractedSessions?: number | null;
   feePerSession?: number | null;
@@ -451,59 +462,59 @@ export interface SessionSegment {
   createdAt: string;
 }
 
-export interface SoapNoteContent {
-  subjective: string;
-  objective: string;
-  assessment: string;
-  plan: string;
-}
-
-export interface DapNoteContent {
-  data: string;
-  assessment: string;
-  plan: string;
-}
-
-export interface BirpNoteContent {
-  behaviour: string;
-  intervention: string;
-  response: string;
-  plan: string;
-}
-
-export interface GirpNoteContent {
-  goals: string;
-  intervention: string;
-  response: string;
-  plan: string;
-}
-
-export interface NarrativeNoteContent {
-  clinicalOpening: string;
-  sessionBody: string;
-  clinicalSynthesis: string;
-  pathForward: string;
-}
-
-/** Internal fallback type used when structured parsing fails */
-export interface FreeformNoteContent {
+export interface NoteContent {
   body: string;
 }
 
-export type NoteContent =
-  | SoapNoteContent
-  | DapNoteContent
-  | BirpNoteContent
-  | GirpNoteContent
-  | NarrativeNoteContent
-  | FreeformNoteContent;
+/** @deprecated Use NoteContent directly — all notes now use the same shape */
+export type FreeformNoteContent = NoteContent;
+
+// ── Custom Note Format types ─────────────────────────────────────────
+
+export interface CustomNoteFormatSection {
+  /** URL-safe key, e.g. "presenting_concerns" */
+  key: string;
+  /** Human-readable label, e.g. "Presenting Concerns" */
+  label: string;
+  /** Description of what content belongs in this section — injected into the LLM prompt */
+  description: string;
+  /** Whether the section is required (used for prompt emphasis) */
+  required: boolean;
+}
+
+export interface CustomNoteFormat {
+  id: string;
+  therapistId: string;
+  name: string;
+  slug: string;
+  sections: CustomNoteFormatSection[];
+  generalRules: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomNoteFormatInsert {
+  therapistId: string;
+  name: string;
+  slug: string;
+  sections: CustomNoteFormatSection[];
+  generalRules?: string | null;
+}
+
+export interface CustomNoteFormatUpdate {
+  name?: string;
+  slug?: string;
+  sections?: CustomNoteFormatSection[];
+  generalRules?: string | null;
+}
 
 export interface ClinicalNote {
   id: string;
   sessionId: string | null;
   clientId: string | null;
   therapistId: string;
-  noteFormat: NoteFormat;
+  /** Built-in format key or "custom:{uuid}" for custom formats */
+  noteFormat: string;
   content: NoteContent;
   status: NoteStatus;
   generatedBy: string;
@@ -550,7 +561,8 @@ export interface ClinicalNoteInsert {
   sessionId?: string | null;
   clientId?: string | null;
   therapistId: string;
-  noteFormat: NoteFormat;
+  /** Built-in format key or "custom:{uuid}" for custom formats */
+  noteFormat: string;
   content: NoteContent;
   generatedBy?: string;
   modelUsed?: string | null;
@@ -588,7 +600,8 @@ export interface ClinicalNoteWithSession {
   id: string;
   sessionId: string | null;
   sessionDate: string | null;
-  noteFormat: NoteFormat;
+  /** Built-in format key or "custom:{uuid}" for custom formats */
+  noteFormat: string;
   status: NoteStatus;
   content: NoteContent;
   createdAt: string;

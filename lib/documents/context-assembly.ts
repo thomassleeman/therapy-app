@@ -9,7 +9,7 @@ import {
   getTherapistProfile,
   getTherapySessions,
 } from "@/lib/db/queries";
-import type { NoteContent } from "@/lib/db/types";
+import type { Client, NoteContent } from "@/lib/db/types";
 import type { ClinicalDocumentType, DataSource } from "./types";
 import { DOCUMENT_TYPE_REGISTRY, getDocumentTypeConfig } from "./types";
 
@@ -35,14 +35,9 @@ export interface AssembledContext {
 
 // ── Individual data source assemblers ────────────────────────────────
 
-export async function assembleClientRecord(clientId: string): Promise<string> {
-  const client = await getClientById({ id: clientId });
-
-  if (!client) {
-    return "CLIENT RECORD:\nNo client record found.";
-  }
-
-  return `CLIENT RECORD:
+export function formatClientRecord(client: Client): string {
+  return `CLIENT CONTEXT:
+Gender: ${client.gender || "Not recorded"}
 Presenting issues: ${client.presentingIssues || "Not recorded"}
 Treatment goals: ${client.treatmentGoals || "Not recorded"}
 Risk considerations: ${client.riskConsiderations || "None recorded"}
@@ -52,6 +47,16 @@ Status: ${client.status}
 Therapy start date: ${client.therapyStartDate || "Not recorded"}
 Session frequency: ${client.sessionFrequency || "Not specified"}
 Delivery method: ${client.deliveryMethod || "Not specified"}`;
+}
+
+export async function assembleClientRecord(clientId: string): Promise<string> {
+  const client = await getClientById({ id: clientId });
+
+  if (!client) {
+    return "CLIENT CONTEXT:\nNo client record found.";
+  }
+
+  return formatClientRecord(client);
 }
 
 export async function assembleSessionHistory(
@@ -100,26 +105,8 @@ ${lines.join("\n")}`;
   return { text, referencedSessionIds: sorted.map((s) => s.id) };
 }
 
-function formatNoteContent(content: NoteContent, noteFormat: string): string {
-  if (noteFormat === "soap" && "subjective" in content) {
-    return `Subjective: ${content.subjective}\nObjective: ${content.objective}\nAssessment: ${content.assessment}\nPlan: ${content.plan}`;
-  }
-  if (noteFormat === "dap" && "data" in content) {
-    return `Data: ${content.data}\nAssessment: ${content.assessment}\nPlan: ${content.plan}`;
-  }
-  if (noteFormat === "birp" && "behaviour" in content) {
-    return `Behaviour: ${content.behaviour}\nIntervention: ${content.intervention}\nResponse: ${content.response}\nPlan: ${content.plan}`;
-  }
-  if (noteFormat === "girp" && "goals" in content) {
-    return `Goals: ${content.goals}\nIntervention: ${content.intervention}\nResponse: ${content.response}\nPlan: ${content.plan}`;
-  }
-  if (noteFormat === "narrative" && "clinicalOpening" in content) {
-    return `Clinical Opening: ${content.clinicalOpening}\nSession Body: ${content.sessionBody}\nClinical Synthesis & Risk: ${content.clinicalSynthesis}\nThe Path Forward: ${content.pathForward}`;
-  }
-  if ("body" in content) {
-    return content.body;
-  }
-  return JSON.stringify(content);
+function formatNoteContent(content: NoteContent, _noteFormat: string): string {
+  return content.body;
 }
 
 export async function assembleClinicalNotes(

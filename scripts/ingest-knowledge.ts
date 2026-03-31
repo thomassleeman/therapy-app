@@ -67,7 +67,7 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function validateEnv(flags: CliFlags): void {
+function validateEnv(): void {
   const missing: string[] = [];
   if (!SUPABASE_URL) {
     missing.push("SUPABASE_URL");
@@ -80,9 +80,6 @@ function validateEnv(flags: CliFlags): void {
   }
   if (!process.env.AWS_SECRET_ACCESS_KEY) {
     missing.push("AWS_SECRET_ACCESS_KEY");
-  }
-  if (flags.withContext && !process.env.OPENAI_API_KEY) {
-    missing.push("OPENAI_API_KEY");
   }
   if (missing.length > 0) {
     throw new Error(
@@ -819,9 +816,9 @@ async function main(): Promise<void> {
 
   // Validate environment (skip for dry-run unless contextual enrichment needs API keys)
   if (!flags.dryRun) {
-    validateEnv(flags);
+    validateEnv();
   } else if (flags.withContext) {
-    validateEnv(flags);
+    validateEnv();
   }
 
   // Discover files

@@ -3,28 +3,21 @@
 import { Lock } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 
-import type { NoteFormat, NoteStatus } from "@/lib/db/types";
-import { SECTION_LABELS, SECTION_ORDER } from "@/lib/notes/format-config";
+import type { NoteStatus } from "@/lib/db/types";
 
 interface NotesEditorProps {
-  noteFormat: NoteFormat;
+  noteText: string;
+  onNoteTextChange: (text: string) => void;
   noteStatus: NoteStatus;
-  noteContent: Record<string, string>;
-  highlightedSections: Set<string>;
-  onFieldChange: (key: string, value: string) => void;
+  noteFormat: string;
 }
 
-function SectionTextarea({
-  value,
-  onChange,
-  disabled,
-  highlighted,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-  highlighted: boolean;
-}) {
+export function NotesEditor({
+  noteText,
+  onNoteTextChange,
+  noteStatus,
+}: NotesEditorProps) {
+  const isFinalised = noteStatus === "finalised";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustHeight = useCallback(() => {
@@ -35,47 +28,10 @@ function SectionTextarea({
     }
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: value must trigger resize when content changes externally (e.g. AI tool calls)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: noteText must trigger resize when content changes externally (e.g. AI tool calls)
   useEffect(() => {
     adjustHeight();
-  }, [value, adjustHeight]);
-
-  return (
-    <div
-      className={`rounded-md transition-all duration-300 ${
-        highlighted ? "ring-2 ring-primary/40 bg-primary/5" : ""
-      }`}
-    >
-      <textarea
-        className="w-full resize-none overflow-hidden border-none bg-transparent p-2 text-base leading-relaxed text-foreground outline-none focus:ring-0 disabled:cursor-default disabled:opacity-60"
-        disabled={disabled}
-        onChange={(e) => {
-          onChange(e.target.value);
-          adjustHeight();
-        }}
-        ref={textareaRef}
-        value={value}
-      />
-    </div>
-  );
-}
-
-export function NotesEditor({
-  noteFormat,
-  noteStatus,
-  noteContent,
-  highlightedSections,
-  onFieldChange,
-}: NotesEditorProps) {
-  const isFinalised = noteStatus === "finalised";
-
-  const orderedKeys = SECTION_ORDER[noteFormat] ?? [];
-  const contentKeys = Object.keys(noteContent);
-  const extraKeys = contentKeys.filter((k) => !orderedKeys.includes(k));
-  const sectionKeys = [
-    ...orderedKeys.filter((k) => k in noteContent),
-    ...extraKeys,
-  ];
+  }, [noteText, adjustHeight]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-6">
@@ -92,20 +48,17 @@ export function NotesEditor({
         </div>
       )}
 
-      <div className="space-y-6 bg-white rounded-lg shadow-sm p-6">
-        {sectionKeys.map((key) => (
-          <div key={key}>
-            <h3 className="mb-2 text-sm font-semibold tracking-wide text-foreground">
-              {SECTION_LABELS[key] ?? key}
-            </h3>
-            <SectionTextarea
-              disabled={isFinalised}
-              highlighted={highlightedSections.has(key)}
-              onChange={(v: string) => onFieldChange(key, v)}
-              value={noteContent[key] ?? ""}
-            />
-          </div>
-        ))}
+      <div className="rounded-lg bg-white p-6 shadow-sm">
+        <textarea
+          className="min-h-[400px] w-full resize-none overflow-hidden border-none bg-transparent p-2 font-mono text-sm leading-relaxed text-foreground outline-none focus:ring-0 disabled:cursor-default disabled:opacity-60"
+          disabled={isFinalised}
+          onChange={(e) => {
+            onNoteTextChange(e.target.value);
+            adjustHeight();
+          }}
+          ref={textareaRef}
+          value={noteText}
+        />
       </div>
     </div>
   );

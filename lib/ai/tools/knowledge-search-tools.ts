@@ -140,7 +140,12 @@ async function executeHybridSearch({
     try {
       rawResults = await parallelSearchAndMerge(queries, searchFn, matchCount);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "object" && err !== null && "message" in err
+            ? (err as { message: string }).message
+            : JSON.stringify(err);
       console.error(`[hybrid_search] parallel search failed: ${message}`, {
         category,
         modality,

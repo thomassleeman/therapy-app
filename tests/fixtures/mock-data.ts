@@ -21,6 +21,7 @@ export const mockClient: Client = {
   therapyStartDate: "2025-09-01",
   referralSource: "GP",
   ageBracket: "adult",
+  gender: null,
   sessionDurationMinutes: 50,
   contractedSessions: 12,
   feePerSession: null,

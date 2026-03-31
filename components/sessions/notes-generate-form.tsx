@@ -1,13 +1,15 @@
 "use client";
 
 import { FileText, Loader2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ClinicalNote,
+  CustomNoteFormat,
   NoteFormat,
   TranscriptionStatus,
 } from "@/lib/db/types";
@@ -17,7 +19,7 @@ import { FORMAT_DESCRIPTIONS } from "@/lib/notes/format-config";
 interface NotesGenerateFormProps {
   sessionId: string;
   transcriptionStatus: TranscriptionStatus;
-  onNotesGenerated: (note: ClinicalNote) => void;
+  onNotesGenerated: (note: ClinicalNote, commentary?: string) => void;
 }
 
 export function NotesGenerateForm({
@@ -25,9 +27,26 @@ export function NotesGenerateForm({
   transcriptionStatus,
   onNotesGenerated,
 }: NotesGenerateFormProps) {
-  const [selectedFormat, setSelectedFormat] = useState<NoteFormat>("soap");
+  const [selectedFormat, setSelectedFormat] = useState<string>("soap");
   const [additionalContext, setAdditionalContext] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [customFormats, setCustomFormats] = useState<CustomNoteFormat[]>([]);
+
+  // Fetch custom formats
+  useEffect(() => {
+    async function fetchCustomFormats() {
+      try {
+        const res = await fetch("/api/settings/note-formats");
+        if (res.ok) {
+          const data = await res.json();
+          setCustomFormats(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        // Custom formats unavailable — show built-in only
+      }
+    }
+    fetchCustomFormats();
+  }, []);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -47,11 +66,12 @@ export function NotesGenerateForm({
         throw new Error(data.error ?? "Failed to generate notes");
       }
 
-      const note = await res.json().catch(() => null);
-      if (!note) {
+      const data = await res.json().catch(() => null);
+      if (!data) {
         throw new Error("Received an invalid response from the server.");
       }
-      onNotesGenerated(note);
+      const { commentary, ...note } = data;
+      onNotesGenerated(note, commentary);
     } catch (err) {
       showErrorToast(err, "Failed to generate notes. Please try again.");
     } finally {
@@ -112,6 +132,50 @@ export function NotesGenerateForm({
           )
         )}
       </div>
+
+      {customFormats.length > 0 && (
+        <>
+          <div className="flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Custom
+            </span>
+            <Separator className="flex-1" />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {customFormats.map((cf) => {
+              const value = `custom:${cf.id}`;
+              const sectionPreview = cf.sections
+                .map((s) => s.label)
+                .join(", ");
+              return (
+                <label
+                  className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
+                    selectedFormat === value
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted"
+                  }`}
+                  key={cf.id}
+                >
+                  <input
+                    checked={selectedFormat === value}
+                    className="sr-only"
+                    name="note-format"
+                    onChange={() => setSelectedFormat(value)}
+                    type="radio"
+                    value={value}
+                  />
+                  <span className="text-sm font-medium">{cf.name}</span>
+                  <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {sectionPreview}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="additional-context">

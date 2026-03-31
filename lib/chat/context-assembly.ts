@@ -25,68 +25,7 @@ export const SUMMARY_DOCUMENT_TYPES: ClinicalDocumentType[] = [
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 function formatNoteContent(note: ClinicalNoteWithSession): string {
-  const content = note.content;
-
-  // Each check uses the unique discriminator key for that format.
-  // subjective   → SOAP
-  // data         → DAP  (no other type has `data`)
-  // behaviour    → BIRP
-  // goals        → GIRP
-  // clinicalOpening → Narrative
-  // body         → Freeform fallback
-
-  if ("subjective" in content) {
-    return [
-      `Subjective: ${content.subjective}`,
-      `Objective: ${content.objective}`,
-      `Assessment: ${content.assessment}`,
-      `Plan: ${content.plan}`,
-    ].join("\n");
-  }
-
-  if ("data" in content) {
-    return [
-      `Data: ${content.data}`,
-      `Assessment: ${content.assessment}`,
-      `Plan: ${content.plan}`,
-    ].join("\n");
-  }
-
-  if ("behaviour" in content) {
-    return [
-      `Behaviour: ${content.behaviour}`,
-      `Intervention: ${content.intervention}`,
-      `Response: ${content.response}`,
-      `Plan: ${content.plan}`,
-    ].join("\n");
-  }
-
-  if ("goals" in content) {
-    return [
-      `Goals: ${content.goals}`,
-      `Intervention: ${content.intervention}`,
-      `Response: ${content.response}`,
-      `Plan: ${content.plan}`,
-    ].join("\n");
-  }
-
-  if ("clinicalOpening" in content) {
-    return [
-      content.clinicalOpening,
-      content.sessionBody,
-      content.clinicalSynthesis,
-      content.pathForward,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  // Freeform fallback
-  if ("body" in content) {
-    return content.body;
-  }
-
-  return "";
+  return note.content.body;
 }
 
 // ── Token estimation ─────────────────────────────────────────────────────────

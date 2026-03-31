@@ -17,7 +17,7 @@ export const SECTION_LABELS: Record<string, string> = {
   body: "Notes",
 };
 
-export const SECTION_ORDER: Record<NoteFormat, string[]> = {
+export const SECTION_ORDER: Record<string, string[]> = {
   soap: ["subjective", "objective", "assessment", "plan"],
   dap: ["data", "assessment", "plan"],
   birp: ["behaviour", "intervention", "response", "plan"],

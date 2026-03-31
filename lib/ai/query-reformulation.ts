@@ -37,7 +37,6 @@ export async function reformulateQuery(
       schema: z.object({
         reformulations: z
           .array(z.string())
-          .length(3)
           .describe(
             "Three reformulations using clinical terminology that therapeutic framework documents and professional guidelines would use"
           ),

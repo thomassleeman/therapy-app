@@ -76,7 +76,7 @@ function buildSystemPrompt({
 
 RULES:
 - Use UK English spelling throughout (behaviour, colour, programme, etc.).
-- Do NOT include client names or identifying information. Use "the client" throughout.
+- Do NOT include client names or identifying information. Use "the client" as the primary way to refer to the client. Where a second reference within the same sentence would cause awkward repetition, use "they/them/their" instead (e.g., "The client mentioned that they had been feeling tired this week"). Do not use gendered pronouns (he/him/his, she/her/hers) even if the client's gender is known.
 - Do NOT diagnose. Use observational language throughout.
 - Use your search tools to reference relevant clinical frameworks, guidelines, or legislation where applicable. Cite the source when you do.
 - If the source data mentions risk factors, highlight these prominently in the appropriate section and note any actions taken or needed.

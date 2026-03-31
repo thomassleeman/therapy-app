@@ -14,6 +14,7 @@ export const JURISDICTIONS = ["UK", "EU"] as const;
 
 export const MODALITIES = [
   "cbt",
+  "dbt",
   "person_centred",
   "psychodynamic",
   "mct",

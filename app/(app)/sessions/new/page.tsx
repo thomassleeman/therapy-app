@@ -30,7 +30,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { RecordingType } from "@/lib/db/types";
+import type { CustomNoteFormat, RecordingType } from "@/lib/db/types";
 import { showErrorToast } from "@/lib/errors/client-error-handler";
 
 interface ClientOption {
@@ -85,11 +85,10 @@ function NewSessionForm() {
     useState<RecordingType>("full_session");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [clientFromUrl, setClientFromUrl] = useState(false);
-  const [noteFormat, setNoteFormat] = useState<
-    "soap" | "dap" | "birp" | "girp" | "narrative"
-  >("soap");
+  const [noteFormat, setNoteFormat] = useState<string>("soap");
   const [writtenNotes, setWrittenNotes] = useState("");
   const [generatingNotes, setGeneratingNotes] = useState(false);
+  const [customFormats, setCustomFormats] = useState<CustomNoteFormat[]>([]);
 
   // Step 2 state
   const [consented, setConsented] = useState(false);
@@ -130,6 +129,22 @@ function NewSessionForm() {
     }
     fetchClients();
   }, [searchParams]);
+
+  // Fetch custom note formats
+  useEffect(() => {
+    async function fetchCustomFormats() {
+      try {
+        const res = await fetch("/api/settings/note-formats");
+        if (res.ok) {
+          const data = await res.json();
+          setCustomFormats(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        // Custom formats unavailable — show built-in only
+      }
+    }
+    fetchCustomFormats();
+  }, []);
 
   // Step 1: Advance from details — pure state transition, no API call
   const handleAdvanceFromDetails = useCallback(() => {
@@ -578,6 +593,39 @@ function NewSessionForm() {
                         {fmt.label}
                       </label>
                     ))}
+                    {customFormats.map((cf) => {
+                      const value = `custom:${cf.id}`;
+                      return (
+                        <label
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                            noteFormat === value
+                              ? "border-primary bg-primary/5"
+                              : "hover:bg-muted"
+                          }`}
+                          key={cf.id}
+                        >
+                          <input
+                            checked={noteFormat === value}
+                            className="sr-only"
+                            name="note-format"
+                            onChange={() => setNoteFormat(value)}
+                            type="radio"
+                          />
+                          <div
+                            className={`size-4 rounded-full border-2 ${
+                              noteFormat === value
+                                ? "border-primary bg-primary"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {noteFormat === value && (
+                              <div className="mt-[3px] ml-[3px] size-[6px] rounded-full bg-white" />
+                            )}
+                          </div>
+                          {cf.name}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </>
