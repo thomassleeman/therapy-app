@@ -200,6 +200,10 @@ export function RefinementChat({
             <Send className="size-4" />
           </Button>
         </div>
+        <span className="text-xs overflow-hidden truncate text-ellipsis">
+          Remember AI tools can make mistakes. Always use your professional
+          judgment.{" "}
+        </span>
       </div>
     </div>
   );

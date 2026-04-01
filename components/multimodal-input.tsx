@@ -375,10 +375,10 @@ function PureMultimodalInput({
               selectedModelId={selectedModelId}
               status={status}
             />
-            <ModelSelectorCompact
+            {/* <ModelSelectorCompact
               onModelChange={onModelChange}
               selectedModelId={selectedModelId}
-            />
+            /> */}
           </PromptInputTools>
 
           {status === "submitted" ? (
@@ -395,6 +395,10 @@ function PureMultimodalInput({
           )}
         </PromptInputToolbar>
       </PromptInput>
+      <span className="text-xs truncate text-ellipsis text-muted-foreground">
+        Remember AI tools can make mistakes. Always use your professional
+        judgment.{" "}
+      </span>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ClientDialog } from "@/components/client-dialog";
+import { DocumentChecklist } from "@/components/documents/document-checklist";
 import { PencilEditIcon } from "@/components/icons";
 import { SessionsTable } from "@/components/sessions-table";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
@@ -111,6 +119,15 @@ export function ClientHubPage({
     router.replace(`${pathname}?${params.toString()}`);
   };
 
+  const tabOptions = [
+    { value: "overview", label: "Overview" },
+    { value: "sessions", label: `Sessions${sessions.length > 0 ? ` (${sessions.length})` : ""}` },
+    { value: "documents", label: `Documents${clinicalDocuments.length > 0 ? ` (${clinicalDocuments.length})` : ""}` },
+    { value: "clinical-notes", label: `Clinical Notes${clinicalNotes.length > 0 ? ` (${clinicalNotes.length})` : ""}` },
+    { value: "chats", label: `Chats${chats.length > 0 ? ` (${chats.length})` : ""}` },
+    { value: "supervision", label: "Supervision" },
+  ];
+
   return (
     <div className="flex flex-1 flex-col bg-background overflow-y-auto">
       {/* Header */}
@@ -167,23 +184,24 @@ export function ClientHubPage({
       {/* Tabs */}
       <div className="flex-1 px-4 py-4 md:px-6">
         <Tabs onValueChange={handleTabChange} value={activeTab}>
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="sessions">
-              Sessions{sessions.length > 0 && ` (${sessions.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="documents">
-              Documents
-              {clinicalDocuments.length > 0 && ` (${clinicalDocuments.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="clinical-notes">
-              Clinical Notes
-              {clinicalNotes.length > 0 && ` (${clinicalNotes.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="chats">
-              Chats{chats.length > 0 && ` (${chats.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="supervision">Supervision</TabsTrigger>
+          <Select onValueChange={handleTabChange} value={activeTab}>
+            <SelectTrigger className="md:hidden w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabOptions.map((tab) => (
+                <SelectItem key={tab.value} value={tab.value}>
+                  {tab.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <TabsList className="hidden md:inline-flex">
+            {tabOptions.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* Overview Tab */}
@@ -192,6 +210,10 @@ export function ClientHubPage({
               <DetailsCard client={client} />
               <PracticeCard client={client} />
             </div>
+            <DocumentChecklist
+              clientId={client.id}
+              documents={clinicalDocuments}
+            />
             <OverviewStatsCards
               chatsCount={chats.length}
               clinicalNotesCount={clinicalNotes.length}
