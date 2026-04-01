@@ -55,7 +55,7 @@ function computeSummaryCounts(
 
 function SummaryCards({ counts }: { counts: SummaryCounts }) {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="md:grid grid-cols-3 gap-3 hidden">
       <Card className="border-amber-200 dark:border-amber-800 py-0">
         <CardContent className="px-4 py-3">
           <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
@@ -90,7 +90,7 @@ function SessionsPageSkeleton() {
   return (
     <>
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="hidden md:grid grid-cols-3 gap-3">
         {["card-1", "card-2", "card-3"].map((id) => (
           <Card className="py-0" key={id}>
             <CardContent className="px-4 py-3">
@@ -105,7 +105,7 @@ function SessionsPageSkeleton() {
       <Skeleton className="h-9 w-full rounded-md" />
 
       {/* Filter controls */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="hidden md:flex flex-wrap items-center gap-3">
         <Skeleton className="h-8 w-[120px] rounded-md" />
         <Skeleton className="h-8 w-[140px] rounded-md" />
         <Skeleton className="h-8 w-[180px] rounded-md" />
@@ -165,7 +165,7 @@ export function SessionsPage() {
         </Button>
       }
       isLoading={isLoading}
-      subtitle="Workflow view across all clients"
+      // subtitle="Workflow view across all clients"
       title="Sessions"
     >
       {isLoading ? (

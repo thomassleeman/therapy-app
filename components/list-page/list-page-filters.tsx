@@ -21,7 +21,7 @@ export function ListPageFilters<T extends string>({
   allLabel = "All",
 }: ListPageFiltersProps<T>) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="hidden md:flex flex-wrap gap-2">
       <Button
         onClick={() => onChange("all")}
         size="sm"

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import type { Chat, Client, RecentSession } from "@/lib/db/types";
 import { formatDate } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
-import { FabNewChat } from "./fab-new-chat";
 import { MessageIcon, PlusIcon, UserIcon } from "./icons";
 
 type ChatCount = { clientId: string | null; count: number };
@@ -128,45 +127,6 @@ export function DashboardPage({
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Recent Chats */}
-          <section>
-            <div className="flex items-center justify-between">
-              <h2 className="font-medium">Recent Chats</h2>
-              <Link
-                className="text-sm text-muted-foreground hover:text-foreground"
-                href="/clients"
-              >
-                View clients &rarr;
-              </Link>
-            </div>
-            {recentChats.length === 0 ? (
-              <div className="mt-3 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No chats yet. Start a conversation to get going.
-              </div>
-            ) : (
-              <div className="mt-3 divide-y rounded-lg border">
-                {recentChats.map((chat) => (
-                  <Link
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent"
-                    href={`/chat/${chat.id}`}
-                    key={chat.id}
-                  >
-                    <MessageIcon size={16} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {chat.title}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {getClientName(chat.clientId)} &middot;{" "}
-                        {formatDate(chat.createdAt)}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </section>
-
           {/* Recent Sessions */}
           <section>
             <div className="flex items-center justify-between">
@@ -209,6 +169,45 @@ export function DashboardPage({
                         status={session.transcriptionStatus}
                       />
                       <NotesBadge status={session.notesStatus} />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Recent Chats */}
+          <section>
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium">Recent Chats</h2>
+              <Link
+                className="text-sm text-muted-foreground hover:text-foreground"
+                href="/clients"
+              >
+                View clients &rarr;
+              </Link>
+            </div>
+            {recentChats.length === 0 ? (
+              <div className="mt-3 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No chats yet. Start a conversation to get going.
+              </div>
+            ) : (
+              <div className="mt-3 divide-y rounded-lg border">
+                {recentChats.map((chat) => (
+                  <Link
+                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent"
+                    href={`/chat/${chat.id}`}
+                    key={chat.id}
+                  >
+                    <MessageIcon size={16} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">
+                        {chat.title}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {getClientName(chat.clientId)} &middot;{" "}
+                        {formatDate(chat.createdAt)}
+                      </div>
                     </div>
                   </Link>
                 ))}
@@ -280,8 +279,6 @@ export function DashboardPage({
         onOpenChange={setShowClientDialog}
         open={showClientDialog}
       />
-
-      <FabNewChat />
     </div>
   );
 }

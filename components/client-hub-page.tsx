@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ClientDialog } from "@/components/client-dialog";
-import { FabNewChat } from "@/components/fab-new-chat";
 import { PencilEditIcon } from "@/components/icons";
 import { SessionsTable } from "@/components/sessions-table";
 import { Badge } from "@/components/ui/badge";
@@ -227,8 +226,6 @@ export function ClientHubPage({
           </TabsContent>
         </Tabs>
       </div>
-
-      <FabNewChat clientId={client.id} />
 
       <ClientDialog
         client={client}

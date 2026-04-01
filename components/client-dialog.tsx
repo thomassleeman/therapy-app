@@ -213,7 +213,7 @@ export function ClientDialog({
     e.preventDefault();
 
     if (!form.name.trim()) {
-      toast({ type: "error", description: "Client name is required" });
+      toast({ type: "error", description: "Client identifier is required" });
       return;
     }
 
@@ -298,12 +298,12 @@ export function ClientDialog({
           <div className="grid gap-4 py-4">
             {/* Name and Status — always visible */}
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Client Identifier</Label>
               <Input
                 autoFocus
                 id="name"
                 onChange={(e) => updateField("name", e.target.value)}
-                placeholder="Enter client name"
+                placeholder="Enter client identifier"
                 value={form.name}
               />
             </div>

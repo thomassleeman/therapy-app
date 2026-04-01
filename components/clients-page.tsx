@@ -23,7 +23,6 @@ import type { Client, ClientStatus } from "@/lib/db/types";
 import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from "@/lib/db/types";
 import { fetcher } from "@/lib/utils";
 import { ClientDialog } from "./client-dialog";
-import { FabNewChat } from "./fab-new-chat";
 import { PencilEditIcon, PlusIcon, TrashIcon, UserIcon } from "./icons";
 import {
   ListPageEmpty,
@@ -180,7 +179,7 @@ export function ClientsPage() {
         <>
           <ListPageSearch
             onChange={setSearchQuery}
-            placeholder="Search clients by name, background, issues, or modalities..."
+            placeholder="Search clients by identifier, background, issues, or modalities..."
             value={searchQuery}
           />
           <ListPageFilters
@@ -308,7 +307,7 @@ export function ClientsPage() {
                                     <StatusBadge status={client.status} />
                                   </div>
                                   {client.background && (
-                                    <p className="mt-0.5 max-w-xs truncate text-xs text-muted-foreground">
+                                    <p className="hidden md:block mt-0.5 max-w-xs truncate text-xs text-muted-foreground">
                                       {client.background}
                                     </p>
                                   )}
@@ -425,8 +424,6 @@ export function ClientsPage() {
           )}
         </>
       )}
-
-      <FabNewChat />
 
       <ClientDialog
         client={editingClient}
