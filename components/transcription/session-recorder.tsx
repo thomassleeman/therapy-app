@@ -7,15 +7,24 @@ import {
   Mic,
   Pause,
   Play,
+  RotateCcw,
   Square,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CopyErrorReport } from "@/components/transcription/copy-error-report";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDuration, useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { useTranscriptionProgress } from "@/hooks/use-transcription-progress";
+import {
+  cacheAudioBlob,
+  deleteCachedAudio,
+  getCachedAudio,
+  pruneStaleEntries,
+} from "@/lib/audio-cache";
+import type { ProcessingError } from "@/lib/db/types";
 
 type RecorderPhase =
   | "ready"
@@ -41,6 +50,7 @@ export function SessionRecorder({
     isPaused,
     duration,
     error: recorderError,
+    processingError: recorderProcessingError,
     startRecording,
     stopRecording,
     pauseRecording,
@@ -51,6 +61,8 @@ export function SessionRecorder({
   const [phase, setPhase] = useState<RecorderPhase>("ready");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [localProcessingError, setLocalProcessingError] =
+    useState<ProcessingError | null>(null);
   const [processSessionId, setProcessSessionId] = useState<string | null>(null);
   const onStartCalledRef = useRef(false);
 
@@ -59,11 +71,23 @@ export function SessionRecorder({
     status: transcriptionStatus,
     label: transcriptionLabel,
     error: transcriptionError,
+    processingError: polledProcessingError,
+    reset: resetTranscriptionStatus,
   } = useTranscriptionProgress(processSessionId);
+
+  // Prune stale IndexedDB entries on mount
+  useEffect(() => {
+    pruneStaleEntries().catch((err) => {
+      console.warn("[audio-cache] Prune on mount failed:", err);
+    });
+  }, []);
 
   const handleStart = useCallback(async () => {
     setErrorMessage(null);
-    await startRecording();
+    const started = await startRecording();
+    if (!started) {
+      return;
+    }
     setPhase("recording");
     if (!onStartCalledRef.current) {
       onStartCalledRef.current = true;
@@ -71,13 +95,12 @@ export function SessionRecorder({
     }
   }, [startRecording, onStart]);
 
-  const handleStop = useCallback(async () => {
-    try {
-      const { blob } = await stopRecording();
+  /** Upload a blob via XHR then fire the process request. */
+  const uploadAndProcess = useCallback(
+    async (blob: Blob): Promise<void> => {
       setPhase("uploading");
       setUploadProgress(0);
 
-      // Upload via XMLHttpRequest for progress tracking
       const uploaded = await new Promise<boolean>((resolve) => {
         const formData = new FormData();
         formData.append("audioFile", blob, `session-${sessionId}.webm`);
@@ -106,15 +129,34 @@ export function SessionRecorder({
               // use default message
             }
             setErrorMessage(message);
+            setLocalProcessingError({
+              stage: "upload",
+              error: message,
+              code: "UPLOAD_HTTP_ERROR",
+              occurredAt: new Date().toISOString(),
+              metadata: {
+                httpStatus: xhr.status,
+                browser: navigator.userAgent,
+              },
+            });
             setPhase("error");
             resolve(false);
           }
         };
 
         xhr.onerror = () => {
-          setErrorMessage(
-            "Network error during upload. Please check your connection."
-          );
+          const message =
+            "Network error during upload. Please check your connection.";
+          setErrorMessage(message);
+          setLocalProcessingError({
+            stage: "upload",
+            error: message,
+            code: "NETWORK_ERROR",
+            occurredAt: new Date().toISOString(),
+            metadata: {
+              browser: navigator.userAgent,
+            },
+          });
           setPhase("error");
           resolve(false);
         };
@@ -137,21 +179,50 @@ export function SessionRecorder({
       }).catch((err) => {
         console.error("[transcription] Process request failed:", err);
       });
+    },
+    [sessionId]
+  );
+
+  const handleStop = useCallback(async () => {
+    try {
+      const { blob, duration } = await stopRecording();
+
+      // Cache blob in IndexedDB for retry — fire-and-forget
+      cacheAudioBlob(sessionId, blob, duration).catch((err) => {
+        console.warn("[audio-cache] Failed to cache blob on stop:", err);
+      });
+
+      await uploadAndProcess(blob);
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "An unexpected error occurred"
-      );
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+      setErrorMessage(message);
+      setLocalProcessingError({
+        stage: "recording",
+        error: message,
+        detail:
+          err instanceof Error
+            ? (err.stack ?? err.message).slice(0, 500)
+            : String(err),
+        occurredAt: new Date().toISOString(),
+        metadata: {
+          browser: navigator.userAgent,
+        },
+      });
       setPhase("error");
     }
-  }, [stopRecording, sessionId]);
+  }, [stopRecording, sessionId, uploadAndProcess]);
 
+  /** Full reset — user must re-record from scratch. */
   const handleReset = useCallback(() => {
+    resetTranscriptionStatus();
     cancelRecording();
     setProcessSessionId(null);
     setPhase("ready");
     setErrorMessage(null);
+    setLocalProcessingError(null);
     setUploadProgress(0);
-  }, [cancelRecording]);
+  }, [resetTranscriptionStatus, cancelRecording]);
 
   // Sync transcription status with phase
   const currentPhase = (() => {
@@ -161,24 +232,81 @@ export function SessionRecorder({
     if (transcriptionStatus === "failed") {
       return "error";
     }
+    if (transcriptionError) {
+      return "error";
+    }
     if (phase === "recording" && isRecording) {
       return "recording";
     }
     return phase;
   })();
 
+  // Sync transcription errors
+  const displayError = errorMessage ?? transcriptionError ?? recorderError;
+  const activeProcessingError =
+    localProcessingError ?? recorderProcessingError ?? polledProcessingError;
+
+  /** Smart retry — re-uploads from cache or re-triggers processing. */
+  const handleRetry = useCallback(async () => {
+    // Snapshot the error stage before clearing state
+    const stage = activeProcessingError?.stage;
+
+    setErrorMessage(null);
+    setLocalProcessingError(null);
+    resetTranscriptionStatus();
+
+    const isPreUploadFailure =
+      !stage ||
+      stage === "upload" ||
+      stage === "recording" ||
+      stage === "mic_access";
+
+    if (isPreUploadFailure) {
+      // Audio never reached Supabase — retry upload from cached blob
+      const cached = await getCachedAudio(sessionId);
+      if (cached) {
+        await uploadAndProcess(cached.blob);
+      } else {
+        // No cached blob available — must re-record
+        handleReset();
+      }
+    } else {
+      // Audio already in Supabase — just re-trigger processing
+      setPhase("processing");
+      setProcessSessionId(sessionId);
+
+      fetch("/api/transcription/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      }).catch((err) => {
+        console.error("[transcription] Process retry failed:", err);
+      });
+    }
+  }, [
+    activeProcessingError?.stage,
+    sessionId,
+    uploadAndProcess,
+    resetTranscriptionStatus,
+    handleReset,
+  ]);
+
   // Call onComplete when transcription finishes (in useEffect to avoid setState during render)
   useEffect(() => {
     if (currentPhase === "completed" && phase !== "completed") {
       setPhase("completed");
+      deleteCachedAudio(sessionId).catch((err) => {
+        console.warn("[audio-cache] Cleanup after completion failed:", err);
+      });
       onComplete();
     }
-  }, [currentPhase, phase, onComplete]);
+  }, [currentPhase, phase, onComplete, sessionId]);
 
-  // Sync transcription errors
-  const displayError = errorMessage ?? transcriptionError ?? recorderError;
-
-  if (currentPhase === "error" || (recorderError && currentPhase === "ready")) {
+  if (
+    currentPhase === "error" ||
+    (recorderError &&
+      (currentPhase === "ready" || currentPhase === "recording"))
+  ) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8">
@@ -186,14 +314,30 @@ export function SessionRecorder({
             <AlertCircle className="size-5" />
             <p className="text-sm font-medium">{displayError}</p>
           </div>
-          <Button
-            className="min-h-12 min-w-[160px]"
-            onClick={handleReset}
-            size="lg"
-            variant="outline"
-          >
-            Try Again
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              className="min-h-12 min-w-40"
+              onClick={handleRetry}
+              size="lg"
+            >
+              <RotateCcw className="size-4" />
+              Try Again
+            </Button>
+            <Button
+              className="min-h-12"
+              onClick={handleReset}
+              size="lg"
+              variant="outline"
+            >
+              Start New Recording
+            </Button>
+          </div>
+          {activeProcessingError && (
+            <CopyErrorReport
+              processingError={activeProcessingError}
+              sessionId={sessionId}
+            />
+          )}
         </CardContent>
       </Card>
     );

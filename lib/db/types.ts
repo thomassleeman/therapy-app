@@ -426,6 +426,30 @@ export const RECORDING_TYPES = [
 ] as const;
 export type RecordingType = (typeof RECORDING_TYPES)[number];
 
+export interface ProcessingError {
+  stage:
+    | "mic_access"
+    | "recording"
+    | "upload"
+    | "preparing"
+    | "transcribing"
+    | "saving"
+    | "polling"
+    | "unknown";
+  error: string;
+  code?: string;
+  detail?: string;
+  occurredAt: string;
+  metadata?: {
+    audioDurationSec?: number;
+    audioMimeType?: string;
+    audioSizeBytes?: number;
+    browser?: string;
+    transcriptionProvider?: string;
+    httpStatus?: number;
+  };
+}
+
 export interface TherapySession {
   id: string;
   therapistId: string;
@@ -442,6 +466,7 @@ export interface TherapySession {
   recordingType: RecordingType;
   writtenNotes: string | null;
   errorMessage: string | null;
+  processingError: ProcessingError | null;
   createdAt: string;
   updatedAt: string;
 }

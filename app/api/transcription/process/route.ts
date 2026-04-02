@@ -8,7 +8,7 @@ import {
   insertSessionSegments,
   updateTherapySession,
 } from "@/lib/db/queries";
-import type { SessionSegmentInsert } from "@/lib/db/types";
+import type { ProcessingError, SessionSegmentInsert } from "@/lib/db/types";
 import { decryptBuffer } from "@/lib/encryption/crypto";
 import { encryptSegments } from "@/lib/encryption/fields";
 import { transcribeAndDiarize } from "@/lib/transcription";
@@ -22,6 +22,8 @@ export async function POST(request: Request) {
   }
 
   let sessionId: string | undefined;
+  let audioMimeType: string | null = null;
+  let currentStage: ProcessingError["stage"] = "preparing";
 
   try {
     const body = await request.json();
@@ -49,6 +51,7 @@ export async function POST(request: Request) {
       );
     }
 
+    audioMimeType = therapySession.audioMimeType ?? null;
     const isSummary = therapySession.recordingType === "therapist_summary";
 
     // Defence in depth: check consents again
@@ -63,10 +66,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update status to preparing (downloading audio)
+    // Update status to preparing (downloading audio) and clear any previous error
     await updateTherapySession({
       id: sessionId,
       transcriptionStatus: "preparing",
+      errorMessage: null,
+      processingError: null,
     });
 
     // Download audio from Supabase Storage using service role
@@ -85,6 +90,16 @@ export async function POST(request: Request) {
         id: sessionId,
         transcriptionStatus: "failed",
         errorMessage: "Failed to download audio from storage",
+        processingError: {
+          stage: "preparing",
+          error: "Failed to download audio from storage",
+          detail: downloadError?.message ?? String(downloadError),
+          occurredAt: new Date().toISOString(),
+          metadata: {
+            audioMimeType: audioMimeType ?? undefined,
+            transcriptionProvider: "assemblyai",
+          },
+        } satisfies ProcessingError,
       });
       return NextResponse.json(
         { error: "Failed to download audio" },
@@ -99,6 +114,7 @@ export async function POST(request: Request) {
     );
 
     // Update status to transcribing
+    currentStage = "transcribing";
     await updateTherapySession({
       id: sessionId,
       transcriptionStatus: "transcribing",
@@ -114,6 +130,7 @@ export async function POST(request: Request) {
     });
 
     // Update status to saving
+    currentStage = "saving";
     await updateTherapySession({
       id: sessionId,
       transcriptionStatus: "saving",
@@ -179,12 +196,27 @@ export async function POST(request: Request) {
 
     // Mark session as failed if we have a sessionId
     if (sessionId) {
+      const processingError: ProcessingError = {
+        stage: currentStage,
+        error: error instanceof Error ? error.message : "Unknown error",
+        detail:
+          error instanceof Error
+            ? (error.stack ?? error.message).slice(0, 500)
+            : String(error),
+        occurredAt: new Date().toISOString(),
+        metadata: {
+          audioMimeType: audioMimeType ?? undefined,
+          transcriptionProvider: "assemblyai",
+        },
+      };
+
       try {
         await updateTherapySession({
           id: sessionId,
           transcriptionStatus: "failed",
           errorMessage:
             error instanceof Error ? error.message : "Unknown error",
+          processingError,
         });
       } catch (updateError) {
         console.error("Failed to update session status:", updateError);

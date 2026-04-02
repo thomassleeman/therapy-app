@@ -21,7 +21,8 @@ const PHASE_STEPS: Record<TranscriptionStatus, number> = {
 const TOTAL_STEPS = 5;
 
 export function useTranscriptionProgress(sessionId: string | null) {
-  const { status, error, isPolling } = useTranscriptionStatus(sessionId);
+  const { status, error, processingError, isPolling, reset } =
+    useTranscriptionStatus(sessionId);
 
   const step = PHASE_STEPS[status] ?? 0;
   const progress =
@@ -33,6 +34,8 @@ export function useTranscriptionProgress(sessionId: string | null) {
     status,
     label,
     error,
+    processingError,
     isPolling,
+    reset,
   };
 }

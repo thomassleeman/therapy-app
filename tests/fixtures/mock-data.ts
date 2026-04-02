@@ -47,6 +47,7 @@ export const mockSession: TherapySession = {
   recordingType: "therapist_summary",
   writtenNotes: null,
   errorMessage: null,
+  processingError: null,
   createdAt: "2025-12-10T09:00:00Z",
   updatedAt: "2025-12-10T10:05:00Z",
 };

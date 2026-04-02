@@ -1403,6 +1403,7 @@ function mapRowToTherapySession(row: any): TherapySession {
     recordingType: row.recording_type ?? "full_session",
     writtenNotes: row.written_notes ?? null,
     errorMessage: row.error_message ?? null,
+    processingError: row.processing_error ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1602,6 +1603,7 @@ export async function updateTherapySession({
       ["recordingType", "recording_type", fields.recordingType],
       ["writtenNotes", "written_notes", fields.writtenNotes],
       ["errorMessage", "error_message", fields.errorMessage],
+      ["processingError", "processing_error", fields.processingError],
     ];
 
     const updatePayload: Record<string, unknown> = {

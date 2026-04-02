@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { ProcessingError } from "@/lib/db/types";
+
 export function formatDuration(seconds: number): string {
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
@@ -36,6 +38,8 @@ export function useAudioRecorder() {
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [processingError, setProcessingError] =
+    useState<ProcessingError | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -102,18 +106,19 @@ export function useAudioRecorder() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [isRecording, isPaused, acquireWakeLock]);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (): Promise<boolean> => {
     setError(null);
+    setProcessingError(null);
 
     if (typeof MediaRecorder === "undefined") {
       setError("Audio recording is not supported in this browser.");
-      return;
+      return false;
     }
 
     const mimeType = getSupportedMimeType();
     if (!mimeType) {
       setError("Audio recording is not supported in this browser.");
-      return;
+      return false;
     }
 
     let stream: MediaStream;
@@ -126,10 +131,19 @@ export function useAudioRecorder() {
         },
       });
     } catch {
-      setError(
-        "Microphone access denied. Please allow microphone access in your browser settings."
-      );
-      return;
+      const message =
+        "Microphone access denied. Please allow microphone access in your browser settings.";
+      setError(message);
+      setProcessingError({
+        stage: "mic_access",
+        error: message,
+        code: "MIC_DENIED",
+        occurredAt: new Date().toISOString(),
+        metadata: {
+          browser: navigator.userAgent,
+        },
+      });
+      return false;
     }
 
     streamRef.current = stream;
@@ -154,6 +168,24 @@ export function useAudioRecorder() {
       }
     };
 
+    mediaRecorder.onerror = () => {
+      const message = "Recording failed unexpectedly. Please try again.";
+      setError(message);
+      setProcessingError({
+        stage: "recording",
+        error: message,
+        code: "MEDIA_RECORDER_ERROR",
+        occurredAt: new Date().toISOString(),
+        metadata: {
+          audioMimeType: mimeType,
+          browser: navigator.userAgent,
+        },
+      });
+      cleanup();
+      setIsRecording(false);
+      setIsPaused(false);
+    };
+
     mediaRecorder.start();
     setIsRecording(true);
     setIsPaused(false);
@@ -163,7 +195,9 @@ export function useAudioRecorder() {
     timerRef.current = setInterval(() => {
       setDuration((prev) => prev + 1);
     }, 1000);
-  }, [duration, acquireWakeLock]);
+
+    return true;
+  }, [duration, acquireWakeLock, cleanup]);
 
   const stopRecording = useCallback((): Promise<StopResult> => {
     return new Promise<StopResult>((resolve) => {
@@ -233,6 +267,7 @@ export function useAudioRecorder() {
     setIsPaused(false);
     setDuration(0);
     setError(null);
+    setProcessingError(null);
   }, [cleanup]);
 
   return {
@@ -240,6 +275,7 @@ export function useAudioRecorder() {
     isPaused,
     duration,
     error,
+    processingError,
     startRecording,
     stopRecording,
     pauseRecording,

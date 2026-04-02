@@ -3,11 +3,13 @@
 import { AlertCircle, Check, FileAudio, Loader2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CopyErrorReport } from "@/components/transcription/copy-error-report";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDuration } from "@/hooks/use-audio-recorder";
 import { useTranscriptionProgress } from "@/hooks/use-transcription-progress";
+import type { ProcessingError } from "@/lib/db/types";
 
 const ACCEPTED_TYPES = [".wav", ".mp3", ".m4a", ".webm", ".ogg"];
 const ACCEPTED_MIME_TYPES = [
@@ -72,6 +74,8 @@ export function AudioUpload({
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [localProcessingError, setLocalProcessingError] =
+    useState<ProcessingError | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [processSessionId, setProcessSessionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +86,8 @@ export function AudioUpload({
     status: transcriptionStatus,
     label: transcriptionLabel,
     error: transcriptionError,
+    processingError: polledProcessingError,
+    reset: resetTranscriptionStatus,
   } = useTranscriptionProgress(processSessionId);
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -177,15 +183,38 @@ export function AudioUpload({
               // use default message
             }
             setErrorMessage(message);
+            setLocalProcessingError({
+              stage: "upload",
+              error: message,
+              code: "UPLOAD_HTTP_ERROR",
+              occurredAt: new Date().toISOString(),
+              metadata: {
+                httpStatus: xhr.status,
+                audioMimeType: selectedFile.file.type,
+                audioSizeBytes: selectedFile.file.size,
+                browser: navigator.userAgent,
+              },
+            });
             setPhase("error");
             resolve(false);
           }
         };
 
         xhr.onerror = () => {
-          setErrorMessage(
-            "Network error during upload. Please check your connection."
-          );
+          const message =
+            "Network error during upload. Please check your connection.";
+          setErrorMessage(message);
+          setLocalProcessingError({
+            stage: "upload",
+            error: message,
+            code: "NETWORK_ERROR",
+            occurredAt: new Date().toISOString(),
+            metadata: {
+              audioMimeType: selectedFile.file.type,
+              audioSizeBytes: selectedFile.file.size,
+              browser: navigator.userAgent,
+            },
+          });
           setPhase("error");
           resolve(false);
         };
@@ -209,24 +238,38 @@ export function AudioUpload({
         console.error("[transcription] Process request failed:", err);
       });
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "An unexpected error occurred"
-      );
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+      setErrorMessage(message);
+      setLocalProcessingError({
+        stage: "upload",
+        error: message,
+        detail:
+          err instanceof Error
+            ? (err.stack ?? err.message).slice(0, 500)
+            : String(err),
+        occurredAt: new Date().toISOString(),
+        metadata: {
+          browser: navigator.userAgent,
+        },
+      });
       setPhase("error");
     }
   }, [selectedFile, sessionId, onStart]);
 
   const handleReset = useCallback(() => {
+    resetTranscriptionStatus();
     setProcessSessionId(null);
     setPhase("idle");
     setSelectedFile(null);
     setErrorMessage(null);
+    setLocalProcessingError(null);
     setUploadProgress(0);
     setIsDragOver(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
+  }, [resetTranscriptionStatus]);
 
   // Sync transcription status with phase
   const currentPhase = (() => {
@@ -248,6 +291,7 @@ export function AudioUpload({
   }, [currentPhase, phase, onComplete]);
 
   const displayError = errorMessage ?? transcriptionError;
+  const activeProcessingError = localProcessingError ?? polledProcessingError;
 
   if (currentPhase === "error") {
     return (
@@ -265,6 +309,12 @@ export function AudioUpload({
           >
             Try Again
           </Button>
+          {activeProcessingError && (
+            <CopyErrorReport
+              processingError={activeProcessingError}
+              sessionId={sessionId}
+            />
+          )}
         </CardContent>
       </Card>
     );

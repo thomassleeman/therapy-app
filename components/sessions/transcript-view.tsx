@@ -2,6 +2,7 @@
 
 import { AlertCircle, Loader2 } from "lucide-react";
 
+import { CopyErrorReport } from "@/components/transcription/copy-error-report";
 import { useTranscriptionStatus } from "@/hooks/use-transcription-status";
 import type { SessionSegment, TherapySession } from "@/lib/db/types";
 import { TRANSCRIPTION_STATUS_LABELS } from "@/lib/db/types";
@@ -72,6 +73,12 @@ export function TranscriptView({ session, segments }: TranscriptViewProps) {
           <p className="text-xs text-muted-foreground">
             {session.errorMessage}
           </p>
+        )}
+        {session.processingError && (
+          <CopyErrorReport
+            processingError={session.processingError}
+            sessionId={session.id}
+          />
         )}
       </div>
     );
