@@ -269,12 +269,6 @@ export function SessionRecorder({
             </span>
           </div>
 
-          {!isPaused && (
-            <p className="text-xs text-muted-foreground">
-              Recording in progress...
-            </p>
-          )}
-
           <div className="flex items-center gap-3">
             {isPaused ? (
               <Button
@@ -307,6 +301,10 @@ export function SessionRecorder({
               Stop Recording
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground text-center max-w-sm mt-2">
+            Please keep this screen open while recording. Closing the app or
+            locking your device will interrupt the recording.
+          </p>
         </CardContent>
       </Card>
     );

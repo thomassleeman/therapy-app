@@ -44,6 +44,23 @@ export function useAudioRecorder() {
   const stopPromiseRef = useRef<{
     resolve: (result: StopResult) => void;
   } | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  const acquireWakeLock = useCallback(async () => {
+    if ("wakeLock" in navigator) {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+      } catch {
+        // Wake lock request can fail (e.g. low battery on some devices) — non-critical
+        console.warn("[audio-recorder] Wake lock request failed");
+      }
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    wakeLockRef.current?.release();
+    wakeLockRef.current = null;
+  }, []);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -54,6 +71,7 @@ export function useAudioRecorder() {
 
   const cleanup = useCallback(() => {
     clearTimer();
+    releaseWakeLock();
     if (mediaRecorderRef.current) {
       if (mediaRecorderRef.current.state !== "inactive") {
         mediaRecorderRef.current.stop();
@@ -67,11 +85,22 @@ export function useAudioRecorder() {
       streamRef.current = null;
     }
     chunksRef.current = [];
-  }, [clearTimer]);
+  }, [clearTimer, releaseWakeLock]);
 
   useEffect(() => {
     return cleanup;
   }, [cleanup]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && isRecording && !isPaused) {
+        acquireWakeLock();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isRecording, isPaused, acquireWakeLock]);
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -129,11 +158,12 @@ export function useAudioRecorder() {
     setIsRecording(true);
     setIsPaused(false);
     setDuration(0);
+    acquireWakeLock();
 
     timerRef.current = setInterval(() => {
       setDuration((prev) => prev + 1);
     }, 1000);
-  }, [duration]);
+  }, [duration, acquireWakeLock]);
 
   const stopRecording = useCallback((): Promise<StopResult> => {
     return new Promise<StopResult>((resolve) => {
@@ -168,31 +198,34 @@ export function useAudioRecorder() {
       };
 
       clearTimer();
+      releaseWakeLock();
       recorder.stop();
       setIsRecording(false);
       setIsPaused(false);
     });
-  }, [duration, clearTimer]);
+  }, [duration, clearTimer, releaseWakeLock]);
 
   const pauseRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state === "recording") {
       recorder.pause();
       clearTimer();
+      releaseWakeLock();
       setIsPaused(true);
     }
-  }, [clearTimer]);
+  }, [clearTimer, releaseWakeLock]);
 
   const resumeRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state === "paused") {
       recorder.resume();
+      acquireWakeLock();
       timerRef.current = setInterval(() => {
         setDuration((prev) => prev + 1);
       }, 1000);
       setIsPaused(false);
     }
-  }, []);
+  }, [acquireWakeLock]);
 
   const cancelRecording = useCallback(() => {
     cleanup();
