@@ -355,7 +355,7 @@ export function DocumentViewer({
         </div>
       </header>
 
-      <div className="flex-1 px-4 py-4 md:px-6 space-y-6 max-w-4xl">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 md:px-6 space-y-6 max-w-4xl">
         {/* AI Warning Banner */}
         {document.status === "draft" && document.generatedBy === "ai" && (
           <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-4 py-3">

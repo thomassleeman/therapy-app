@@ -336,6 +336,7 @@ export function ClientDialog({
                   <TagInput
                     onChange={(v) => updateField("therapeuticModalities", v)}
                     placeholder="Add modality..."
+                    restrictToSuggestions
                     suggestions={[...COMMON_MODALITIES]}
                     value={form.therapeuticModalities}
                   />

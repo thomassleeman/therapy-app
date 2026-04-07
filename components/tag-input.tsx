@@ -10,6 +10,7 @@ interface TagInputProps {
   onChange: (tags: string[]) => void;
   suggestions?: string[];
   placeholder?: string;
+  restrictToSuggestions?: boolean;
 }
 
 export function TagInput({
@@ -17,6 +18,7 @@ export function TagInput({
   onChange,
   suggestions = [],
   placeholder = "Add a tag...",
+  restrictToSuggestions = false,
 }: TagInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -30,14 +32,27 @@ export function TagInput({
   const addTag = useCallback(
     (tag: string) => {
       const trimmed = tag.trim();
-      if (trimmed && !value.includes(trimmed)) {
-        onChange([...value, trimmed]);
+      if (!trimmed) {
+        return;
+      }
+      let toAdd = trimmed;
+      if (restrictToSuggestions) {
+        const match = suggestions.find(
+          (s) => s.toLowerCase() === trimmed.toLowerCase()
+        );
+        if (!match) {
+          return;
+        }
+        toAdd = match;
+      }
+      if (!value.includes(toAdd)) {
+        onChange([...value, toAdd]);
       }
       setInputValue("");
       setShowSuggestions(false);
       inputRef.current?.focus();
     },
-    [value, onChange]
+    [value, onChange, restrictToSuggestions, suggestions]
   );
 
   const removeTag = useCallback(
@@ -50,9 +65,20 @@ export function TagInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (inputValue.trim()) {
-        addTag(inputValue);
+      if (!inputValue.trim()) {
+        return;
       }
+      if (
+        restrictToSuggestions &&
+        !suggestions.some(
+          (s) => s.toLowerCase() === inputValue.trim().toLowerCase()
+        ) &&
+        filteredSuggestions.length === 1
+      ) {
+        addTag(filteredSuggestions[0]);
+        return;
+      }
+      addTag(inputValue);
     } else if (e.key === "Backspace" && !inputValue && value.length > 0) {
       const lastTag = value.at(-1);
       if (lastTag) {
