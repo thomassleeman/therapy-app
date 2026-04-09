@@ -14,8 +14,16 @@
  * @see https://www.anthropic.com/news/contextual-retrieval
  */
 
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
 import { generateText } from "ai";
+
+/**
+ * Dedicated Bedrock client for offline ingestion scripts.
+ * Matches the eu-west-1 region used by the production provider in lib/ai/providers.ts.
+ */
+const bedrock = createAmazonBedrock({ region: "eu-west-1" });
+const DEFAULT_ENRICHMENT_MODEL =
+  "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,7 +56,7 @@ export interface BatchEnrichmentOptions {
   batchSize?: number;
   /** Delay in ms between batches to respect rate limits. Default: 1000 */
   batchDelayMs?: number;
-  /** Anthropic model ID to use. Default: 'claude-haiku-4-5-20251001' */
+  /** Bedrock model ID to use. Default: 'eu.anthropic.claude-haiku-4-5-20251001-v1:0' */
   model?: string;
   /** Called after each batch completes */
   onBatchComplete?: (batchIndex: number, totalBatches: number) => void;
@@ -135,7 +143,7 @@ export async function enrichChunkWithContext(
   options: { skipEnrichment?: boolean; model?: string } = {}
 ): Promise<EnrichmentResult> {
   const { chunk, fullDocument, documentTitle, sectionPath } = input;
-  const model = options.model ?? "claude-haiku-4-5-20251001";
+  const model = options.model ?? DEFAULT_ENRICHMENT_MODEL;
 
   // Fast path: skip enrichment for testing
   if (options.skipEnrichment) {
@@ -148,7 +156,7 @@ export async function enrichChunkWithContext(
 
   try {
     const { text } = await generateText({
-      model: anthropic(model),
+      model: bedrock(model),
       system:
         "You are a precise document analyst. Generate concise context snippets for document chunks to improve search retrieval. Be factual and specific. Never include meta-commentary — output only the context snippet itself.",
       prompt: buildEnrichmentPrompt(
@@ -218,7 +226,7 @@ export async function enrichChunksInBatches(
     skipEnrichment = false,
     batchSize = 10,
     batchDelayMs = 1000,
-    model = "claude-haiku-4-5-20251001",
+    model = DEFAULT_ENRICHMENT_MODEL,
     onBatchComplete,
   } = options;
 
@@ -257,7 +265,7 @@ export async function enrichChunksInBatches(
       batch.map(async (input) => {
         try {
           const { text, usage } = await generateText({
-            model: anthropic(model),
+            model: bedrock(model),
             system:
               "You are a precise document analyst. Generate concise context snippets for document chunks to improve search retrieval. Be factual and specific. Never include meta-commentary — output only the context snippet itself.",
             prompt: buildEnrichmentPrompt(

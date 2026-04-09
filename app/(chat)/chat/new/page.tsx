@@ -1,7 +1,5 @@
-import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { NewChatWrapper } from "@/components/new-chat-wrapper";
-import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { auth } from "@/lib/auth";
 import { getTherapistProfile, getTherapySession } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
@@ -23,19 +21,13 @@ async function NewChatPage({
 }: {
   searchParams: Promise<{ clientId?: string; sessionId?: string }>;
 }) {
-  const [cookieStore, resolvedParams, session] = await Promise.all([
-    cookies(),
-    searchParams,
-    auth(),
-  ]);
+  const [resolvedParams, session] = await Promise.all([searchParams, auth()]);
 
   const therapistProfile = session
     ? await getTherapistProfile({ userId: session.user.id })
     : null;
 
-  const modelIdFromCookie = cookieStore.get("chat-model");
   const id = generateUUID();
-  const chatModel = modelIdFromCookie?.value ?? DEFAULT_CHAT_MODEL;
 
   // If ?clientId is provided, skip the picker and pre-select that client
   // "general" maps to null (no client), absent = undefined (show picker)
@@ -55,7 +47,6 @@ async function NewChatPage({
       defaultModality={therapistProfile?.defaultModality ?? null}
       hasProfile={therapistProfile !== null}
       id={id}
-      initialChatModel={chatModel}
       preselectedClientId={preselectedClientId}
       sessionDate={therapySession?.sessionDate ?? null}
       sessionId={sessionId}

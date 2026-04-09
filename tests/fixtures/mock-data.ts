@@ -63,7 +63,7 @@ export const mockChatMessages: DBMessage[] = [
         text: "I had a session with a client today who presented with increased anxiety around work deadlines.",
       },
     ],
-    attachments: [],
+
     createdAt: "2025-12-10T11:00:00Z",
   },
   {
@@ -76,7 +76,7 @@ export const mockChatMessages: DBMessage[] = [
         text: "It sounds like your client is experiencing heightened anxiety in response to work pressures. What therapeutic approaches have you been using to explore this with them?",
       },
     ],
-    attachments: [],
+
     createdAt: "2025-12-10T11:00:05Z",
   },
   {
@@ -89,7 +89,7 @@ export const mockChatMessages: DBMessage[] = [
         text: "We have been using CBT to identify automatic thoughts and cognitive distortions.",
       },
     ],
-    attachments: [],
+
     createdAt: "2025-12-10T11:01:00Z",
   },
   {
@@ -102,7 +102,7 @@ export const mockChatMessages: DBMessage[] = [
         text: "That sounds like a solid approach. Have you noticed any patterns in the automatic thoughts your client reports? Sometimes recurring themes can point toward underlying core beliefs worth exploring.",
       },
     ],
-    attachments: [],
+
     createdAt: "2025-12-10T11:01:05Z",
   },
 ];

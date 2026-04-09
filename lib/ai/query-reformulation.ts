@@ -10,8 +10,8 @@
  * Cost: ~$0.0005 per search invocation (one claude-haiku call).
  */
 
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
+import { getSmallModel } from "@/lib/ai/providers";
 import { z } from "zod";
 
 /**
@@ -32,7 +32,7 @@ export async function reformulateQuery(
 
   try {
     const { object } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getSmallModel(),
       temperature: 0.3,
       schema: z.object({
         reformulations: z

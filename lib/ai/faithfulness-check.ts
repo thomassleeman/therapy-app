@@ -11,8 +11,8 @@
  * Feature-gated: set ENABLE_FAITHFULNESS_CHECK=true to activate.
  */
 
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
+import { getSmallModel } from "@/lib/ai/providers";
 import { z } from "zod";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ export async function checkFaithfulness(
       .join("\n\n");
 
     const { object } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getSmallModel(),
       temperature: 0,
       schema: faithfulnessSchema,
       prompt: `You are a clinical accuracy auditor for a therapy reflection platform. Given an AI-generated response and the source chunks it was based on, evaluate whether each factual claim in the response is supported by the source material.

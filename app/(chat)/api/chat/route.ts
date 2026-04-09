@@ -147,7 +147,7 @@ export async function POST(request: Request) {
               id: message.id,
               role: "user",
               parts: message.parts,
-              attachments: [],
+
               createdAt: new Date().toISOString(),
             },
           ],
@@ -458,7 +458,7 @@ export async function POST(request: Request) {
                       role: finishedMsg.role,
                       parts: finishedMsg.parts,
                       createdAt: new Date().toISOString(),
-                      attachments: [],
+        
                       chatId: id,
                     },
                   ],
@@ -472,7 +472,7 @@ export async function POST(request: Request) {
                 role: currentMessage.role,
                 parts: currentMessage.parts,
                 createdAt: new Date().toISOString(),
-                attachments: [],
+  
                 chatId: id,
               })),
             });

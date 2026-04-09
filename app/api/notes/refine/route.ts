@@ -1,6 +1,7 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import type { UIMessage } from "ai";
 import { convertToModelMessages, stepCountIs, streamText, tool } from "ai";
+import { getLanguageModel } from "@/lib/ai/providers";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
 
     // Stream the response
     const result = streamText({
-      model: anthropic("claude-sonnet-4-5-20250929"),
+      model: getLanguageModel(DEFAULT_CHAT_MODEL),
       system: systemPrompt,
       messages: modelMessages,
       tools: {

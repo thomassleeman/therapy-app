@@ -15,7 +15,6 @@ import { Response } from "./elements/response";
 import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
-import { PreviewAttachment } from "./preview-attachment";
 import { RagStatusIndicator } from "./rag-status-indicator";
 import { SEARCH_TOOL_TYPES, SearchToolStatus } from "./search-tool-status";
 
@@ -39,11 +38,6 @@ const PurePreviewMessage = ({
   requiresScrollPadding: boolean;
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
-
-  const attachmentsFromMessage = message.parts.filter(
-    (part): part is Extract<typeof part, { type: "file" }> =>
-      part.type === "file"
-  );
 
   useDataStream();
 
@@ -88,24 +82,6 @@ const PurePreviewMessage = ({
               message.role === "user" && mode !== "edit",
           })}
         >
-          {attachmentsFromMessage.length > 0 && (
-            <div
-              className="flex flex-row justify-end gap-2"
-              data-testid={"message-attachments"}
-            >
-              {attachmentsFromMessage.map((attachment) => (
-                <PreviewAttachment
-                  attachment={{
-                    name: attachment.filename ?? "file",
-                    contentType: attachment.mediaType,
-                    url: attachment.url,
-                  }}
-                  key={attachment.url}
-                />
-              ))}
-            </div>
-          )}
-
           {message.parts?.map((part, index) => {
             const { type } = part;
             const key = `message-${message.id}-part-${index}`;

@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateText, stepCountIs } from "ai";
+import { getLanguageModel } from "@/lib/ai/providers";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { NextResponse } from "next/server";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
 import { auth } from "@/lib/auth";
@@ -312,7 +313,7 @@ export async function POST(request: Request) {
       });
 
       const result = await generateText({
-        model: anthropic("claude-sonnet-4-5-20250929"),
+        model: getLanguageModel(DEFAULT_CHAT_MODEL),
         system: systemPrompt,
         prompt: `Generate a ${config.label} document from the client data provided.`,
         tools: {

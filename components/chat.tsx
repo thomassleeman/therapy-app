@@ -21,10 +21,11 @@ import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatClient } from "@/hooks/use-chat-client";
 import { useClients } from "@/hooks/use-clients";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import type { TherapeuticOrientation } from "@/lib/ai/prompts";
 import { ChatSDKError } from "@/lib/errors";
 import { ARTIFACTS_ENABLED } from "@/lib/features";
-import type { Attachment, ChatMessage } from "@/lib/types";
+import type { ChatMessage } from "@/lib/types";
 import { fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
@@ -36,7 +37,6 @@ import { toast } from "./toast";
 export function Chat({
   id,
   initialMessages,
-  initialChatModel,
   initialClientId,
   initialSessionId,
   initialSessionDate,
@@ -47,7 +47,6 @@ export function Chat({
 }: {
   id: string;
   initialMessages: ChatMessage[];
-  initialChatModel: string;
   initialClientId: string | null;
   initialSessionId?: string | null;
   initialSessionDate?: string | null;
@@ -79,12 +78,6 @@ export function Chat({
 
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
-  const [currentModelId, setCurrentModelId] = useState(initialChatModel);
-  const currentModelIdRef = useRef(currentModelId);
-
-  useEffect(() => {
-    currentModelIdRef.current = currentModelId;
-  }, [currentModelId]);
 
   const approachRef = useRef<TherapeuticOrientation>("integrative");
   const handleApproachChange = useCallback(
@@ -141,7 +134,7 @@ export function Chat({
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
               : { message: lastMessage }),
-            selectedChatModel: currentModelIdRef.current,
+            selectedChatModel: DEFAULT_CHAT_MODEL,
             selectedVisibilityType: "private",
             selectedClientId: clientId,
             therapeuticOrientation: approachRef.current,
@@ -195,7 +188,6 @@ export function Chat({
     }
   }, [query, sendMessage, hasAppendedQuery, id]);
 
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const _isArtifactVisible = useArtifactSelector((state) => state.isVisible);
   const isArtifactVisible = ARTIFACTS_ENABLED && _isArtifactVisible;
 
@@ -237,7 +229,6 @@ export function Chat({
           isReadonly={isReadonly}
           messages={messages}
           regenerate={regenerate}
-          selectedModelId={initialChatModel}
           sessionDate={initialSessionDate}
           setMessages={setMessages}
           status={status}
@@ -246,14 +237,10 @@ export function Chat({
         <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
           {!isReadonly && (
             <MultimodalInput
-              attachments={attachments}
               chatId={id}
               input={input}
               messages={messages}
-              onModelChange={setCurrentModelId}
-              selectedModelId={currentModelId}
               sendMessage={sendMessage}
-              setAttachments={setAttachments}
               setInput={setInput}
               setMessages={setMessages}
               status={status}
@@ -266,15 +253,12 @@ export function Chat({
       {ARTIFACTS_ENABLED && (
         <Artifact
           addToolApprovalResponse={addToolApprovalResponse}
-          attachments={attachments}
           chatId={id}
           input={input}
           isReadonly={isReadonly}
           messages={messages}
           regenerate={regenerate}
-          selectedModelId={currentModelId}
           sendMessage={sendMessage}
-          setAttachments={setAttachments}
           setInput={setInput}
           setMessages={setMessages}
           status={status}

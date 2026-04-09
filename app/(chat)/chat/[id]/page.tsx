@@ -1,10 +1,8 @@
-import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { RagLogDownloadButton } from "@/components/rag-log-download-button";
-import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { auth } from "@/lib/auth";
 import {
   getChatById,
@@ -44,19 +42,15 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     return notFound();
   }
 
-  const [messagesFromDb, cookieStore, therapySession, therapistProfile] =
-    await Promise.all([
-      getMessagesByChatId({ id }),
-      cookies(),
-      chat.sessionId
-        ? getTherapySession({ id: chat.sessionId })
-        : Promise.resolve(null),
-      getTherapistProfile({ userId: session.user.id }),
-    ]);
+  const [messagesFromDb, therapySession, therapistProfile] = await Promise.all([
+    getMessagesByChatId({ id }),
+    chat.sessionId
+      ? getTherapySession({ id: chat.sessionId })
+      : Promise.resolve(null),
+    getTherapistProfile({ userId: session.user.id }),
+  ]);
 
   const uiMessages = convertToUIMessages(messagesFromDb);
-  const chatModelFromCookie = cookieStore.get("chat-model");
-  const chatModel = chatModelFromCookie?.value ?? DEFAULT_CHAT_MODEL;
 
   return (
     <>
@@ -65,7 +59,6 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
         defaultModality={therapistProfile?.defaultModality ?? null}
         hasProfile={therapistProfile !== null}
         id={chat.id}
-        initialChatModel={chatModel}
         initialClientId={chat.clientId}
         initialMessages={uiMessages}
         initialSessionDate={therapySession?.sessionDate ?? null}

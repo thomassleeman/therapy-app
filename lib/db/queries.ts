@@ -355,7 +355,6 @@ export async function saveMessages({ messages }: { messages: DBMessage[] }) {
         chatId: msg.chatId,
         role: msg.role,
         parts: await encryptJsonb(msg.parts, msg.id),
-        attachments: msg.attachments,
         createdAt: msg.createdAt,
       }))
     );

@@ -17,10 +17,6 @@
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.92",
-    "@ai-sdk/anthropic": "^3.0.58",
-    "@ai-sdk/cohere": "^3.0.22",
-    "@ai-sdk/gateway": "^3.0.15",
-    "@ai-sdk/openai": "^3.0.30",
     "@ai-sdk/provider": "^3.0.3",
     "@ai-sdk/react": "3.0.39",
     "@aws-sdk/client-bedrock-runtime": "^3.1007.0",

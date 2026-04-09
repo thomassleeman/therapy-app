@@ -12,20 +12,17 @@
  * are far more accurate. Research shows contextual retrieval + hybrid search +
  * reranking achieves 67% fewer retrieval failures than without reranking.
  *
- * GATE CONDITION
+ * DATA RESIDENCY
  * ──────────────
- * Reranking activates automatically when COHERE_API_KEY is set.
- * If the key is missing, results are returned unchanged (degraded but
- * functional). If the Cohere API call fails at runtime, the error is
- * logged and original results are returned.
+ * Reranking runs via AWS Bedrock in eu-west-1 (Ireland) using the
+ * cohere.rerank-v3-5:0 model — same EU infrastructure as Claude inference
+ * and Cohere embeddings. No therapist query text leaves EU infrastructure.
  */
 
-import { createCohere } from "@ai-sdk/cohere";
+import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
 import { rerank } from "ai";
 
-// Module-level flag so the missing-key warning is logged once per process
-// rather than once per request (avoids log spam in serverless environments).
-let hasWarnedAboutKey = false;
+const bedrockFrankfurt = createAmazonBedrock({ region: "eu-central-1" });
 
 /**
  * Reranks search results using Cohere's rerank-v3.5 cross-encoder model.
@@ -48,18 +45,6 @@ export async function rerankResults<T extends { content: string }>(
   results: T[],
   topN = 5
 ): Promise<{ results: T[]; wasReranked: boolean }> {
-  const apiKey = process.env.COHERE_API_KEY;
-  if (!apiKey) {
-    if (!hasWarnedAboutKey) {
-      console.warn(
-        "[rerank] COHERE_API_KEY is not set — reranking skipped. " +
-          "Set COHERE_API_KEY to enable."
-      );
-      hasWarnedAboutKey = true;
-    }
-    return { results, wasReranked: false };
-  }
-
   if (results.length === 0) {
     return { results, wasReranked: false };
   }
@@ -67,10 +52,9 @@ export async function rerankResults<T extends { content: string }>(
   const start = performance.now();
 
   try {
-    const cohereProvider = createCohere({ apiKey });
-
     const { ranking } = await rerank({
-      model: cohereProvider.reranking("rerank-v3.5"),
+      // model: bedrock.reranking("cohere.rerank-v3-5:0"),
+      model: bedrockFrankfurt.reranking("cohere.rerank-v3-5:0"),
       query,
       documents: results.map((r) => r.content),
       topN,
@@ -93,7 +77,7 @@ export async function rerankResults<T extends { content: string }>(
     return { results: reranked, wasReranked: true };
   } catch (err) {
     console.error(
-      "[rerank] Cohere API error — falling back to original results:",
+      "[rerank] Bedrock reranking error — falling back to original results:",
       err
     );
     return { results, wasReranked: false };

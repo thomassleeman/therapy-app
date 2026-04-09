@@ -1,5 +1,6 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateText, stepCountIs } from "ai";
+import { getLanguageModel } from "@/lib/ai/providers";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { NextResponse } from "next/server";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
 import { auth } from "@/lib/auth";
@@ -471,7 +472,7 @@ export async function POST(request: Request) {
           : noteFormat.toUpperCase();
 
       const result = await generateText({
-        model: anthropic("claude-sonnet-4-5-20250929"),
+        model: getLanguageModel(DEFAULT_CHAT_MODEL),
         system: systemPrompt,
         prompt: `Generate ${formatLabel} clinical note from the ${therapySession.recordingType === "written_notes" ? "written notes" : "session transcript"} provided. Use the <note> and <commentary> XML structure as instructed.`,
         tools: {

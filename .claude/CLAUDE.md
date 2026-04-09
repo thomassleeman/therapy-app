@@ -23,7 +23,7 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 | Language | TypeScript (strict mode, `strictNullChecks`) |
 | Database | Supabase (PostgreSQL + pgvector, 512-dim embeddings) |
 | Auth | Supabase Auth (email/password + Google OAuth) |
-| AI / LLM | Vercel AI SDK v6, Anthropic Claude (via `@ai-sdk/anthropic`) |
+| AI / LLM | Vercel AI SDK v6, Anthropic Claude via AWS Bedrock EU inference profiles (`@ai-sdk/amazon-bedrock`, `eu-west-1`) |
 | Embeddings | Cohere Embed v4 at 512 dimensions via AWS Bedrock (`eu-west-1`), called through `@aws-sdk/client-bedrock-runtime` |
 | Transcription | AssemblyAI EU endpoint (`api.eu.assemblyai.com`, Dublin) — sole transcription provider (Whisper removed for GDPR non-compliance). Speech-to-text + speaker diarisation in a single call using `speech_models: ["universal-3-pro", "universal-2"]`. Provider abstraction in `lib/transcription/`. Audio MIME type persisted in `therapy_sessions.audio_mime_type` and passed through to AssemblyAI via `TranscribeOptions.mimeType`. |
 | Encryption | AES-256-GCM with HKDF-SHA256 key derivation (Node.js `crypto`, zero dependencies) |
@@ -39,19 +39,19 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 
 | Provider | Use case | Integration | File |
 |---|---|---|---|
-| Claude | Chat agent (ToolLoopAgent) | `@ai-sdk/anthropic` | `lib/ai/agents/therapy-reflection-agent.ts` |
-| Claude | Note generation | `@ai-sdk/anthropic` `generateText` | `app/api/notes/generate/route.ts` |
-| Claude | Note refinement | `@ai-sdk/anthropic` `streamText` | `app/api/notes/refine/route.ts` |
-| Claude | Document generation | `@ai-sdk/anthropic` `generateText` | `app/api/documents/generate/route.ts` |
-| Claude | Query reformulation | `@ai-sdk/anthropic` `generateObject` | `lib/ai/query-reformulation.ts` |
-| Claude | Faithfulness check | `@ai-sdk/anthropic` `generateObject` | `lib/ai/faithfulness-check.ts` |
-| Claude | Diarisation fallback | `@ai-sdk/anthropic` `generateObject` | `lib/transcription/providers/claude-diarization.ts` |
-| Claude | Contextual enrichment (ingest, offline) | `@ai-sdk/anthropic` `generateText` | `scripts/lib/contextual-enrichment.ts` |
+| Claude | Chat agent (ToolLoopAgent) | `@ai-sdk/amazon-bedrock` via `lib/ai/providers.ts` | `lib/ai/agents/therapy-reflection-agent.ts` |
+| Claude | Note generation | `@ai-sdk/amazon-bedrock` `generateText` | `app/api/notes/generate/route.ts` |
+| Claude | Note refinement | `@ai-sdk/amazon-bedrock` `streamText` | `app/api/notes/refine/route.ts` |
+| Claude | Document generation | `@ai-sdk/amazon-bedrock` `generateText` | `app/api/documents/generate/route.ts` |
+| Claude | Query reformulation | `@ai-sdk/amazon-bedrock` `generateObject` | `lib/ai/query-reformulation.ts` |
+| Claude | Faithfulness check | `@ai-sdk/amazon-bedrock` `generateObject` | `lib/ai/faithfulness-check.ts` |
+| Claude | Diarisation fallback | `@ai-sdk/amazon-bedrock` `generateObject` | `lib/transcription/providers/claude-diarization.ts` |
+| Claude | Contextual enrichment (ingest, offline) | `@ai-sdk/amazon-bedrock` `generateText` | `scripts/lib/contextual-enrichment.ts` |
 | AssemblyAI | Transcription + diarisation | Direct `assemblyai` SDK | `lib/transcription/providers/assemblyai.ts` |
 | Cohere (Bedrock) | Embeddings | Direct `@aws-sdk/client-bedrock-runtime` | `lib/ai/embedding.ts` |
-| Cohere | Reranking | `@ai-sdk/cohere` | `lib/ai/rerank.ts` |
+| Cohere (Bedrock) | Reranking | `@ai-sdk/amazon-bedrock` (dedicated `eu-central-1` client — model not available in `eu-west-1`) | `lib/ai/rerank.ts` |
 
-**GDPR rationale for `@ai-sdk/anthropic`:** All runtime Claude calls use `@ai-sdk/anthropic` (the direct provider) rather than `@ai-sdk/gateway`. The Vercel AI Gateway routes through US-based infrastructure, adding an intermediary in the data path that we cannot place under Anthropic's EU data residency or DPA. Direct provider calls keep special-category health data on Anthropic's EU endpoint with no extra processor in between. New Claude integrations must use `@ai-sdk/anthropic`. See `.claude/anthropic-provider-migration.md` for the original migration. AssemblyAI and the Cohere/Bedrock embeddings path bypass the AI SDK entirely (AssemblyAI: the AI SDK doesn't cover transcription providers; Bedrock embeddings: known AI SDK bug — see `lib/ai/embedding.ts`).
+**GDPR rationale for AWS Bedrock EU inference profiles:** All runtime Claude calls route through `@ai-sdk/amazon-bedrock` using EU cross-region inference profiles (e.g. `eu.anthropic.claude-sonnet-4-5-20250929-v1:0`) in `eu-west-1` (Ireland). This guarantees inference stays within EU infrastructure — Anthropic's direct API (`@ai-sdk/anthropic`) only offers `"us"` and `"global"` regions, neither of which provides contractual EU data residency. Model access is centralised in `lib/ai/providers.ts` via `getLanguageModel()`, `getSmallModel()`, `getTitleModel()`, and `getArtifactModel()`. New Claude integrations must use these helpers, not direct provider imports. See `.claude/anthropic-provider-migration.md` for the full migration history. `@ai-sdk/anthropic` and `@ai-sdk/gateway` have been fully removed from the project. AssemblyAI and the Cohere/Bedrock embeddings path bypass the AI SDK entirely (AssemblyAI: the AI SDK doesn't cover transcription providers; Bedrock embeddings: known AI SDK bug — see `lib/ai/embedding.ts`).
 
 ---
 
@@ -101,7 +101,7 @@ lib/
 │   ├── modality.ts     # Modality resolution chain (chat → client → therapist → null)
 │   ├── query-reformulation.ts # Multi-query retrieval via LLM reformulation
 │   ├── parallel-search.ts     # RRF merging for parallel query variants
-│   ├── rerank.ts       # Cohere cross-encoder reranking
+│   ├── rerank.ts       # Cohere cross-encoder reranking (via Bedrock eu-central-1 — model not available in eu-west-1)
 │   ├── faithfulness-check.ts  # Post-generation grounding verification
 │   ├── embedding.ts    # Centralised Cohere Embed v4 provider (AWS Bedrock eu-west-1)
 │   ├── models.ts       # Available LLM models
@@ -284,7 +284,7 @@ ToolLoopAgent runs (up to 6 steps)
   → Optional: query reformulation (3 clinical variants via claude-haiku-4-5-20251001)
   → Optional: parallel search + RRF merge
   → hybrid_search RPC executes (vector similarity + full-text search, merged via RRF)
-  → Optional: Cohere reranking
+  → Optional: Cohere reranking (Rerank v3.5 via Bedrock eu-central-1)
   → Confidence threshold applied (high >0.80, moderate 0.65–0.80, low <0.65)
   → Results returned to LLM with confidenceTier + confidenceNote
     ↓
@@ -480,6 +480,7 @@ Separate from session notes. Client-level documents spanning multiple sessions:
 | Anthropic | AI chat (Claude) | EU |
 | AssemblyAI | Transcription + speaker diarisation | EU (Dublin) |
 | Cohere via AWS Bedrock | Embeddings | `eu-west-1` (Ireland) |
+| Cohere via AWS Bedrock | Reranking | `eu-central-1` (Frankfurt) — model not available in `eu-west-1` |
 | Supabase | Database, auth, storage | EU |
 | Vercel | Hosting | EU |
 
@@ -507,14 +508,14 @@ See `.env.example` for the full list. Key variables:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Yes | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (server-side only) |
 | `ENCRYPTION_MASTER_KEY` | Yes | 64-char hex string (32 bytes). Application-level encryption key for clinical data. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Loss of this key means permanent loss of all encrypted data. |
-| `AI_GATEWAY_API_KEY` | Yes | Vercel AI Gateway key |
-| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Yes | For embedding generation via Cohere Embed v4 on AWS Bedrock (`eu-west-1`). See `lib/ai/embedding.ts` |
+| `AI_GATEWAY_API_KEY` | No | No longer used. `@ai-sdk/gateway` has been removed. Can be deleted from Vercel env vars. |
+| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Yes | For all Claude inference (via Bedrock EU inference profiles) and Cohere Embed v4 in `eu-west-1`, plus Cohere Rerank v3.5 in `eu-central-1` (Frankfurt — model not available in `eu-west-1`; dedicated Bedrock client in `lib/ai/rerank.ts`). See `lib/ai/providers.ts`, `lib/ai/embedding.ts`, and `lib/ai/rerank.ts` |
 | `ASSEMBLYAI_API_KEY` | Yes | For session transcription and speaker diarisation via AssemblyAI EU endpoint (Dublin). See `lib/transcription/providers/assemblyai.ts` |
 | `OPENAI_API_KEY` | No | No longer used by runtime code. `scripts/ingest-knowledge.ts` still checks for it when `--with-context` is passed — that check is stale and can be removed. |
 | `DIARIZATION_PROVIDER` | No | `assemblyai` (default) or `claude` — selects diarisation backend. `TRANSCRIPTION_PROVIDER` env var was removed (Whisper deleted for GDPR non-compliance; AssemblyAI is the sole provider). |
 | `ENABLE_TRANSCRIPTION` | No | Feature flag for transcription |
 | `ENABLE_QUERY_REFORMULATION` | No | Multi-query retrieval (~$0.0005/search via claude-haiku-4-5-20251001) |
-| `COHERE_API_KEY` + `ENABLE_RERANKING` | No | Cross-encoder reranking |
+| `ENABLE_RERANKING` | No | Feature flag for Cohere Rerank v3.5 cross-encoder reranking (AWS Bedrock `eu-central-1`) |
 | `DEV_LOGGING` | No | Dev-only RAG quality logging to disk |
 | `ENABLE_FAITHFULNESS_CHECK` | No | Post-generation grounding verification |
 
@@ -606,9 +607,9 @@ tests/
 - **Client-aware chat context injection** — Three-tier context system for enriching chat agent responses with client-specific clinical data when a client is selected. Implementation plan in `client-aware-chat-context-plan.md` (7 prompts). Architecture: Tier 1 (client record — always), Tier 2 (latest Case Formulation or Comprehensive Assessment — therapist-reviewed summary), Tier 3 (last 10 session notes in full). Includes session-linked chat transcript injection, token budget safety valve (30,000 char limit with progressive truncation), and post-note-finalisation nudge to update Case Formulation. GDPR-compatible — no new processing activity, same data flow to Anthropic. Key files to create: `lib/chat/context-assembly.ts`, modifications to `app/(chat)/api/chat/route.ts` and `lib/ai/prompts.ts`. Requires Aaron review of the "Client Context" system prompt instructions before merging (Prompt 3).
 - **Confidence threshold integration into tool files** — `applyConfidenceThreshold` exists in `lib/ai/confidence.ts` but the wiring into `knowledge-search-tools.ts` and `search-knowledge-base.ts` may be incomplete. Verify the tool execute functions call it.
 - **Contextual enrichment prompt update** — Add situational vocabulary generation to `scripts/lib/contextual-enrichment.ts` (addresses semantic gap between therapist language and KB terminology). Requires re-running ingestion with `--with-context`.
-- **`ingest-knowledge.ts` stale OPENAI_API_KEY check** — The `--with-context` flag still validates `OPENAI_API_KEY` at startup, but contextual enrichment now uses `@ai-sdk/anthropic` directly. Remove the check and replace with `ANTHROPIC_API_KEY` validation (which is already required by the main app anyway).
+- **`ingest-knowledge.ts` stale OPENAI_API_KEY check** — The `--with-context` flag still validates `OPENAI_API_KEY` at startup, but contextual enrichment now uses `@ai-sdk/amazon-bedrock` (same AWS credentials as production). Remove the check.
 - **Post-diarisation speaker confirmation UI** — Highest-impact improvement to diarisation accuracy. Proposed but not implemented.
-- **Vercel artifact/document system** — Legacy from the template. Coexists with the purpose-built clinical notes and clinical documents systems but shares no data, UI, or database. Decision pending on whether to remove, repurpose, or keep.
+- **Vercel artifact/document system** — Legacy from the template. Coexists with the purpose-built clinical notes and clinical documents systems but shares no data, UI, or database. Decision pending on whether to remove, repurpose, or keep. (Note: the template's chat file upload/attachment system has been fully removed — upload route, `PreviewAttachment` component, `Attachment` type, paperclip button, paste/drop handlers, and the `attachments` column on `Message_v2`. The chat input is text-only.)
 - **Proposed pages implementation** — `proposed-pages-implementation-plan.md` contains 18 prompts for dashboard overhaul, client list enhancements, session detail improvements, sidebar enhancements, and template cleanup. Partially implemented (check individual pages for current state).
 - **Playwright `mockApi` fixture issue** — An `unknown parameter` error was being diagnosed. Check `tests/fixtures/index.ts` for correct `test.extend()` generic type, and verify no test files import from `@playwright/test` directly instead of the custom fixture.
 - **RAGAS evaluation framework** and golden test dataset — knowledge base now has content; evaluation can proceed when prioritised.
@@ -643,7 +644,7 @@ tests/
 
 2. **KB-grounded for high confidence, general knowledge with labelling for gaps.** Rigid KB-exclusive enforcement during MVP (with an empty KB) kills adoption. The agreed approach: use KB content when available at high confidence, fall back to general clinical knowledge with explicit labelling, hard refusal only for safety-critical edge cases.
 
-3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`. **Transcription data residency** — all audio transcription and speaker diarisation uses AssemblyAI's EU endpoint (`api.eu.assemblyai.com`), processing data in Dublin (eu-west-1). No audio data leaves EU infrastructure. EU residency is controlled by the base URL in code — no dashboard configuration needed. AssemblyAI is SOC 2 Type 2, ISO 27001, and GDPR compliant. Configuration is in `lib/transcription/providers/assemblyai.ts`. OpenAI Whisper was previously available as a fallback provider but was removed because the Whisper API has no EU data residency option for audio processing, making it non-compliant for Article 9 special category health data. **Encryption at rest** — all sensitive clinical content is encrypted at the application layer (AES-256-GCM) with keys managed separately from the database. Even a full database compromise yields only ciphertext.
+3. **GDPR as competitive advantage.** Mental health data is special category data under Article 9. The privacy-by-design architecture (RAG processes anonymised therapist inputs, not raw client data) is the core differentiator. **Embedding data residency** — all embedding calls (query-time and ingestion) use Cohere Embed v4 on AWS Bedrock in `eu-west-1` (Ireland) via `@aws-sdk/client-bedrock-runtime`. No embedding data leaves EU infrastructure. Configuration is centralised in `lib/ai/embedding.ts`. **Reranking data residency** — Cohere Rerank v3.5 runs via AWS Bedrock in `eu-central-1` (Frankfurt), not `eu-west-1`, because the model is not available in Ireland. A dedicated Bedrock client scoped to `eu-central-1` is used in `lib/ai/rerank.ts`. Frankfurt is still EU infrastructure under the same AWS DPA and GDPR compliance posture — all data stays within the EU. All other Bedrock calls (Claude inference, Cohere embeddings) remain on `eu-west-1`. **Transcription data residency** — all audio transcription and speaker diarisation uses AssemblyAI's EU endpoint (`api.eu.assemblyai.com`), processing data in Dublin (eu-west-1). No audio data leaves EU infrastructure. EU residency is controlled by the base URL in code — no dashboard configuration needed. AssemblyAI is SOC 2 Type 2, ISO 27001, and GDPR compliant. Configuration is in `lib/transcription/providers/assemblyai.ts`. OpenAI Whisper was previously available as a fallback provider but was removed because the Whisper API has no EU data residency option for audio processing, making it non-compliant for Article 9 special category health data. **Encryption at rest** — all sensitive clinical content is encrypted at the application layer (AES-256-GCM) with keys managed separately from the database. Even a full database compromise yields only ciphertext.
 
 4. **Legislation as practitioner briefings.** Raw statutory text is inappropriate. All legislation content is practitioner-oriented, organised around therapeutic scenarios, written in therapist-friendly language with inline statutory citations.
 

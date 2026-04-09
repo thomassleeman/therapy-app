@@ -1,5 +1,5 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
+import { getSmallModel } from "@/lib/ai/providers";
 import { z } from "zod";
 import type {
   DiarisedSegment,
@@ -109,7 +109,7 @@ export class ClaudeDiarizationProvider implements DiarizationProvider {
     const prompt = buildPrompt(transcript, options);
 
     const { object, usage } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getSmallModel(),
       schema: speakerLabelSchema,
       prompt,
     });

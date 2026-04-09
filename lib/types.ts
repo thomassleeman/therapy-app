@@ -52,9 +52,3 @@ export type ChatMessage = UIMessage<
   CustomUIDataTypes,
   ChatTools
 >;
-
-export type Attachment = {
-  name: string;
-  url: string;
-  contentType: string;
-};

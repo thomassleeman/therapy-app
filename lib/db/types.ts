@@ -155,7 +155,6 @@ export interface DBMessage {
   chatId: string;
   role: string;
   parts: unknown;
-  attachments: unknown;
   createdAt: string;
 }
 
@@ -301,7 +300,6 @@ export interface DBMessageInsert {
   chatId: string;
   role: string;
   parts: unknown;
-  attachments: unknown;
   createdAt?: string;
 }
 
