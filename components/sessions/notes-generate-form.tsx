@@ -1,8 +1,8 @@
 "use client";
 
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, Plus } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -133,48 +133,54 @@ export function NotesGenerateForm({
         )}
       </div>
 
-      {customFormats.length > 0 && (
-        <>
-          <div className="flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Custom
-            </span>
-            <Separator className="flex-1" />
-          </div>
+      <div className="flex items-center gap-3">
+        <Separator className="flex-1" />
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Custom
+        </span>
+        <Separator className="flex-1" />
+      </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {customFormats.map((cf) => {
-              const value = `custom:${cf.id}`;
-              const sectionPreview = cf.sections
-                .map((s) => s.label)
-                .join(", ");
-              return (
-                <label
-                  className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
-                    selectedFormat === value
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted"
-                  }`}
-                  key={cf.id}
-                >
-                  <input
-                    checked={selectedFormat === value}
-                    className="sr-only"
-                    name="note-format"
-                    onChange={() => setSelectedFormat(value)}
-                    type="radio"
-                    value={value}
-                  />
-                  <span className="text-sm font-medium">{cf.name}</span>
-                  <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    {sectionPreview}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </>
+      <div className="flex justify-start">
+        <Link
+          className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline"
+          href="/settings/note-formats"
+        >
+          <Plus className="size-3" />
+          Create a new format
+        </Link>
+      </div>
+
+      {customFormats.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {customFormats.map((cf) => {
+            const value = `custom:${cf.id}`;
+            const sectionPreview = cf.sections.map((s) => s.label).join(", ");
+            return (
+              <label
+                className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-colors ${
+                  selectedFormat === value
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted"
+                }`}
+                key={cf.id}
+              >
+                <input
+                  checked={selectedFormat === value}
+                  className="sr-only"
+                  name="note-format"
+                  onChange={() => setSelectedFormat(value)}
+                  type="radio"
+                  value={value}
+                />
+                <span className="text-sm font-medium">{cf.name}</span>
+                <span className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {sectionPreview}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       )}
 
       <div className="space-y-2">
@@ -189,7 +195,6 @@ export function NotesGenerateForm({
           value={additionalContext}
         />
       </div>
-
       <Button
         className="w-full min-h-12"
         disabled={generating}

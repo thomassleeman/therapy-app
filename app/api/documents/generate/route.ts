@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gateway } from "@ai-sdk/gateway";
+import { anthropic } from "@ai-sdk/anthropic";
 import { generateText, stepCountIs } from "ai";
 import { NextResponse } from "next/server";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
@@ -312,7 +312,7 @@ export async function POST(request: Request) {
       });
 
       const result = await generateText({
-        model: gateway.languageModel("anthropic/claude-sonnet-4-5"),
+        model: anthropic("claude-sonnet-4-5-20250929"),
         system: systemPrompt,
         prompt: `Generate a ${config.label} document from the client data provided.`,
         tools: {

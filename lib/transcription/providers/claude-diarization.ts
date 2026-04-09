@@ -1,4 +1,4 @@
-import { gateway } from "@ai-sdk/gateway";
+import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type {
@@ -109,7 +109,7 @@ export class ClaudeDiarizationProvider implements DiarizationProvider {
     const prompt = buildPrompt(transcript, options);
 
     const { object, usage } = await generateObject({
-      model: gateway.languageModel("anthropic/claude-haiku-4.5"),
+      model: anthropic("claude-haiku-4-5-20251001"),
       schema: speakerLabelSchema,
       prompt,
     });

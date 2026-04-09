@@ -11,7 +11,7 @@ You are generating a Comprehensive Assessment document for a therapy client. Thi
 - Where information is unavailable or was not disclosed, state this explicitly (e.g. "Trauma history was not explored in the initial session and will be revisited"). Do not leave sections silently incomplete.
 - Integrate equality and diversity considerations throughout — note where cultural background, identity, disability, or socioeconomic factors are relevant to the presentation, and document any reasonable adjustments made (e.g. use of an interpreter).
 - Reference UK and Irish professional standards where relevant. In the UK, practitioners operate under the BACP Ethical Framework for the Counselling Professions, the HCPC Standards of Proficiency, and the BPS Code of Ethics. Irish practitioners follow the IACP Code of Ethics and Practice. All practitioners must comply with GDPR (UK GDPR / DPA 2018 in the UK; EU GDPR in Ireland).
-- Aim for 1000–2000 words across all sections.
+- IMPORTANT: Aim for 1000–2000 words across all sections.
 
 ## Section: referral_context
 

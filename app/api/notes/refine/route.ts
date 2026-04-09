@@ -1,4 +1,4 @@
-import { gateway } from "@ai-sdk/gateway";
+import { anthropic } from "@ai-sdk/anthropic";
 import type { UIMessage } from "ai";
 import { convertToModelMessages, stepCountIs, streamText, tool } from "ai";
 import { NextResponse } from "next/server";
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
 
     // Stream the response
     const result = streamText({
-      model: gateway.languageModel("anthropic/claude-sonnet-4-5"),
+      model: anthropic("claude-sonnet-4-5-20250929"),
       system: systemPrompt,
       messages: modelMessages,
       tools: {

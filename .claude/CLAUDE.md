@@ -35,6 +35,26 @@ The strategic differentiator is **GDPR compliance and privacy-by-design** — th
 
 ---
 
+## AI Provider Integration
+
+| Provider | Use case | Integration | File |
+|---|---|---|---|
+| Claude | Chat agent (ToolLoopAgent) | `@ai-sdk/anthropic` | `lib/ai/agents/therapy-reflection-agent.ts` |
+| Claude | Note generation | `@ai-sdk/anthropic` `generateText` | `app/api/notes/generate/route.ts` |
+| Claude | Note refinement | `@ai-sdk/anthropic` `streamText` | `app/api/notes/refine/route.ts` |
+| Claude | Document generation | `@ai-sdk/anthropic` `generateText` | `app/api/documents/generate/route.ts` |
+| Claude | Query reformulation | `@ai-sdk/anthropic` `generateObject` | `lib/ai/query-reformulation.ts` |
+| Claude | Faithfulness check | `@ai-sdk/anthropic` `generateObject` | `lib/ai/faithfulness-check.ts` |
+| Claude | Diarisation fallback | `@ai-sdk/anthropic` `generateObject` | `lib/transcription/providers/claude-diarization.ts` |
+| Claude | Contextual enrichment (ingest, offline) | `@ai-sdk/anthropic` `generateText` | `scripts/lib/contextual-enrichment.ts` |
+| AssemblyAI | Transcription + diarisation | Direct `assemblyai` SDK | `lib/transcription/providers/assemblyai.ts` |
+| Cohere (Bedrock) | Embeddings | Direct `@aws-sdk/client-bedrock-runtime` | `lib/ai/embedding.ts` |
+| Cohere | Reranking | `@ai-sdk/cohere` | `lib/ai/rerank.ts` |
+
+**GDPR rationale for `@ai-sdk/anthropic`:** All runtime Claude calls use `@ai-sdk/anthropic` (the direct provider) rather than `@ai-sdk/gateway`. The Vercel AI Gateway routes through US-based infrastructure, adding an intermediary in the data path that we cannot place under Anthropic's EU data residency or DPA. Direct provider calls keep special-category health data on Anthropic's EU endpoint with no extra processor in between. New Claude integrations must use `@ai-sdk/anthropic`. See `.claude/anthropic-provider-migration.md` for the original migration. AssemblyAI and the Cohere/Bedrock embeddings path bypass the AI SDK entirely (AssemblyAI: the AI SDK doesn't cover transcription providers; Bedrock embeddings: known AI SDK bug — see `lib/ai/embedding.ts`).
+
+---
+
 ## Project Structure
 
 ```
