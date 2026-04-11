@@ -639,7 +639,7 @@ export interface ClinicalDocument {
   therapistId: string;
   documentType: ClinicalDocumentType;
   title: string;
-  content: Record<string, string>; // section key → section text
+  content: { body: string };
   status: ClinicalDocumentStatus;
   version: number;
   supersedesId: string | null;
@@ -656,7 +656,7 @@ export interface ClinicalDocumentInsert {
   therapistId: string;
   documentType: ClinicalDocumentType;
   title: string;
-  content: Record<string, string>;
+  content: { body: string };
   status?: ClinicalDocumentStatus;
   version?: number;
   supersedesId?: string | null;

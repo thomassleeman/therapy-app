@@ -16,6 +16,12 @@ interface RefinementChatProps {
   onInputChange: (value: string) => void;
   onSubmit: () => void;
   onRetry: () => void;
+  /** Tool name to display confirmations for (default: "update_notes") */
+  updateToolName?: string;
+  /** Placeholder text for the input (default: "Ask the AI to help refine your notes...") */
+  placeholder?: string;
+  /** Label for the finalised banner (default: "notes") */
+  finalisedLabel?: string;
 }
 
 function getMessageText(message: UIMessage): string {
@@ -57,6 +63,9 @@ export function RefinementChat({
   onInputChange,
   onSubmit,
   onRetry,
+  updateToolName = "update_notes",
+  placeholder = "Ask the AI to help refine your notes...",
+  finalisedLabel = "notes",
 }: RefinementChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -87,7 +96,7 @@ export function RefinementChat({
         {!hasMessages && !isFinalised && (
           <div className="flex h-full flex-col items-center justify-center">
             <p className="text-sm text-muted-foreground">
-              Ask the AI to help refine your notes
+              {placeholder}
             </p>
           </div>
         )}
@@ -99,7 +108,7 @@ export function RefinementChat({
               const toolResults = getToolCallResults(message);
 
               const toolConfirmations = toolResults
-                .filter((t) => t.toolName === "update_notes")
+                .filter((t) => t.toolName === updateToolName)
                 .map((t) => {
                   const output = t.output as
                     | { summary?: string }
@@ -173,8 +182,8 @@ export function RefinementChat({
       {isFinalised && (
         <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
           <Lock className="size-4 shrink-0" />
-          These notes are finalised. To make changes, regenerate from the
-          session page.
+          These {finalisedLabel} are finalised. To make changes, regenerate
+          from the {finalisedLabel === "notes" ? "session" : "document"} page.
         </div>
       )}
 
@@ -186,7 +195,7 @@ export function RefinementChat({
             disabled={isBusy || isFinalised}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask the AI to refine your notes..."
+            placeholder={placeholder}
             rows={1}
             value={input}
           />

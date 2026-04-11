@@ -162,17 +162,8 @@ export async function assemblePriorDocuments(
     if (doc) {
       referencedIds.push(doc.id);
       const label = DOCUMENT_TYPE_REGISTRY[prereqType].label;
-      const sectionLines = Object.entries(doc.content)
-        .map(([key, text]) => {
-          const sectionDef = DOCUMENT_TYPE_REGISTRY[prereqType].sections.find(
-            (s) => s.key === key
-          );
-          const heading = sectionDef?.label || key;
-          return `### ${heading}\n${text}`;
-        })
-        .join("\n\n");
       blocks.push(
-        `--- ${label}: ${doc.title} (v${doc.version}, ${doc.status}, ${doc.createdAt}) ---\n${sectionLines}`
+        `--- ${label}: ${doc.title} (v${doc.version}, ${doc.status}, ${doc.createdAt}) ---\n${doc.content.body}`
       );
     }
   }
@@ -185,17 +176,8 @@ export async function assemblePriorDocuments(
       if (doc) {
         referencedIds.push(doc.id);
         const label = DOCUMENT_TYPE_REGISTRY[doc.documentType].label;
-        const sectionLines = Object.entries(doc.content)
-          .map(([key, text]) => {
-            const sectionDef = DOCUMENT_TYPE_REGISTRY[
-              doc.documentType
-            ].sections.find((s) => s.key === key);
-            const heading = sectionDef?.label || key;
-            return `### ${heading}\n${text}`;
-          })
-          .join("\n\n");
         blocks.push(
-          `--- ${label}: ${doc.title} (v${doc.version}, ${doc.status}, ${doc.createdAt}) ---\n${sectionLines}`
+          `--- ${label}: ${doc.title} (v${doc.version}, ${doc.status}, ${doc.createdAt}) ---\n${doc.content.body}`
         );
       }
     }

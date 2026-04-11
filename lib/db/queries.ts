@@ -2521,7 +2521,7 @@ export async function updateClinicalDocument({
   id: string;
   therapistId: string;
   title?: string;
-  content?: Record<string, string>;
+  content?: { body: string };
   status?: ClinicalDocumentStatus;
   reviewedAt?: string;
   finalisedAt?: string;

@@ -27,7 +27,7 @@ export async function PATCH(
     reviewedAt,
   }: {
     title?: string;
-    content?: Record<string, string>;
+    content?: { body: string };
     status?: ClinicalDocumentStatus;
     reviewedAt?: string;
   } = body;

@@ -1,5 +1,7 @@
 "use client";
 
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import {
   AlertCircle,
   Check,
@@ -7,7 +9,8 @@ import {
   ChevronRight,
   Download,
   FileText,
-  HelpCircle,
+  GripHorizontal,
+  GripVertical,
   Loader2,
   Lock,
   MessageSquare,
@@ -17,6 +20,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { RefinementChat } from "@/components/sessions/refinement-chat";
 import { toast } from "@/components/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,27 +33,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { ClinicalDocumentWithReferences } from "@/lib/db/types";
 import type { DocumentTypeConfig } from "@/lib/documents/types";
 import {
   extractErrorMessage,
   showErrorToast,
 } from "@/lib/errors/client-error-handler";
+import { cn } from "@/lib/utils";
 
 interface Props {
   document: ClinicalDocumentWithReferences;
   typeConfig: DocumentTypeConfig;
   clientId: string;
   clientName: string;
+  initialCommentary?: string;
 }
 
 function formatDate(dateStr: string): string {
@@ -99,48 +97,16 @@ function referenceLabel(type: string): string {
   }
 }
 
-function AutoResizeTextarea({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-}) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
-    }
-  }, [value]);
-
-  return (
-    <Textarea
-      className="resize-none overflow-hidden"
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      ref={textareaRef}
-      rows={3}
-      value={value}
-    />
-  );
-}
-
 export function DocumentViewer({
   document: initialDocument,
   typeConfig,
   clientId,
   clientName,
+  initialCommentary,
 }: Props) {
   const router = useRouter();
   const [document, setDocument] = useState(initialDocument);
-  const [editedContent, setEditedContent] = useState<Record<string, string>>(
-    {}
-  );
+  const [editedBody, setEditedBody] = useState(document.content.body);
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmFinalise, setConfirmFinalise] = useState(false);
@@ -151,19 +117,147 @@ export function DocumentViewer({
 
   const isEditable =
     document.status === "draft" || document.status === "reviewed";
-  const isDirty = Object.keys(editedContent).length > 0 || editedTitle !== null;
+  const isFinalised = document.status === "finalised";
+  const isDirty = editedBody !== document.content.body || editedTitle !== null;
 
-  const updateField = (key: string, value: string) => {
-    setEditedContent((prev) => ({ ...prev, [key]: value }));
-  };
+  // Keep refs so the transport body always has current values
+  // (useChat creates its Chat instance once — closures in the transport are frozen from that first render)
+  const documentTextRef = useRef(editedBody);
+  documentTextRef.current = editedBody;
+  const documentTypeRef = useRef(document.documentType);
+  documentTypeRef.current = document.documentType;
 
+  // Track which tool call outputs we've already processed
+  const processedToolCalls = useRef<Set<string>>(new Set());
+
+  // Chat input state
+  const [chatInput, setChatInput] = useState("");
+
+  // Responsive panel direction
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  // ─── useChat hook ───────────────────────────────────────────────────────────
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    error: chatError,
+    clearError,
+  } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/documents/refine",
+      prepareSendMessagesRequest(request: any) {
+        return {
+          body: {
+            ...request.body,
+            messages: request.messages,
+            documentId: document.id,
+            documentText: documentTextRef.current,
+            documentType: documentTypeRef.current,
+          },
+        };
+      },
+    }),
+    onToolCall: ({ toolCall }) => {
+      if (
+        toolCall.toolName === "update_document" &&
+        "input" in toolCall &&
+        toolCall.input
+      ) {
+        const args = toolCall.input as {
+          updatedDocument: string;
+          summary: string;
+        };
+        setEditedBody(args.updatedDocument);
+      }
+    },
+  });
+
+  // Watch for tool call results in messages (server-side tool output)
+  useEffect(() => {
+    for (const message of messages) {
+      if (message.role === "assistant") {
+        for (const part of message.parts) {
+          if (
+            "toolName" in part &&
+            part.toolName === "update_document" &&
+            "state" in part &&
+            part.state === "output-available" &&
+            "toolCallId" in part &&
+            "input" in part &&
+            part.input
+          ) {
+            const callId = part.toolCallId as string;
+            if (!processedToolCalls.current.has(callId)) {
+              processedToolCalls.current.add(callId);
+
+              const args = part.input as {
+                updatedDocument: string;
+                summary: string;
+              };
+              setEditedBody(args.updatedDocument);
+            }
+          }
+        }
+      }
+    }
+  }, [messages]);
+
+  // Inject commentary as first assistant message (from props or sessionStorage)
+  const commentaryInjected = useRef(false);
+  useEffect(() => {
+    if (commentaryInjected.current || messages.length > 0) {
+      return;
+    }
+    const storageKey = `doc-commentary-${document.id}`;
+    const commentary = initialCommentary ?? sessionStorage.getItem(storageKey);
+    if (commentary) {
+      commentaryInjected.current = true;
+      sessionStorage.removeItem(storageKey);
+      setMessages([
+        {
+          id: `commentary-${document.id}`,
+          role: "assistant" as const,
+          parts: [{ type: "text" as const, text: commentary }],
+        },
+      ]);
+    }
+  }, [initialCommentary, document.id, messages.length, setMessages]);
+
+  const isChatBusy = status === "submitted" || status === "streaming";
+
+  // ─── Auto-resize textarea ──────────────────────────────────────────────────
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: editedBody must trigger resize when content changes externally (e.g. AI tool calls)
+  useEffect(() => {
+    adjustHeight();
+  }, [editedBody, adjustHeight]);
+
+  // ─── Save handler ──────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       const body: Record<string, unknown> = {};
 
-      if (Object.keys(editedContent).length > 0) {
-        body.content = { ...document.content, ...editedContent };
+      if (editedBody !== document.content.body) {
+        body.content = { body: editedBody };
       }
       if (editedTitle !== null) {
         body.title = editedTitle;
@@ -181,7 +275,6 @@ export function DocumentViewer({
           throw new Error("Received an invalid response from the server.");
         }
         setDocument((prev) => ({ ...prev, ...updated }));
-        setEditedContent({});
         setEditedTitle(null);
         toast({ type: "success", description: "Document saved." });
       } else {
@@ -196,8 +289,23 @@ export function DocumentViewer({
     } finally {
       setSaving(false);
     }
-  }, [document, editedContent, editedTitle]);
+  }, [document, editedBody, editedTitle]);
 
+  // Cmd+S / Ctrl+S to save
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (isDirty) {
+          handleSave();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isDirty, handleSave]);
+
+  // ─── Delete handler ────────────────────────────────────────────────────────
   const handleDelete = useCallback(async () => {
     setDeleting(true);
     try {
@@ -223,6 +331,7 @@ export function DocumentViewer({
     }
   }, [document.id, clientId, router]);
 
+  // ─── Status update handler ─────────────────────────────────────────────────
   const handleStatusUpdate = useCallback(
     async (status: "reviewed" | "finalised") => {
       setSaving(true);
@@ -265,10 +374,25 @@ export function DocumentViewer({
     [document.id, router]
   );
 
+  // ─── Chat handlers ──────────────────────────────────────────────────────────
+  const handleSendMessage = useCallback(() => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || isChatBusy) {
+      return;
+    }
+    sendMessage({ text: trimmed });
+    setChatInput("");
+  }, [chatInput, isChatBusy, sendMessage]);
+
+  const handleRetry = useCallback(() => {
+    clearError();
+    setMessages(messages.slice(0, -1));
+  }, [clearError, setMessages, messages]);
+
   return (
-    <TooltipProvider>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-background border-b px-4 py-4 md:px-6">
+      <header className="shrink-0 bg-background border-b px-4 py-4 md:px-6">
         <div className="mb-3">
           <Link
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -356,198 +480,235 @@ export function DocumentViewer({
         </div>
       </header>
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="px-4 py-4 md:px-6 space-y-6 max-w-4xl">
-          {/* AI Warning Banner */}
-          {document.status === "draft" && document.generatedBy === "ai" && (
-            <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-4 py-3">
-              <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <p className="text-sm text-amber-800 dark:text-amber-300">
-                This document was generated by AI and requires clinical review
-                before finalising. Please verify all content against your
-                clinical records.
-              </p>
-            </div>
-          )}
-
-          {/* References Section */}
-          {document.references.length > 0 && (
-            <div className="rounded-lg border">
-              <button
-                className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
-                onClick={() => setReferencesOpen(!referencesOpen)}
-                type="button"
-              >
-                <span>
-                  Based on {document.references.length} source
-                  {document.references.length === 1 ? "" : "s"}
-                </span>
-                {referencesOpen ? (
-                  <ChevronDown className="size-4" />
-                ) : (
-                  <ChevronRight className="size-4" />
+      {/* Content area: resizable panels */}
+      <PanelGroup
+        className="min-h-0 flex-1"
+        direction={isDesktop ? "horizontal" : "vertical"}
+        key={isDesktop ? "horizontal" : "vertical"}
+      >
+        {/* LEFT / TOP PANEL — document editor */}
+        <Panel defaultSize={60} minSize={25} order={1}>
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-4 py-4 md:px-6 space-y-6 max-w-4xl">
+                {/* AI Warning Banner */}
+                {document.status === "draft" && document.generatedBy === "ai" && (
+                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-4 py-3">
+                    <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                      This document was generated by AI and requires clinical review
+                      before finalising. Please verify all content against your
+                      clinical records.
+                    </p>
+                  </div>
                 )}
-              </button>
-              {referencesOpen && (
-                <div className="border-t px-4 py-3 space-y-2">
-                  {document.references.map((ref) => {
-                    const label = referenceLabel(ref.referenceType);
-                    const date = formatDate(ref.createdAt);
 
-                    let href: string | null = null;
-                    if (ref.referenceType === "session") {
-                      href = `/sessions/${ref.referenceId}`;
-                    } else if (ref.referenceType === "clinical_document") {
-                      href = `/clients/${clientId}/documents/${ref.referenceId}`;
-                    }
+                {/* References Section */}
+                {document.references.length > 0 && (
+                  <div className="rounded-lg border">
+                    <button
+                      className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+                      onClick={() => setReferencesOpen(!referencesOpen)}
+                      type="button"
+                    >
+                      <span>
+                        Based on {document.references.length} source
+                        {document.references.length === 1 ? "" : "s"}
+                      </span>
+                      {referencesOpen ? (
+                        <ChevronDown className="size-4" />
+                      ) : (
+                        <ChevronRight className="size-4" />
+                      )}
+                    </button>
+                    {referencesOpen && (
+                      <div className="border-t px-4 py-3 space-y-2">
+                        {document.references.map((ref) => {
+                          const label = referenceLabel(ref.referenceType);
+                          const date = formatDate(ref.createdAt);
 
-                    const content = (
-                      <div className="flex items-center gap-2 text-sm">
-                        <ReferenceIcon type={ref.referenceType} />
-                        <span>
-                          {label} &mdash; {date}
-                        </span>
+                          let href: string | null = null;
+                          if (ref.referenceType === "session") {
+                            href = `/sessions/${ref.referenceId}`;
+                          } else if (ref.referenceType === "clinical_document") {
+                            href = `/clients/${clientId}/documents/${ref.referenceId}`;
+                          }
+
+                          const inner = (
+                            <>
+                              <ReferenceIcon type={ref.referenceType} />
+                              <span>
+                                {label} &mdash; {date}
+                              </span>
+                            </>
+                          );
+
+                          return href ? (
+                            <Link
+                              className="flex items-center gap-2 text-sm rounded-md px-2 py-1.5 hover:bg-muted transition-colors"
+                              href={href}
+                              key={ref.id}
+                            >
+                              {inner}
+                            </Link>
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm rounded-md px-2 py-1.5" key={ref.id}>
+                              {inner}
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
+                    )}
+                  </div>
+                )}
 
-                    return href ? (
-                      <Link
-                        className="block rounded-md px-2 py-1.5 hover:bg-muted transition-colors"
-                        href={href}
-                        key={ref.id}
-                      >
-                        {content}
-                      </Link>
-                    ) : (
-                      <div className="rounded-md px-2 py-1.5" key={ref.id}>
-                        {content}
-                      </div>
-                    );
-                  })}
+                {/* Document Content */}
+                {isFinalised && (
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+                    <Lock className="size-4 shrink-0" />
+                    This document has been finalised and is locked for editing.
+                  </div>
+                )}
+
+                {document.status === "draft" && (
+                  <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+                    AI-generated draft &mdash; please review before finalising.
+                  </div>
+                )}
+
+                <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-background">
+                  <textarea
+                    className="min-h-[400px] w-full resize-none overflow-hidden border-none bg-transparent p-2 font-mono text-sm leading-relaxed text-foreground outline-none focus:ring-0 disabled:cursor-default disabled:opacity-60"
+                    disabled={!isEditable}
+                    onChange={(e) => {
+                      setEditedBody(e.target.value);
+                      adjustHeight();
+                    }}
+                    ref={textareaRef}
+                    value={editedBody}
+                  />
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Content Sections */}
-          {typeConfig.sections.map((sectionDef) => {
-            const value =
-              editedContent[sectionDef.key] ??
-              document.content[sectionDef.key] ??
-              "";
-
-            return (
-              <div className="space-y-2" key={sectionDef.key}>
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-sm font-semibold uppercase tracking-wide">
-                    {sectionDef.label}
-                  </Label>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <p className="text-xs">{sectionDef.description}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  {!isEditable && (
-                    <Lock className="size-3.5 text-muted-foreground ml-auto" />
-                  )}
-                </div>
-                <AutoResizeTextarea
-                  disabled={!isEditable}
-                  onChange={(v) => updateField(sectionDef.key, v)}
-                  value={value}
-                />
               </div>
-            );
-          })}
+            </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            {isEditable && (
-              <>
+            {/* Actions Bar — pinned at bottom */}
+            <div className="shrink-0 border-t px-4 py-3 md:px-6">
+              <div className="flex flex-wrap items-center gap-3">
+                {isEditable && (
+                  <>
+                    <Button
+                      disabled={saving || !isDirty}
+                      onClick={handleSave}
+                      size="sm"
+                    >
+                      {saving ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Check className="size-4" />
+                      )}
+                      Save Changes
+                    </Button>
+
+                    {document.status === "draft" && (
+                      <Button
+                        disabled={saving}
+                        onClick={() => handleStatusUpdate("reviewed")}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Mark as Reviewed
+                      </Button>
+                    )}
+
+                    {document.status === "reviewed" && (
+                      <Button
+                        disabled={saving}
+                        onClick={() => setConfirmFinalise(true)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Finalise
+                      </Button>
+                    )}
+
+                    {document.status === "draft" && (
+                      <Button
+                        disabled={saving}
+                        onClick={() => setConfirmRegenerate(true)}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <RefreshCw className="size-4" />
+                        Regenerate
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                {isFinalised && (
+                  <Button
+                    onClick={() =>
+                      router.push(
+                        `/clients/${clientId}/documents/generate?type=${document.documentType}&supersedesId=${document.id}`
+                      )
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    Create New Version
+                  </Button>
+                )}
+
                 <Button
-                  className="min-h-11"
-                  disabled={saving || !isDirty}
-                  onClick={handleSave}
-                  size="lg"
+                  className="ml-auto"
+                  disabled={saving || deleting}
+                  onClick={() => setConfirmDelete(true)}
+                  size="sm"
+                  variant="ghost"
                 >
-                  {saving ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Check className="size-4" />
-                  )}
-                  Save Changes
+                  <Trash2 className="size-4" />
+                  Delete
                 </Button>
-
-                {document.status === "draft" && (
-                  <Button
-                    className="min-h-11"
-                    disabled={saving}
-                    onClick={() => handleStatusUpdate("reviewed")}
-                    size="lg"
-                    variant="outline"
-                  >
-                    Mark as Reviewed
-                  </Button>
-                )}
-
-                {document.status === "reviewed" && (
-                  <Button
-                    className="min-h-11"
-                    disabled={saving}
-                    onClick={() => setConfirmFinalise(true)}
-                    size="lg"
-                    variant="outline"
-                  >
-                    Finalise
-                  </Button>
-                )}
-
-                {document.status === "draft" && (
-                  <Button
-                    className="min-h-11"
-                    disabled={saving}
-                    onClick={() => setConfirmRegenerate(true)}
-                    size="lg"
-                    variant="ghost"
-                  >
-                    <RefreshCw className="size-4" />
-                    Regenerate
-                  </Button>
-                )}
-              </>
-            )}
-
-            {document.status === "finalised" && (
-              <Button
-                className="min-h-11"
-                onClick={() =>
-                  router.push(
-                    `/clients/${clientId}/documents/generate?type=${document.documentType}&supersedesId=${document.id}`
-                  )
-                }
-                size="lg"
-                variant="outline"
-              >
-                Create New Version
-              </Button>
-            )}
-
-            <Button
-              className="min-h-11 ml-auto"
-              disabled={saving || deleting}
-              onClick={() => setConfirmDelete(true)}
-              size="lg"
-              variant="ghost"
-            >
-              <Trash2 className="size-4" />
-              Delete
-            </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </ScrollArea>
+        </Panel>
+
+        {/* RESIZE HANDLE */}
+        <PanelResizeHandle
+          className={cn(
+            "flex items-center justify-center bg-muted/50 transition-colors hover:bg-muted active:bg-muted",
+            isDesktop
+              ? "w-2 border-x border-border"
+              : "h-2 border-y border-border"
+          )}
+        >
+          {isDesktop ? (
+            <GripVertical className="size-4 text-muted-foreground" />
+          ) : (
+            <GripHorizontal className="size-4 text-muted-foreground" />
+          )}
+        </PanelResizeHandle>
+
+        {/* RIGHT / BOTTOM PANEL — refinement chat */}
+        <Panel defaultSize={40} minSize={20} order={2}>
+          <div className="flex h-full min-h-0 flex-1 flex-col">
+            <RefinementChat
+              error={chatError}
+              finalisedLabel="document"
+              input={chatInput}
+              isBusy={isChatBusy}
+              isFinalised={isFinalised}
+              messages={messages}
+              onInputChange={setChatInput}
+              onRetry={handleRetry}
+              onSubmit={handleSendMessage}
+              placeholder="Ask the AI to help refine this document..."
+              updateToolName="update_document"
+            />
+          </div>
+        </Panel>
+      </PanelGroup>
 
       {/* Finalise Confirmation Dialog */}
       <Dialog onOpenChange={setConfirmFinalise} open={confirmFinalise}>
@@ -608,6 +769,7 @@ export function DocumentViewer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <Dialog onOpenChange={setConfirmDelete} open={confirmDelete}>
         <DialogContent>
@@ -636,6 +798,6 @@ export function DocumentViewer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </TooltipProvider>
+    </div>
   );
 }

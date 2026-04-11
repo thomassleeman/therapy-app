@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateText, stepCountIs } from "ai";
-import { getLanguageModel } from "@/lib/ai/providers";
-import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { NextResponse } from "next/server";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { getLanguageModel } from "@/lib/ai/providers";
 import { knowledgeSearchTools } from "@/lib/ai/tools/knowledge-search-tools";
 import { auth } from "@/lib/auth";
 import {
@@ -88,8 +88,23 @@ DOCUMENT TYPE: ${config.label}
 ${config.shortDescription}
 
 FORMAT INSTRUCTIONS:
-Generate the document with clearly labelled sections using markdown headers (## Section Name). The sections are:
+Generate the document with clearly labelled sections. Use UPPERCASE section headers on their own line, with the section content starting on the next line. Separate sections with a blank line.
+
+The sections are:
 ${sectionLines}
+
+Plain text only: do NOT use inline markdown formatting within the document. No bold (**), no italics (*), no sub-headers (### or ##), no markdown bullet syntax (- or *), no code fences, backticks, blockquotes, tables, or links. Use full sentences and short paragraphs. The output is rendered in a plain text field — any markdown characters will appear literally.
+
+IMPORTANT: The specification document below uses markdown for its own readability — it is NOT a formatting template. Do not mirror its formatting in your output.
+
+Output your response in exactly this structure:
+  <document>
+  [The clinical document content — start with the first section header, end with the last line of content]
+  </document>
+  <commentary>
+  [Any observations about the document generation: gaps in the source data, assumptions made, areas the therapist may want to review. If you have no observations, leave this empty.]
+  </commentary>
+  Do not include any text outside these two tags. No preamble, no closing remarks.
 
 DOCUMENT SPECIFICATION:
 ${specContents}
@@ -110,52 +125,16 @@ THERAPIST CONTEXT:
   return parts.join("\n\n");
 }
 
-function parseSections(
-  text: string,
-  config: ReturnType<typeof getDocumentTypeConfig>
-): Record<string, string> {
-  const result: Record<string, string> = {};
-
-  // Split on ## headers
-  const parts = text.split(/^## /m);
-
-  let extraIndex = 0;
-  for (const part of parts) {
-    // Skip any content before the first header
-    if (!part.trim()) {
-      continue;
-    }
-
-    const newlineIndex = part.indexOf("\n");
-    if (newlineIndex === -1) {
-      continue;
-    }
-
-    const headerText = part.substring(0, newlineIndex).trim();
-    const body = part.substring(newlineIndex + 1).trim();
-
-    // Try to match against known section labels
-    const matchedSection = config.sections.find(
-      (s) => s.label.toLowerCase() === headerText.toLowerCase()
-    );
-
-    if (matchedSection) {
-      result[matchedSection.key] = body;
-    } else if (headerText) {
-      result[`_extra_${extraIndex}`] = `## ${headerText}\n${body}`;
-      extraIndex++;
-    }
-  }
-
-  // Fill in missing required sections
-  for (const section of config.sections) {
-    if (section.required && !result[section.key]) {
-      result[section.key] =
-        "[Section not generated — please complete manually]";
-    }
-  }
-
-  return result;
+function parseGenerationOutput(text: string): {
+  document: string;
+  commentary: string;
+} {
+  const documentMatch = text.match(/<document>([\s\S]*?)<\/document>/);
+  const commentaryMatch = text.match(/<commentary>([\s\S]*?)<\/commentary>/);
+  return {
+    document: documentMatch?.[1]?.trim() ?? text.trim(),
+    commentary: commentaryMatch?.[1]?.trim() ?? "",
+  };
 }
 
 export async function POST(request: Request) {
@@ -296,7 +275,7 @@ export async function POST(request: Request) {
       therapistId: session.user.id,
       documentType: validatedType,
       title: documentTitle,
-      content: {},
+      content: { body: "" },
       status: "generating",
       generatedBy: "ai",
       modelUsed: "anthropic/claude-sonnet-4-5",
@@ -315,20 +294,22 @@ export async function POST(request: Request) {
       const result = await generateText({
         model: getLanguageModel(DEFAULT_CHAT_MODEL),
         system: systemPrompt,
-        prompt: `Generate a ${config.label} document from the client data provided.`,
+        prompt: `Generate a ${config.label} document from the client data provided. Use the <document> and <commentary> XML structure as instructed.`,
         tools: {
           ...knowledgeSearchTools({ session }),
         },
         stopWhen: stepCountIs(6),
       });
 
-      const parsedContent = parseSections(result.text, config);
+      const { document: documentText, commentary } = parseGenerationOutput(
+        result.text
+      );
 
-      // Update document with parsed content and draft status
+      // Update document with generated content and draft status
       const completedDocument = await updateClinicalDocument({
         id: placeholder.id,
         therapistId: session.user.id,
-        content: parsedContent,
+        content: { body: documentText },
         status: "draft",
       });
 
@@ -365,7 +346,7 @@ export async function POST(request: Request) {
         await addDocumentReferences(refs);
       }
 
-      return NextResponse.json(completedDocument);
+      return NextResponse.json({ ...completedDocument, commentary });
     } catch (generationError) {
       console.error("[documents] Generation failed:", generationError);
       // Clean up placeholder on failure

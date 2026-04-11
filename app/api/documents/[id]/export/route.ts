@@ -39,7 +39,7 @@ function buildDocx({
   doc: {
     documentType: ClinicalDocumentType;
     title: string;
-    content: Record<string, string>;
+    content: { body: string };
     status: string;
     version: number;
     createdAt: string;
@@ -49,7 +49,6 @@ function buildDocx({
   clientIdentifier: string;
   finalisedAt: string | null;
 }): Document {
-  const typeConfig = DOCUMENT_TYPE_REGISTRY[doc.documentType];
   const margin = convertMillimetersToTwip(25);
 
   const footerText =
@@ -132,76 +131,88 @@ function buildDocx({
     })
   );
 
-  // Content sections
-  for (const sectionDef of typeConfig.sections) {
-    const text = doc.content[sectionDef.key];
-    if (!text) continue;
+  // Content — parse UPPERCASE headers from body text
+  const bodyLines = doc.content.body.split("\n");
+  const sections: Array<{ heading: string; body: string }> = [];
+  let currentHeading = "";
+  let currentBody: string[] = [];
 
+  for (const line of bodyLines) {
+    // Match lines that are entirely uppercase letters, spaces, ampersands, hyphens
+    if (/^[A-Z][A-Z &\-/,()]+$/.test(line.trim()) && line.trim().length > 2) {
+      // Save previous section if any
+      if (currentHeading || currentBody.length > 0) {
+        sections.push({
+          heading: currentHeading,
+          body: currentBody.join("\n").trim(),
+        });
+      }
+      currentHeading = line.trim();
+      currentBody = [];
+    } else {
+      currentBody.push(line);
+    }
+  }
+  // Push final section
+  if (currentHeading || currentBody.length > 0) {
+    sections.push({
+      heading: currentHeading,
+      body: currentBody.join("\n").trim(),
+    });
+  }
+
+  for (const section of sections) {
     // Section heading
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: sectionDef.label,
-            bold: true,
-            size: 28, // 14pt
-            font: "Arial",
-          }),
-        ],
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 300, after: 120 },
-      })
-    );
+    if (section.heading) {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: section.heading,
+              bold: true,
+              size: 28, // 14pt
+              font: "Arial",
+            }),
+          ],
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 120 },
+        })
+      );
+    }
+
+    if (!section.body) {
+      continue;
+    }
 
     // Section body — split by paragraph
-    const paragraphs = text.split(/\n\n+/);
+    const paragraphs = section.body.split(/\n\n+/);
     for (const para of paragraphs) {
       const trimmed = para.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        continue;
+      }
 
-      // Handle simple bullet points
-      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        const bulletLines = trimmed.split("\n");
-        for (const bulletLine of bulletLines) {
-          const cleaned = bulletLine.replace(/^[-*]\s+/, "").trim();
-          if (!cleaned) continue;
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `\u2022  ${cleaned}`,
-                  size: 22, // 11pt
-                  font: "Arial",
-                }),
-              ],
-              indent: { left: convertMillimetersToTwip(8) },
-              spacing: { after: 60 },
-            })
-          );
+      // Regular paragraph — preserve inline line breaks as single paragraph
+      const lines = trimmed.split("\n");
+      const runs: TextRun[] = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (i > 0) {
+          runs.push(new TextRun({ break: 1 }));
         }
-      } else {
-        // Regular paragraph — preserve inline line breaks as single paragraph
-        const lines = trimmed.split("\n");
-        const runs: TextRun[] = [];
-        for (let i = 0; i < lines.length; i++) {
-          if (i > 0) {
-            runs.push(new TextRun({ break: 1 }));
-          }
-          runs.push(
-            new TextRun({
-              text: lines[i].trim(),
-              size: 22, // 11pt
-              font: "Arial",
-            })
-          );
-        }
-        children.push(
-          new Paragraph({
-            children: runs,
-            spacing: { after: 120 },
+        runs.push(
+          new TextRun({
+            text: lines[i].trim(),
+            size: 22, // 11pt
+            font: "Arial",
           })
         );
       }
+      children.push(
+        new Paragraph({
+          children: runs,
+          spacing: { after: 120 },
+        })
+      );
     }
   }
 

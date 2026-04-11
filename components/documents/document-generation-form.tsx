@@ -233,6 +233,12 @@ export function DocumentGenerationForm({
       }
 
       const result = await res.json();
+      if (result.commentary) {
+        sessionStorage.setItem(
+          `doc-commentary-${result.id}`,
+          result.commentary
+        );
+      }
       router.push(`/clients/${clientId}/documents/${result.id}`);
     } catch (err) {
       setError(
